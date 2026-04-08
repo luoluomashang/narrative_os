@@ -1,0 +1,44 @@
+/* styles/global.css — reset + base styles */
+@import './tokens.css';
+@import './animations.css';
+
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  font-family: 'Inter', 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  background: var(--color-base);
+  color: var(--color-text-primary);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-ai-active);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-l2);
+  border-radius: 3px;
+}

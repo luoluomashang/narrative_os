@@ -1,0 +1,327 @@
+<template>
+  <div class="worldbuilder-page">
+    <div class="wb-header">
+      <span class="wb-title">世界构建向导</span>
+      <span class="wb-subtitle">{{ stepLabels[currentStepName] ?? currentStepName }}</span>
+    </div>
+
+    <!-- 进度步骤条 -->
+    <div class="wb-progress">
+      <div
+        v-for="(label, key) in stepLabels"
+        :key="key"
+        class="wb-step-dot"
+        :class="{
+          active: key === currentStepName,
+          done: completedSteps.has(key),
+        }"
+        :title="label"
+      >
+        <span class="dot-inner">{{ completedSteps.has(key) ? '✓' : '' }}</span>
+        <span class="dot-label">{{ label }}</span>
+      </div>
+    </div>
+
+    <!-- 完成界面 -->
+    <div v-if="done" class="wb-done">
+      <div class="done-title">🎉 世界构建完成！</div>
+      <div class="done-summary">
+        <div v-if="seedData?.characters?.length" class="done-section">
+          <div class="done-section-title">角色（{{ seedData.characters.length }}）</div>
+          <div v-for="c in seedData.characters" :key="c.name" class="done-char">
+            {{ c.name }}（{{ c.role ?? '主要角色' }}）
+          </div>
+        </div>
+        <div v-if="seedData?.plot_nodes?.length" class="done-section">
+          <div class="done-section-title">情节节点（{{ seedData.plot_nodes.length }}）</div>
+          <div v-for="n in seedData.plot_nodes" :key="n.id" class="done-node">
+            {{ n.summary ?? n.id }}
+          </div>
+        </div>
+      </div>
+      <div class="done-actions">
+        <NButton variant="primary" @click="goToPlot">查看情节画布 →</NButton>
+        <NButton variant="ghost" @click="goToSceneIDE">开始写作 →</NButton>
+        <NButton variant="ghost" @click="reset">重新构建</NButton>
+      </div>
+    </div>
+
+    <!-- 步骤表单 -->
+    <div v-else-if="wbSessionId" class="wb-step">
+      <div class="step-prompt" v-html="promptHtml" />
+
+      <div v-if="draftPreview" class="step-draft">
+        <div class="draft-title">草稿预览</div>
+        <pre class="draft-content">{{ JSON.stringify(draftPreview, null, 2) }}</pre>
+      </div>
+
+      <textarea
+        v-model="userInput"
+        class="step-input"
+        :placeholder="inputPlaceholder"
+        rows="6"
+        @keydown.ctrl.enter="submitStep"
+      />
+
+      <div class="step-actions">
+        <NButton variant="primary" :loading="loading" @click="submitStep">
+          {{ requiresConfirmation ? '确认并继续' : '下一步' }}
+        </NButton>
+        <NButton v-if="skippable" variant="ghost" :loading="loading" @click="skipStep">
+          跳过此步
+        </NButton>
+      </div>
+
+      <div v-if="errorMsg" class="step-error">{{ errorMsg }}</div>
+    </div>
+
+    <!-- 启动面板（未开始） -->
+    <div v-else class="wb-start">
+      <div class="start-desc">
+        通过 7 步引导，将你的创意转化为完整的小说世界观、角色和情节骨架。
+      </div>
+      <div class="start-tip">整个过程约需 10–15 分钟，可随时跳过可选步骤。</div>
+      <NButton variant="primary" :loading="loading" @click="startBuilder">开始构建</NButton>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import NButton from '@/components/common/NButton.vue'
+import axios from 'axios'
+
+const router = useRouter()
+
+// ── State ─────────────────────────────────────────────────────────
+const wbSessionId = ref<string | null>(null)
+const currentStepName = ref('one_sentence')
+const completedSteps = ref<Set<string>>(new Set())
+const promptHtml = ref('')
+const draftPreview = ref<Record<string, unknown> | null>(null)
+const requiresConfirmation = ref(true)
+const skippable = ref(false)
+const userInput = ref('')
+const loading = ref(false)
+const errorMsg = ref('')
+const done = ref(false)
+const seedData = ref<{
+  characters: Array<{ name: string; role?: string }>
+  world: Record<string, unknown>
+  plot_nodes: Array<{ id: string; summary?: string }>
+} | null>(null)
+
+const stepLabels: Record<string, string> = {
+  one_sentence: '核心概念',
+  one_paragraph: '展开方向',
+  world_power: '世界观',
+  one_page: '一页大纲',
+  character_arcs: '角色弧光',
+  four_pages: '四页大纲',
+  done: '完成',
+}
+
+const inputPlaceholder = computed(() => {
+  const hints: Record<string, string> = {
+    one_sentence: '输入一句话概念，例如：主角韩立凭借神秘小瓶在修真界逆天改命…',
+    one_paragraph: '输入展开描述：当前卷落点 + 全书方向…',
+    world_power: '描述世界背景、修炼体系、力量等级…',
+    one_page: '概述第一卷：目标、对手、关键冲突…',
+    character_arcs: '描述主要角色的性格和成长轨迹…',
+    four_pages: '详细描述情节节拍和章节分布…',
+  }
+  return hints[currentStepName.value] ?? '输入内容…'
+})
+
+// ── Actions ────────────────────────────────────────────────────────
+async function startBuilder() {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const res = await axios.post('/api/worldbuilder/start')
+    wbSessionId.value = res.data.wb_session_id
+    currentStepName.value = res.data.step
+    promptHtml.value = (res.data.prompt ?? '').replace(/\n/g, '<br/>')
+    draftPreview.value = res.data.draft ?? null
+    requiresConfirmation.value = res.data.requires_confirmation ?? true
+    skippable.value = res.data.skippable ?? false
+  } catch (e: unknown) {
+    errorMsg.value = (e as { response?: { data?: { detail?: string } } })
+      ?.response?.data?.detail ?? '启动失败，请确认后端已运行'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function submitStep() {
+  if (!wbSessionId.value) return
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const res = await axios.post('/api/worldbuilder/step', {
+      wb_session_id: wbSessionId.value,
+      user_input: userInput.value,
+    })
+    completedSteps.value.add(currentStepName.value)
+    userInput.value = ''
+
+    if (res.data.done) {
+      done.value = true
+      seedData.value = res.data.seed_data ?? null
+    } else {
+      currentStepName.value = res.data.step
+      promptHtml.value = (res.data.prompt ?? '').replace(/\n/g, '<br/>')
+      draftPreview.value = res.data.draft ?? null
+      requiresConfirmation.value = res.data.requires_confirmation ?? true
+      skippable.value = res.data.skippable ?? false
+    }
+  } catch (e: unknown) {
+    errorMsg.value = (e as { response?: { data?: { detail?: string } } })
+      ?.response?.data?.detail ?? '提交失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function skipStep() {
+  userInput.value = '__skip__'
+  await submitStep()
+}
+
+function goToPlot() {
+  router.push('/plot')
+}
+function goToSceneIDE() {
+  router.push('/scene')
+}
+function reset() {
+  wbSessionId.value = null
+  done.value = false
+  completedSteps.value = new Set()
+  promptHtml.value = ''
+  userInput.value = ''
+  seedData.value = null
+  currentStepName.value = 'one_sentence'
+}
+</script>
+
+<style scoped>
+.worldbuilder-page {
+  padding: var(--spacing-lg);
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+.wb-header { display: flex; flex-direction: column; gap: 4px; }
+.wb-title { font-size: 22px; font-weight: 700; color: var(--color-text-primary); }
+.wb-subtitle { font-size: 14px; color: var(--color-ai-active); }
+
+.wb-progress {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+.wb-step-dot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+.wb-step-dot.active { opacity: 1; }
+.wb-step-dot.done { opacity: 0.8; }
+.dot-inner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--color-ai-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--color-ai-active);
+  background: transparent;
+}
+.wb-step-dot.active .dot-inner { background: var(--color-ai-active); color: #000; }
+.wb-step-dot.done .dot-inner { background: #4caf50; border-color: #4caf50; color: #fff; }
+.dot-label { font-size: 11px; color: var(--color-text-secondary); white-space: nowrap; }
+
+.wb-start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  background: var(--color-surface-l1);
+  border-radius: var(--radius-card);
+}
+.start-desc { font-size: 15px; color: var(--color-text-primary); line-height: 1.6; }
+.start-tip { font-size: 13px; color: var(--color-text-secondary); }
+
+.wb-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+.step-prompt {
+  background: var(--color-surface-l1);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-card);
+  font-size: 14px;
+  color: var(--color-text-primary);
+  line-height: 1.7;
+  border-left: 3px solid var(--color-ai-active);
+}
+.step-draft {
+  background: var(--color-surface-l2);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+}
+.draft-title { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px; }
+.draft-content {
+  font-size: 12px;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.step-input {
+  background: var(--color-surface-l2);
+  border: 1px solid #444;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.6;
+}
+.step-input:focus { outline: none; border-color: var(--color-ai-active); }
+.step-actions { display: flex; gap: var(--spacing-sm); }
+.step-error { color: #f44336; font-size: 13px; }
+
+.wb-done {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+.done-title { font-size: 24px; font-weight: 700; color: #4caf50; }
+.done-summary {
+  display: flex;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+.done-section {
+  background: var(--color-surface-l1);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+  flex: 1;
+  min-width: 200px;
+}
+.done-section-title { font-size: 13px; color: var(--color-ai-active); margin-bottom: 8px; font-weight: 600; }
+.done-char, .done-node { font-size: 13px; color: var(--color-text-primary); padding: 2px 0; }
+.done-actions { display: flex; gap: var(--spacing-sm); flex-wrap: wrap; }
+</style>

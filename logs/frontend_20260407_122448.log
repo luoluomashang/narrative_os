@@ -1,0 +1,32 @@
+2026-04-07 12:24:58  [Frontend]  
+2026-04-07 12:24:58  [Frontend]  > frontend@0.0.0 dev E:\opencodeProject\novel-control-world\narrative_os\frontend
+2026-04-07 12:24:58  [Frontend]  > vite "--port" "5173"
+2026-04-07 12:24:58  [Frontend]  
+2026-04-07 12:24:59  [Frontend]  
+2026-04-07 12:24:59  [Frontend]    [32m[1mVITE[22m v8.0.3[39m  [2mready in [0m[1m971[22m[2m[0m ms[22m
+2026-04-07 12:24:59  [Frontend]  
+2026-04-07 12:24:59  [Frontend]    [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+2026-04-07 12:24:59  [Frontend]  [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+2026-04-07 12:24:59  [Frontend]  [2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+2026-04-07 12:26:24  [Frontend]  [2m12:26:24[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /projects[39m
+2026-04-07 12:26:24  [Frontend]  Error: connect ECONNREFUSED 127.0.0.1:8000
+2026-04-07 12:26:24  [Frontend]      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1634:16)
+2026-04-07 12:26:24  [Frontend]  [2m12:26:24[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /health[39m
+2026-04-07 12:26:24  [Frontend]  Error: connect ECONNREFUSED 127.0.0.1:8000
+2026-04-07 12:26:24  [Frontend]      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1634:16)
+2026-04-07 12:26:24  [Frontend]  [2m12:26:24[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /cost/summary[39m
+2026-04-07 12:26:24  [Frontend]  Error: connect ECONNREFUSED 127.0.0.1:8000
+2026-04-07 12:26:24  [Frontend]      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1634:16)
+2026-04-07 12:26:24  [Frontend]  [2m12:26:24[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /projects[39m
+2026-04-07 12:26:24  [Frontend]  Error: connect ECONNREFUSED 127.0.0.1:8000
+2026-04-07 12:26:24  [Frontend]      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1634:16)
+2026-04-07 12:26:39  [Frontend]  [2m12:26:39[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /health[39m
+2026-04-07 12:26:39  [Frontend]  Error: connect ECONNREFUSED 127.0.0.1:8000
+2026-04-07 12:26:39  [Frontend]      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1634:16)
+2026-04-07 12:26:54  [Frontend]  [2m12:26:54[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /health[39m
+2026-04-07 12:26:54  [Frontend]  Error: connect ECONNREFUSED 127.0.0.1:8000
+2026-04-07 12:26:54  [Frontend]      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1634:16)
+2026-04-07 12:26:54  [Frontend]  [2m12:26:54[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /cost/summary[39m
+2026-04-07 12:26:54  [Frontend]  Error: connect ECONNREFUSED 127.0.0.1:8000
+2026-04-07 12:26:54  [Frontend]      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1634:16)
+2026-04-07 12:26:55  [Frontend]   ELIFECYCLE  Command failed with exit code 3221225786.

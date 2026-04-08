@@ -1,0 +1,1020 @@
+{
+  "chapter_1_hook": "完成致命一击的林川并未等来接应，反而被远超情报所述的武装力量层层包围，灯光将他孤立的身影彻底暴露，一句冰冷的机械音从四面八方传来：“‘夜鸦’，你被捕了。”",
+  "chapter_2_hook": "下一步悬念",
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": {
+      "system_name": "新力量体系",
+      "tiers": [
+        "炼气期",
+        "筑基期",
+        "金丹期",
+        "元婴期",
+        "化神期",
+        "炼虚期",
+        "合体期",
+        "大乘期"
+      ],
+      "rules": [
+        "灵气是修炼根本",
+        "境界不可跨越，必须逐级突破",
+        "渡劫失败则陨落",
+        "杀孽过重影响修炼"
+      ],
+      "resources": [
+        "灵石",
+        "丹药",
+        "法宝",
+        "灵泉",
+        "秘籍"
+      ]
+    },
+    "factions": [
+      "新势力",
+      "青云门",
+      "幽血魔教",
+      "铁血盟",
+      "赤炎阁",
+      "星海阁",
+      "太虚仙朝",
+      "神道圣院",
+      "域外魔族"
+    ],
+    "key_locations": [
+      "新地区",
+      "青龙山脉",
+      "青云山脉",
+      "洛城",
+      "星海湖",
+      "幽冥林",
+      "赤炎荒漠",
+      "铁血关",
+      "天门渡口",
+      "太虚仙宫",
+      "瑶池圣地",
+      "魔渊深处",
+      "混沌边境",
+      "神殿山"
+    ],
+    "rules": [],
+    "world_name": "九天玄界",
+    "world_type": "multi_layer",
+    "world_description": "九天玄界分为上下两重天：下层为凡界，灵气稀薄，芸芸众生于此修炼挣扎；上层为仙界，灵气充沛，强者聚集，俯瞰苍生。两界以\"天门\"相隔，凡人飞升方可入仙界。三大力量体系贯穿两界——修仙者以灵气修炼，魔道以魔气腐蚀，神道以神力庇佑苍生。各大势力争锋，正道与魔道数万年恩怨纠葛，仙魔之战的阴影至今未散。",
+    "sandbox_raw": {
+      "world_name": "九天玄界",
+      "world_type": "multi_layer",
+      "world_description": "九天玄界分为上下两重天：下层为凡界，灵气稀薄，芸芸众生于此修炼挣扎；上层为仙界，灵气充沛，强者聚集，俯瞰苍生。两界以\"天门\"相隔，凡人飞升方可入仙界。三大力量体系贯穿两界——修仙者以灵气修炼，魔道以魔气腐蚀，神道以神力庇佑苍生。各大势力争锋，正道与魔道数万年恩怨纠葛，仙魔之战的阴影至今未散。",
+      "regions": [
+        {
+          "id": "2b18041f-5837-44dc-b4f2-403b306d92d1",
+          "name": "新地区",
+          "region_type": "区域",
+          "x": 144.36385620678087,
+          "y": 294.05876196772806,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": "9e9ec73e-0d9d-492a-8e0e-636394c97038",
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": "边境贸易枢纽，雨季洪涝频发。"
+        },
+        {
+          "id": "d296ea1b-9137-4c4d-be5d-33549253bca8",
+          "name": "青龙山脉",
+          "region_type": "mountain",
+          "x": 163.02448257413278,
+          "y": 129.2056829548209,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界山脉圣地",
+            "修炼宝地"
+          ],
+          "notes": ""
+        },
+        {
+          "id": "e8474404-c984-4882-84be-a04350a6ab05",
+          "name": "青云山脉",
+          "region_type": "mountain",
+          "x": 157.72850461375143,
+          "y": 328.92565062129734,
+          "geography": {
+            "terrain": "高山峻岭，云雾缭绕",
+            "climate": "高寒多雾，四季云海不散",
+            "special_features": [
+              "灵气浓郁，为凡界修炼圣地山顶常年积雪，形成天然屏障内有多处灵泉与灵矿"
+            ],
+            "landmarks": [
+              "青云峰（巅峰修炼台）云海灵泉万古剑冢"
+            ]
+          },
+          "race": {
+            "primary_race": "修仙者",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "青云仙门文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界正道圣地",
+            "修炼要地"
+          ],
+          "notes": "凡界最重要的正道修仙圣地，青云门的大本营所在，灵气冠绝凡界，是无数修仙者梦寐以求之地。"
+        },
+        {
+          "id": "301d81b0-076b-4f0b-abeb-16e18c474c3f",
+          "name": "洛城",
+          "region_type": "plain",
+          "x": 1155.0597541851394,
+          "y": 335.27815548682383,
+          "geography": {
+            "terrain": "平原盆地，水源丰沛",
+            "climate": "高寒多雾，四季云海不散",
+            "special_features": [
+              "灵气浓郁，为凡界修炼圣地山顶常年积雪，形成天然屏障内有多处灵泉与灵矿"
+            ],
+            "landmarks": [
+              "青云峰（巅峰修炼台）云海灵泉万古剑冢"
+            ]
+          },
+          "race": {
+            "primary_race": "凡人",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "青云仙门文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界商业重镇",
+            "凡人聚居"
+          ],
+          "notes": "凡界最重要的正道修仙圣地，青云门的大本营所在，灵气冠绝凡界，是无数修仙者梦寐以求之地。"
+        },
+        {
+          "id": "2257a12b-75eb-4794-83d9-ed5c975b9c58",
+          "name": "星海湖",
+          "region_type": "ocean",
+          "x": 320.4825876958883,
+          "y": 261.7613045552838,
+          "geography": {
+            "terrain": "辽阔湖泊，深不见底",
+            "climate": "温润多雨，水雾弥漫",
+            "special_features": [
+              "湖底藏有远古秘境",
+              "湖面常现星辰倒影",
+              "富含水属性灵气"
+            ],
+            "landmarks": [
+              "星海秘境入口",
+              "龙宫遗址",
+              "水灵台"
+            ]
+          },
+          "race": {
+            "primary_race": "水族修仙者",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "星海文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界",
+            "神秘水域",
+            "秘境所在"
+          ],
+          "notes": "凡界最大湖泊，湖底藏有远古秘境，是修仙者寻宝圣地。"
+        },
+        {
+          "id": "beebdffd-c60c-490b-82cc-0e12414f98e5",
+          "name": "幽冥林",
+          "region_type": "forest",
+          "x": 355.66054117006297,
+          "y": 321.27928701661574,
+          "geography": {
+            "terrain": "阴暗密林，魔气弥漫",
+            "climate": "常年阴云，极少见日光",
+            "special_features": [
+              "魔气浓厚，正道修士进入会受到影响",
+              "树木扭曲变形，充满戾气",
+              "内有多处魔道洞府"
+            ],
+            "landmarks": [
+              "血祭祭坛",
+              "幽冥大阵核心",
+              "万骨枯山"
+            ]
+          },
+          "race": {
+            "primary_race": "魔修",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "幽血教文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界",
+            "魔道领地",
+            "危险禁区"
+          ],
+          "notes": "凡界最大的魔道势力据点，幽血魔教的大本营。正道不得轻易涉足。"
+        },
+        {
+          "id": "a136ae4c-cee5-4855-bf26-f961974d5995",
+          "name": "赤炎荒漠",
+          "region_type": "plain",
+          "x": 206.28967317467615,
+          "y": 142.00306260793704,
+          "geography": {
+            "terrain": "红色沙漠，终年高温",
+            "climate": "极度干燥炎热，火属性灵气异常浓厚",
+            "special_features": [
+              "火灵脉贯穿地下",
+              "偶现火凤巢穴",
+              "古代炼丹阵法遗址"
+            ],
+            "landmarks": [
+              "赤炎灵脉核心",
+              "焚天熔炉遗址",
+              "火凤翎台"
+            ]
+          },
+          "race": {
+            "primary_race": "火修",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "炎阳文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界",
+            "火属灵地",
+            "炼丹圣地"
+          ],
+          "notes": "火属性灵气最浓郁的荒漠，是炼丹宗师觊觎的宝地，赤炎阁主要驻扎在此。"
+        },
+        {
+          "id": "f92826bf-0004-4afe-b4c9-feaca3d2e541",
+          "name": "铁血关",
+          "region_type": "mountain",
+          "x": 269.05945577038926,
+          "y": 284.20442998270175,
+          "geography": {
+            "terrain": "险峻关隘，依山而建",
+            "climate": "四季风沙凛冽",
+            "special_features": [
+              "凡界与外域的天然屏障",
+              "灵气聚阵护城",
+              "历史悠久的军事要塞"
+            ],
+            "landmarks": [
+              "铁血碑林",
+              "千将台",
+              "守关大阵基点"
+            ]
+          },
+          "race": {
+            "primary_race": "武修",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "铁血边军文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界",
+            "军事要塞",
+            "边境防线"
+          ],
+          "notes": "守护凡界边境的军事要塞，铁血盟的核心据点，抵御域外魔族侵袭。"
+        },
+        {
+          "id": "8978f296-a69f-4d69-bbd2-4f3a0e67483b",
+          "name": "天门渡口",
+          "region_type": "mountain",
+          "x": 129.91242254608017,
+          "y": 157.68536500705198,
+          "geography": {
+            "terrain": "高耸山顶，常年云海翻腾",
+            "climate": "仙气氤氲，灵气极度浓厚",
+            "special_features": [
+              "连接凡界与仙界的传送阵核心",
+              "只有大乘期以上修士方可进入",
+              "历代飞升者在此留下痕迹"
+            ],
+            "landmarks": [
+              "飞升传送阵",
+              "渡仙碑",
+              "望仙峰"
+            ]
+          },
+          "race": {
+            "primary_race": "大乘修士",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "仙道文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:1",
+            "凡界",
+            "两界交界",
+            "飞升之地"
+          ],
+          "notes": "凡界修士飞升仙界的唯一通道所在地，是无数修仙者的终极目标。"
+        },
+        {
+          "id": "9f69b5aa-3c34-45a9-992b-7649d5d1021b",
+          "name": "太虚仙宫",
+          "region_type": "mountain",
+          "x": 375.2006942563323,
+          "y": 186.74046197964424,
+          "geography": {
+            "terrain": "云上宫殿，悬浮于仙界顶端",
+            "climate": "永恒晴朗，灵气如潮水般涌动",
+            "special_features": [
+              "仙界最高权力中心",
+              "汇聚天下仙师",
+              "古仙阵法护持"
+            ],
+            "landmarks": [
+              "太虚正殿",
+              "仙官令台",
+              "万仙朝会坛"
+            ]
+          },
+          "race": {
+            "primary_race": "真仙",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "太虚仙朝文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:2",
+            "仙界",
+            "权力中心",
+            "正道圣地"
+          ],
+          "notes": "仙界最高权力机构所在地，太虚仙朝统治仙界万年，号令诸仙。"
+        },
+        {
+          "id": "024e3bb8-d64b-4fff-aafe-0612b7540baf",
+          "name": "瑶池圣地",
+          "region_type": "ocean",
+          "x": -463.2825488272547,
+          "y": 552.8875746517001,
+          "geography": {
+            "terrain": "仙界最大湖泊，灵泉汇聚",
+            "climate": "温润如春，灵气内敛而充沛",
+            "special_features": [
+              "仙界灵气最充沛之地",
+              "孕育珍贵仙草仙果",
+              "西池仙母居所"
+            ],
+            "landmarks": [
+              "瑶池灵泉",
+              "蟠桃仙园",
+              "西池仙殿"
+            ]
+          },
+          "race": {
+            "primary_race": "仙女",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "瑶池文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:2",
+            "仙界",
+            "灵气圣地",
+            "仙草产地"
+          ],
+          "notes": "仙界灵气最充沛的圣地，西池仙母居所，出产无数珍贵仙草灵果。"
+        },
+        {
+          "id": "e4a0919d-2bf2-4c81-bafe-4a32819f8136",
+          "name": "魔渊深处",
+          "region_type": "forest",
+          "x": 312.735004488276,
+          "y": 130.17958638914556,
+          "geography": {
+            "terrain": "仙界中被魔气侵蚀的禁地",
+            "climate": "黑暗腐化，灵气扭曲",
+            "special_features": [
+              "仙界中魔道的最后据点",
+              "魔气与仙气在此激烈冲突",
+              "曾经发生仙魔大战的古战场"
+            ],
+            "landmarks": [
+              "仙魔战场遗址",
+              "魔主封印阵",
+              "仙魔裂缝"
+            ]
+          },
+          "race": {
+            "primary_race": "魔修",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "魔渊文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:2",
+            "仙界",
+            "魔道禁区",
+            "古战场"
+          ],
+          "notes": "仙界中仙魔大战的遗址，魔道余孽藏匿之处，有封印困锁古老魔主。"
+        },
+        {
+          "id": "80707da5-0259-43b5-aaa9-23db6a890bf3",
+          "name": "混沌边境",
+          "region_type": "plain",
+          "x": 231.91527956578813,
+          "y": 103.28405791537419,
+          "geography": {
+            "terrain": "混沌之气弥漫，空间不稳定",
+            "climate": "虚空乱流频发，极度危险",
+            "special_features": [
+              "仙界与未知虚空的边界地带",
+              "时有域外势力试图渗透",
+              "空间撕裂会开启通往异界的裂隙"
+            ],
+            "landmarks": [
+              "虚空裂隙监测台",
+              "混沌封锁大阵",
+              "天界边疆烽燧"
+            ]
+          },
+          "race": {
+            "primary_race": "虚空修士",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "边疆文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:2",
+            "仙界",
+            "边境要地",
+            "虚空裂隙"
+          ],
+          "notes": "仙界与未知虚空的边界，域外异族觊觎入侵之地，边疆守军严防死守。"
+        },
+        {
+          "id": "d651eab7-d645-4911-9f9b-0ec36af3c636",
+          "name": "神殿山",
+          "region_type": "mountain",
+          "x": 358.96057323913146,
+          "y": 295.9592820577101,
+          "geography": {
+            "terrain": "耸立云端的神圣山岳",
+            "climate": "圣洁光辉，神力弥漫",
+            "special_features": [
+              "神道信仰的圣地",
+              "神力能量极度充沛",
+              "祭祀活动在此举行"
+            ],
+            "landmarks": [
+              "神明祭坛",
+              "众神殿堂",
+              "神力聚灵台"
+            ]
+          },
+          "race": {
+            "primary_race": "神官",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "神道文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [
+            "layer:2",
+            "仙界",
+            "神道圣地",
+            "信仰中心"
+          ],
+          "notes": "神道体系的核心圣地，所有神道修士供奉祭祀之所，神力最为充盈。"
+        }
+      ],
+      "factions": [
+        {
+          "id": "bc2c0c08-24f6-4b5b-b5b1-401f55cc1b36",
+          "name": "新势力",
+          "scope": "internal",
+          "description": "",
+          "territory_region_ids": [],
+          "alignment": "true_neutral",
+          "relation_map": {},
+          "power_system_id": "9e9ec73e-0d9d-492a-8e0e-636394c97038",
+          "notes": ""
+        },
+        {
+          "id": "0ba00630-2a21-4e85-8cb8-095cdd4bd10a",
+          "name": "青云门",
+          "scope": "internal",
+          "description": "修仙界最顶尖的正道门派，历史长达数万年，坐落于青云山脉之巅，号令正道修仙者，培育无数大能。行事光明磊落，以剑道为尊。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "lawful_good",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "凡界第一正道门派，门规严明，门弟子遍布正道各地，与幽血魔教数万年宿仇。"
+        },
+        {
+          "id": "579214d6-fb36-4b1a-9ba3-de69ce1f2a66",
+          "name": "幽血魔教",
+          "scope": "internal",
+          "description": "凡界最强大的魔道势力，以修炼邪气魔道为主，手段残忍，以生灵血祭强化魔功。盘踞幽冥林数千年，与正道势不两立。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "chaotic_evil",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "魔道之首，门下弟子修炼血魔功法，以杀戮取乐，正道之敌，仙界所共讨之。"
+        },
+        {
+          "id": "bb05d7ac-6d18-4a7f-85cd-5ee8ce4f2e95",
+          "name": "铁血盟",
+          "scope": "internal",
+          "description": "凡界最大的武修联盟，成员均为身经百战的武修强者，誓死守护凡界边境。盘踞铁血关，作为对抗域外势力的第一道防线。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "lawful_neutral",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "凡界护卫者，铁律治军，誓死不退，与域外魔族有血海深仇，与正道保持中立盟约。"
+        },
+        {
+          "id": "8d80a81c-bb58-492e-ab9b-59a3c77be497",
+          "name": "赤炎阁",
+          "scope": "internal",
+          "description": "凡界最顶尖的炼丹势力，专精火系灵物炼制与火法器铸造。盘踞赤炎荒漠，垄断凡界高阶丹药市场，财力雄厚。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "neutral_good",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "炼丹界泰斗，中立不参与正邪纷争，但倾向于供应正道，以丹药之道回馈修仙界。"
+        },
+        {
+          "id": "c87bd696-9063-4ac4-a07b-538e18bdde14",
+          "name": "星海阁",
+          "scope": "internal",
+          "description": "以星海湖为据点的水修门派，擅长水系功法与占卜之术，是凡界最神秘的势力之一。门下高手众多，善于预测命运走向。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "neutral_good",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "神秘的水修门派，以预测闻名于世，很少主动介入正邪争斗，但关键时刻往往扮演决定性角色。"
+        },
+        {
+          "id": "f5b7290d-720f-49cb-99e3-6d3b49d9f887",
+          "name": "太虚仙朝",
+          "scope": "internal",
+          "description": "统治仙界数万年的最高权力机构，以太虚仙宫为中心。汇聚整个仙界最强大的真仙，制定并维护仙界秩序与法则。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "lawful_good",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "仙界最高权威，号令诸仙，维护天道平衡，曾多次镇压域外势力入侵与魔道叛乱。"
+        },
+        {
+          "id": "83e8f8d7-656c-4d86-9336-d4bc73c08a65",
+          "name": "神道圣院",
+          "scope": "internal",
+          "description": "神道体系的核心机构，以神殿山为圣地，汇聚所有神官与信仰修士。拥有神圣的神力与赐福能力，守护苍生。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "lawful_good",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "神道修士的精神家园，以神力信仰为核心，与太虚仙朝既有合作又有理念分歧，强调信仰而非权力。"
+        },
+        {
+          "id": "48feaf34-a707-4075-a775-803cd148737d",
+          "name": "域外魔族",
+          "scope": "external",
+          "description": "来自九天玄界之外的魔族势力，意图入侵并吞噬整个世界的灵气。长期在混沌边境觊觎，是所有仙界势力的共同敌人。",
+          "territory_region_ids": [
+            "e8474404-c984-4882-84be-a04350a6ab05"
+          ],
+          "alignment": "chaotic_evil",
+          "relation_map": {},
+          "power_system_id": null,
+          "notes": "外来入侵者，破坏九天玄界秩序，铁血盟在凡界层层阻拦，太虚仙朝在仙界部署防线。"
+        }
+      ],
+      "power_systems": [
+        {
+          "id": "9e9ec73e-0d9d-492a-8e0e-636394c97038",
+          "name": "新力量体系",
+          "template": "cultivation",
+          "levels": [
+            {
+              "name": "炼气期",
+              "description": "修炼基础灵气，打通经脉",
+              "requirements": "资质达到灵根"
+            },
+            {
+              "name": "筑基期",
+              "description": "构建灵台，稳固修为根基",
+              "requirements": "炼气圆满，服用筑基丹"
+            },
+            {
+              "name": "金丹期",
+              "description": "凝结金丹，突破凡人之躯",
+              "requirements": "筑基圆满，天地元气充沛"
+            },
+            {
+              "name": "元婴期",
+              "description": "孕育元婴，神识大幅提升",
+              "requirements": "金丹期三百年以上"
+            },
+            {
+              "name": "化神期",
+              "description": "神识化阶，初窥大道",
+              "requirements": "元婴成熟，与道合一契机"
+            },
+            {
+              "name": "炼虚期",
+              "description": "虚实相合，掌控空间之力",
+              "requirements": "悟透虚实之道"
+            },
+            {
+              "name": "合体期",
+              "description": "与天地融合，道法自然",
+              "requirements": "法力与自然同频共振"
+            },
+            {
+              "name": "大乘期",
+              "description": "超凡入圣，渡劫仙途",
+              "requirements": "天劫渡越，踏上飞升之路"
+            }
+          ],
+          "rules": [
+            "灵气是修炼根本",
+            "境界不可跨越，必须逐级突破",
+            "渡劫失败则陨落",
+            "杀孽过重影响修炼"
+          ],
+          "resources": [
+            "灵石",
+            "丹药",
+            "法宝",
+            "灵泉",
+            "秘籍"
+          ],
+          "notes": ""
+        },
+        {
+          "id": "13f0aab6-c83e-4580-a65d-94ab876e251f",
+          "name": "仙道灵气体系",
+          "template": "cultivation",
+          "levels": [
+            {
+              "name": "炼气期",
+              "description": "修炼基础灵气，打通经脉",
+              "requirements": "资质达到灵根"
+            },
+            {
+              "name": "筑基期",
+              "description": "构建灵台，稳固修为根基",
+              "requirements": "炼气圆满，服用筑基丹"
+            },
+            {
+              "name": "金丹期",
+              "description": "凝结金丹，突破凡人之躯",
+              "requirements": "筑基圆满，天地元气充沛"
+            },
+            {
+              "name": "元婴期",
+              "description": "孕育元婴，神识大幅提升",
+              "requirements": "金丹期三百年以上"
+            },
+            {
+              "name": "化神期",
+              "description": "神识化阶，初窥大道",
+              "requirements": "元婴成熟，与道合一契机"
+            },
+            {
+              "name": "炼虚期",
+              "description": "虚实相合，掌控空间之力",
+              "requirements": "悟透虚实之道"
+            },
+            {
+              "name": "合体期",
+              "description": "与天地融合，道法自然",
+              "requirements": "法力与自然同频共振"
+            },
+            {
+              "name": "大乘期",
+              "description": "超凡入圣，渡劫仙途",
+              "requirements": "天劫渡越，踏上飞升之路"
+            }
+          ],
+          "rules": [
+            "灵气是修炼根本",
+            "境界不可跨越，必须逐级突破",
+            "渡劫失败则陨落",
+            "杀孽过重影响修炼"
+          ],
+          "resources": [
+            "灵石",
+            "丹药",
+            "法宝",
+            "灵泉",
+            "秘籍"
+          ],
+          "notes": ""
+        },
+        {
+          "id": "eff04a4f-714b-4c47-9517-e9c19542f435",
+          "name": "魔道邪气体系",
+          "template": "custom",
+          "levels": [],
+          "rules": [],
+          "resources": [],
+          "notes": ""
+        },
+        {
+          "id": "e7ac03d3-93d5-492f-877b-530ebd52f6e5",
+          "name": "神道神力体系",
+          "template": "custom",
+          "levels": [],
+          "rules": [],
+          "resources": [],
+          "notes": ""
+        }
+      ],
+      "world_rules": [],
+      "relations": [
+        {
+          "id": "1df2dd21-b857-484a-88c6-156ad7289c64",
+          "source_id": "2b18041f-5837-44dc-b4f2-403b306d92d1",
+          "target_id": "bc2c0c08-24f6-4b5b-b5b1-401f55cc1b36",
+          "relation_type": "alliance",
+          "label": "连接",
+          "description": ""
+        },
+        {
+          "id": "4417c593-3da8-44af-bb43-dcdd74f525a6",
+          "source_id": "a136ae4c-cee5-4855-bf26-f961974d5995",
+          "target_id": "301d81b0-076b-4f0b-abeb-16e18c474c3f",
+          "relation_type": "alliance",
+          "label": "连接",
+          "description": ""
+        },
+        {
+          "id": "fe5f9d64-b6a9-44a2-836f-d83989d21c8b",
+          "source_id": "a136ae4c-cee5-4855-bf26-f961974d5995",
+          "target_id": "0ba00630-2a21-4e85-8cb8-095cdd4bd10a",
+          "relation_type": "alliance",
+          "label": "连接",
+          "description": ""
+        },
+        {
+          "id": "9142005b-dcb8-44ce-9b67-e4d0fb108ab9",
+          "source_id": "301d81b0-076b-4f0b-abeb-16e18c474c3f",
+          "target_id": "bb05d7ac-6d18-4a7f-85cd-5ee8ce4f2e95",
+          "relation_type": "alliance",
+          "label": "连接",
+          "description": ""
+        },
+        {
+          "id": "1a6ef0cd-e6ac-4041-98cc-e23da84d9cfd",
+          "source_id": "301d81b0-076b-4f0b-abeb-16e18c474c3f",
+          "target_id": "579214d6-fb36-4b1a-9ba3-de69ce1f2a66",
+          "relation_type": "alliance",
+          "label": "连接",
+          "description": ""
+        },
+        {
+          "id": "ea7065ea-6093-4400-afd2-7f9ed9ff1c04",
+          "source_id": "a136ae4c-cee5-4855-bf26-f961974d5995",
+          "target_id": "bb05d7ac-6d18-4a7f-85cd-5ee8ce4f2e95",
+          "relation_type": "alliance",
+          "label": "连接",
+          "description": ""
+        },
+        {
+          "id": "888281d0-b818-4153-9617-26bbb41a955f",
+          "source_id": "0ba00630-2a21-4e85-8cb8-095cdd4bd10a",
+          "target_id": "579214d6-fb36-4b1a-9ba3-de69ce1f2a66",
+          "relation_type": "alliance",
+          "label": "连接",
+          "description": ""
+        }
+      ],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

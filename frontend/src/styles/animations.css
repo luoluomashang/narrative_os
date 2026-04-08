@@ -1,0 +1,54 @@
+/* styles/animations.css — Animations */
+
+/* 呼吸灯：2s 循环，30%→80% 透明度 */
+@keyframes breathing {
+  0%, 100% { opacity: 0.30; }
+  50%       { opacity: 0.80; }
+}
+.breathing {
+  animation: breathing 2s ease-in-out infinite;
+}
+
+/* 侧边栏滑入 */
+.slide-in-right-enter-active {
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+.slide-in-right-enter-from {
+  transform: translateX(20px);
+  opacity: 0;
+}
+.slide-in-right-leave-active {
+  transition: transform 200ms ease, opacity 200ms ease;
+}
+.slide-in-right-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+/* Modal 淡入+缩放 */
+.modal-enter-active {
+  transition: all 180ms ease;
+}
+.modal-enter-from {
+  opacity: 0;
+  transform: scale(0.96);
+}
+.modal-leave-active {
+  transition: all 150ms ease;
+}
+.modal-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
+/* PING_PONG 粒子 */
+@keyframes particle-backward {
+  from { offset-distance: 0%; opacity: 1; }
+  to   { offset-distance: 100%; opacity: 0; }
+}
+
+/* 光标闪烁 */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}

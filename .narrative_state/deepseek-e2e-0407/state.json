@@ -1,0 +1,46 @@
+{
+  "project_id": "deepseek-e2e-0407",
+  "project_name": "DeepSeek端到端验收",
+  "created_at": "2026-04-07T04:44:05.668778+00:00",
+  "updated_at": "2026-04-07T04:50:31.795135+00:00",
+  "current_step": "genesis",
+  "current_chapter": 3,
+  "current_volume": 1,
+  "current_cycle_id": "",
+  "chapters": [
+    {
+      "chapter": 1,
+      "summary": "第 1 章",
+      "quality_score": 0.547,
+      "hook_score": 0.3,
+      "word_count": 49,
+      "timestamp": "2026-04-07T04:48:42.547578+00:00"
+    },
+    {
+      "chapter": 2,
+      "summary": "第 2 章",
+      "quality_score": 0.566,
+      "hook_score": 0.3,
+      "word_count": 1332,
+      "timestamp": "2026-04-07T04:49:27.754183+00:00"
+    },
+    {
+      "chapter": 3,
+      "summary": "第 3 章",
+      "quality_score": 0.547,
+      "hook_score": 0.3,
+      "word_count": 881,
+      "timestamp": "2026-04-07T04:50:31.794054+00:00"
+    }
+  ],
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "consecutive_no_payoff": 0,
+  "consecutive_hook_fail": 0,
+  "consecutive_low_words": 0,
+  "total_tokens_used": 0,
+  "last_confirmed_step": "",
+  "pending_approval": false,
+  "approval_context": {}
+}

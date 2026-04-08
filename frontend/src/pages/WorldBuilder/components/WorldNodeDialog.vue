@@ -263,16 +263,28 @@ watch(
   (isVisible) => {
     if (!isVisible) return
     regionForm.value = {
-      ...regionForm.value,
       name: '新地区',
       region_type: '区域',
       x: 120 + Math.random() * 260,
       y: 100 + Math.random() * 260,
+      geography: { terrain: '', climate: '', special_features: [], landmarks: [] },
+      race: { primary_race: '', secondary_races: [], is_mixed: false, race_notes: '' },
+      civilization: { name: '', belief_system: '', culture_tags: [], govt_type: '' },
+      power_access: { inherits_global: true, custom_system_id: null, power_notes: '' },
+      faction_ids: [],
+      alignment: 'true_neutral',
+      tags: [],
+      notes: '',
     }
     factionForm.value = {
-      ...factionForm.value,
       name: '新势力',
       scope: 'internal',
+      description: '',
+      territory_region_ids: [],
+      alignment: 'true_neutral',
+      relation_map: {},
+      power_system_id: null,
+      notes: '',
     }
   },
 )

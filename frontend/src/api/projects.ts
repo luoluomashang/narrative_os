@@ -33,6 +33,17 @@ export const projects = {
     client.get<CharacterSummary[]>(`/projects/${id}/characters`),
   character: (id: string, name: string) =>
     client.get<CharacterDetail>(`/projects/${id}/characters/${encodeURIComponent(name)}`),
+  createCharacter: (id: string, data: Partial<CharacterDetail>) =>
+    client.post<CharacterDetail>(`/projects/${id}/characters`, data),
+  updateCharacter: (id: string, name: string, data: Partial<CharacterDetail>) =>
+    client.put<CharacterDetail>(`/projects/${id}/characters/${encodeURIComponent(name)}`, data),
+  deleteCharacter: (id: string, name: string) =>
+    client.delete<{ deleted: string }>(`/projects/${id}/characters/${encodeURIComponent(name)}`),
+  testVoice: (id: string, name: string, scenario: string) =>
+    client.post<{ dialogue: string }>(
+      `/projects/${id}/characters/${encodeURIComponent(name)}/test-voice`,
+      { scenario }
+    ),
   memory: (id: string) =>
     client.get<MemorySnapshot>(`/projects/${id}/memory`),
   memorySearch: (id: string, q: string) =>

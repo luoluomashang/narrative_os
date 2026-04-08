@@ -100,6 +100,9 @@ class MaintenanceAgent:
             warnings,
         )
 
+        # 1.5 动机张力宣泄：若本章涉及关键冲突，降低相关角色 motivation.tension
+        updated = self._release_tension(updated, inp.critic_report, warnings)
+
         # 2. 标记本章节点已完成
         completed = self._mark_completed_nodes(
             plot_graph,
@@ -174,6 +177,59 @@ class MaintenanceAgent:
             updated.append(ch)
 
         return updated
+
+    # ---------------------------------------------------------------- #
+    # 动机张力宣泄                                                         #
+    # ---------------------------------------------------------------- #
+
+    def _release_tension(
+        self,
+        characters: list[CharacterState],
+        report: CriticReport | None,
+        warnings: list[str],
+    ) -> list[CharacterState]:
+        """
+        若本章涉及角色关键冲突事件（从 critic_report 中判断），
+        将相关角色的 motivation.tension 降低 0.1（表示冲突得到了宣泄）。
+        """
+        if not report or not report.consistency_report:
+            return characters
+
+        # 收集本章涉及关键冲突的角色名（来自一致性报告中的 character 维度 issue）
+        conflict_chars: set[str] = set()
+        for issue in report.consistency_report.issues:
+            if issue.dimension == "character":
+                for ch in characters:
+                    if ch.name in issue.description:
+                        conflict_chars.add(ch.name)
+
+        if not conflict_chars:
+            return characters
+
+        result: list[CharacterState] = []
+        for ch in characters:
+            if ch.name not in conflict_chars or not ch.motivations:
+                result.append(ch)
+                continue
+
+            # 降低高张力动机的 tension 值
+            new_motivations = []
+            tension_reduced = False
+            for m in ch.motivations:
+                if m.tension >= 0.6:
+                    new_tension = max(0.0, round(m.tension - 0.1, 2))
+                    new_motivations.append(m.model_copy(update={"tension": new_tension}))
+                    tension_reduced = True
+                else:
+                    new_motivations.append(m)
+
+            if tension_reduced:
+                ch = ch.model_copy(update={"motivations": new_motivations})
+                warnings.append(f"角色「{ch.name}」本章涉及冲突，高张力动机 tension 已降低 0.1")
+
+            result.append(ch)
+
+        return result
 
     # ---------------------------------------------------------------- #
     # 节点状态                                                            #

@@ -143,6 +143,7 @@ function removeEvent(id: string) {
   right: 0;
   z-index: 10;
   transition: height 0.3s ease;
+  pointer-events: none; /* 容器本身不拦截鼠标事件，防止遮挡画布下层交互 */
 }
 
 .timeline-container:not(.open) {
@@ -163,6 +164,7 @@ function removeEvent(id: string) {
   color: var(--wb-neon-cyan, #2ef2ff);
   font-size: 12px;
   backdrop-filter: blur(8px);
+  pointer-events: auto;
   user-select: none;
 }
 
@@ -178,6 +180,7 @@ function removeEvent(id: string) {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  pointer-events: auto;
 }
 
 .timeline-toolbar {
@@ -272,17 +275,18 @@ function removeEvent(id: string) {
   height: 14px;
   border-radius: 50%;
   border: none;
-  background: rgba(255, 64, 64, 0.6);
+  background: rgba(255, 64, 64, 0.5);
   color: white;
   cursor: pointer;
   font-size: 10px;
   line-height: 14px;
   padding: 0;
-  display: none;
+  opacity: 0.5;
+  transition: opacity 0.15s;
 }
 
 .event-card:hover .event-delete {
-  display: block;
+  opacity: 1;
 }
 
 .timeline-empty {

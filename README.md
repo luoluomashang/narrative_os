@@ -30,17 +30,34 @@
 - 节点详细字段编辑（地区环境、势力治理、力量规则等）
 - 关系连线创建、关系详情编辑、关系删除
 - 批量关系编辑
+- 图谱/地图/分层/星图多视图切换，支持主题切换
+- 图谱模式支持双向拖拽连线（Loose Connection）
+- 自动布局后自动 FitView，快速回到全局可见范围
+- 底部时间线支持事件新增、浏览与删除
+- 势力关系映射支持“按名称编辑 + 分值滑杆”，不再仅显示 UUID
+- AI 建议关系按实体名称展示，便于阅读与采纳
+- 逻辑校验面板 + AI 深度分析
 - 力量体系保存时可选“同步到全局继承节点”
 - Finalize：将世界设定写入知识库
 
 详细说明见 [docs/ui/07_worldbuilder_module_spec.md](docs/ui/07_worldbuilder_module_spec.md)。
 
-### 4. TRPG 互动模式
+### 4. 角色矩阵（Character Matrix）
+- 角色 CRUD：创建、查看、编辑、删除角色
+- **档案 Tab**：基础信息编辑（名称、特质、目标、背景、外貌、性格、别名）
+- **状态 Tab**：ECharts 雷达图展示 6 维属性 + 弧光阶段进度条
+- **限制 Tab**：行为约束规则（rule / severity / context）可编辑，支持实时约束测试
+- **关系 Tab**：D3 力导向关系图 + 关系列表编辑（角色名 + 好感度 -1~1）
+- **对话口吻 Tab**：VoiceFingerprint 五维编辑 + speech_style + 口头禅 + Few-Shot 对话示例 + 口吻试戏面板
+- **动机冲突 Tab**：Motivation（desire / fear / tension）可编辑 + 张力总览 + scenario_context / system_instructions
+- Pipeline 集成：角色口吻和动机冲突自动注入 Writer/Planner/Critic/Maintenance Agent 提示词
+
+### 5. TRPG 互动模式
 - 会话创建、行动推进、帮回、回滚、结束摘要
 - WebSocket 流式叙事
 - 密度模式：dense / normal / sparse
 
-### 5. 可视化与运营面板
+### 6. 可视化与运营面板
 - 情节画布、角色矩阵、记忆系统、质量仪表盘、风格控制台
 - Agent 工坊、消耗统计、插件市场、全局与项目设置
 
@@ -215,6 +232,14 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 - `DELETE /projects/{project_id}/world/relations/{relation_id}`
 - `GET /projects/{project_id}/world/power-templates`
 - `POST /projects/{project_id}/world/finalize`
+
+### 角色矩阵
+- `GET /projects/{project_id}/characters` — 角色列表摘要
+- `GET /projects/{project_id}/characters/{name}` — 角色详情
+- `POST /projects/{project_id}/characters` — 创建角色
+- `PUT /projects/{project_id}/characters/{name}` — 更新角色
+- `DELETE /projects/{project_id}/characters/{name}` — 删除角色
+- `POST /projects/{project_id}/characters/{name}/test-voice` — 口吻试戏
 
 ## 目录
 

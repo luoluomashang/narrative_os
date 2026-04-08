@@ -88,6 +88,8 @@ class WriteContext(BaseModel):
     # Gate 8 (merged into chapter_target.tension_target / hook_type)
     # Gate 9
     style_summary: str = ""
+    # Gate 10: 角色口吻 & 动机注入（Author's Note 风格，紧贴 user message 末尾）
+    character_voice_notes: str = ""
 
     def to_system_prompt(self) -> str:
         """将上下文渲染为 system prompt 文本，供 LLMRouter 使用。"""
@@ -238,6 +240,7 @@ class ContextBuilder:
         # Gate 3: 角色快照
         if characters:
             ctx.characters = self._gate3_characters(characters)
+            ctx.character_voice_notes = _build_all_voice_notes(characters)
 
         # Gate 4: 世界快照
         if world is not None:
@@ -285,6 +288,7 @@ class ContextBuilder:
     def _gate3_characters(
         self, characters: "list[CharacterState]"
     ) -> list[CharacterSnapshot]:
+        """将完整 CharacterState 压缩为 CharacterSnapshot。"""
         snaps = []
         for ch in characters:
             arc = ch.get_arc_progression()
@@ -362,3 +366,54 @@ class ContextBuilder:
         if isinstance(goal, str):
             return goal[:300]
         return ""
+
+
+# ------------------------------------------------------------------ #
+# 角色口吻 & 动机注入（供 Writer Pipeline 使用）                        #
+# ------------------------------------------------------------------ #
+
+def _build_character_voice_injection(char: "CharacterState") -> str:
+    """构建角色口吻注入文本（Author's Note 风格，紧贴上下文）"""
+    parts: list[str] = []
+    vf = char.voice_fingerprint
+    if char.speech_style:
+        parts.append(f"[{char.name} 语言风格] {char.speech_style}")
+    if vf.under_pressure:
+        parts.append(f"[{char.name} 高压时] {vf.under_pressure}")
+    if char.catchphrases:
+        parts.append(f"[{char.name} 口头禅] {'、'.join(char.catchphrases[:3])}")
+    if char.dialogue_examples:
+        ex = char.dialogue_examples[:2]  # 最多注入2条示例
+        examples_text = "\n".join(
+            f"  [{e.context}] {e.dialogue}" for e in ex if e.dialogue
+        )
+        if examples_text:
+            parts.append(f"[{char.name} 对话示例]\n{examples_text}")
+    if char.system_instructions:
+        parts.append(f"[{char.name} 行为规则] {char.system_instructions}")
+    return "\n".join(parts)
+
+
+def _build_high_tension_motivations(char: "CharacterState") -> str:
+    """提取高张力动机（tension >= 0.6），作为行为驱动提示"""
+    high = [m for m in char.motivations if m.tension >= 0.6]
+    if not high:
+        return ""
+    lines = [
+        f"  • 渴望「{m.desire}」但恐惧「{m.fear or '未知'}」（张力 {m.tension:.1f}）"
+        for m in high
+    ]
+    return f"[{char.name} 当前内在冲突]\n" + "\n".join(lines)
+
+
+def _build_all_voice_notes(characters: "list[CharacterState]") -> str:
+    """为所有在场角色构建口吻 & 动机注入文本。"""
+    blocks: list[str] = []
+    for ch in characters:
+        voice = _build_character_voice_injection(ch)
+        motivation = _build_high_tension_motivations(ch)
+        if voice:
+            blocks.append(voice)
+        if motivation:
+            blocks.append(motivation)
+    return "\n\n".join(blocks)

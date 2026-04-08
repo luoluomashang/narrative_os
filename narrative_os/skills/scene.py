@@ -156,6 +156,12 @@ class SceneGenerator:
             for c in req.constraints:
                 lines.append(f"- {c}")
 
+        # 角色口吻 & 动机注入（Author's Note Depth 0：紧贴内容末尾）
+        if context.character_voice_notes:
+            lines.append("")
+            lines.append("## 角色口吻与动机参考（务必遵循）")
+            lines.append(context.character_voice_notes)
+
         return "\n".join(l for l in lines if l)
 
     @staticmethod

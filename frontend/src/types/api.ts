@@ -100,6 +100,34 @@ export interface PlotGraphData {
   edges: PlotEdge[]
 }
 
+// Character sub-types
+export interface DialogueExample {
+  context: string
+  dialogue: string
+  action?: string
+}
+
+export interface Motivation {
+  desire: string
+  fear?: string
+  tension: number   // 0.0 ~ 1.0
+  notes?: string
+}
+
+export interface VoiceFingerprint {
+  under_pressure?: string
+  when_lying?: string
+  deflection?: string
+  emotional_peak?: string
+  default_length?: 'short' | 'medium' | 'long'
+}
+
+export interface BehaviorConstraintDetail {
+  rule: string
+  severity: 'hard' | 'soft'
+  context?: string
+}
+
 // Character
 export interface CharacterSummary {
   name: string
@@ -111,11 +139,26 @@ export interface CharacterSummary {
 }
 
 export interface CharacterDetail extends CharacterSummary {
+  // 原有字段
   traits: string[]
   goal: string
   backstory: string
-  relationships: Record<string, string>
-  behavior_constraints: string[]
+  relationships: Record<string, number>
+  behavior_constraints: BehaviorConstraintDetail[]
+  voice_fingerprint: VoiceFingerprint
+  memory: Array<{ chapter: number; event: string; emotion?: string; importance?: number }>
+  snapshot_history: Array<{ chapter: number; arc_stage: string; emotion: string; health: number }>
+  // 新增字段
+  description: string
+  personality: string
+  alias: string[]
+  speech_style: string
+  catchphrases: string[]
+  dialogue_examples: DialogueExample[]
+  motivations: Motivation[]
+  scenario_context: string
+  system_instructions: string
+  chapter_introduced: number
 }
 
 // Memory

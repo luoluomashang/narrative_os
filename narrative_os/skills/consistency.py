@@ -176,6 +176,7 @@ class ConsistencyChecker:
     ) -> list[ConsistencyIssue]:
         issues: list[ConsistencyIssue] = []
         for char in characters:
+            # 1. 行为约束检查（原有逻辑）
             result = char.check_constraints(text)
             for v in result.violations:
                 issues.append(ConsistencyIssue(
@@ -188,6 +189,59 @@ class ConsistencyChecker:
                     suggestion=v.suggestion or f"\u8bf7调整\u300c{char.name}\u300d在此处的行为\uff0c使其符合角色设定。",
                     source_rule=v.rule,
                 ))
+
+            # 2. 口吻一致性参考（voice_fingerprint + dialogue_examples）
+            #    作为 OOC 检测的附加 soft 信号
+            vf = getattr(char, "voice_fingerprint", None)
+            dialogue_examples = getattr(char, "dialogue_examples", [])
+            speech_style = getattr(char, "speech_style", "")
+            catchphrases = getattr(char, "catchphrases", [])
+
+            # 如果角色有口头禅定义，检查文本中角色对话是否完全缺乏口头禅特征
+            if catchphrases and char.name in text:
+                has_catchphrase = any(cp in text for cp in catchphrases)
+                if not has_catchphrase:
+                    issues.append(ConsistencyIssue(
+                        dimension="character",
+                        severity="info",
+                        description=(
+                            f"角色「{char.name}」有定义口头禅"
+                            f"（{'、'.join(catchphrases[:3])}），"
+                            f"但文本中未出现任何口头禅特征"
+                        ),
+                        suggestion=f"考虑在「{char.name}」的对话中融入其口头禅以保持角色一致性。",
+                        source_rule="voice_fingerprint",
+                        confidence=0.4,  # 低置信度，仅作参考
+                    ))
+
+            # 如果角色有对话示例，构建风格参考上下文供后续 LLM 语义检查使用
+            if dialogue_examples and self._llm_call.__name__ != "<lambda>":
+                voice_ref_parts: list[str] = []
+                if speech_style:
+                    voice_ref_parts.append(f"语言风格：{speech_style}")
+                if vf and vf.under_pressure:
+                    voice_ref_parts.append(f"高压时说话风格：{vf.under_pressure}")
+                for ex in dialogue_examples[:3]:
+                    if ex.dialogue:
+                        voice_ref_parts.append(f"对话示例（{ex.context}）：{ex.dialogue}")
+                if voice_ref_parts:
+                    voice_ref = "\n".join(voice_ref_parts)
+                    prompt = (
+                        f"判断以下文本中「{char.name}」的对话是否符合其口吻设定。\n"
+                        f"口吻参考：\n{voice_ref}\n\n"
+                        f"文本片段：{text[:500]}\n\n"
+                        f"如果严重不符合请回答'OOC'，否则回答'OK'。"
+                    )
+                    llm_result = self._llm_call(prompt)
+                    if "OOC" in llm_result.upper():
+                        issues.append(ConsistencyIssue(
+                            dimension="character",
+                            severity="soft",
+                            description=f"角色「{char.name}」对话风格可能偏离其口吻设定（OOC）",
+                            suggestion=f"请参考「{char.name}」的对话示例和语言风格设定，调整其对话措辞。",
+                            source_rule="voice_fingerprint",
+                            confidence=0.6,
+                        ))
         return issues
 
     def _check_world(

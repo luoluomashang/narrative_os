@@ -96,6 +96,7 @@
 
         <div class="canvas-overlay-topright">
           <ThemeSwitcher v-model="currentTheme" />
+          <span class="overlay-divider"></span>
           <ViewSwitcher v-model="activeView" />
           <button v-if="activeView === 'graph'" class="wb-icon-btn" title="自动布局" @click="autoLayout">⚙ 自动</button>
         </div>
@@ -103,11 +104,13 @@
         <div v-if="error" class="error-box">{{ error }}</div>
 
         <VueFlow
+          id="wb-graph"
           v-else-if="activeView === 'graph'"
           class="world-flow"
           :nodes="flowNodes"
           :edges="flowEdges"
           :node-types="nodeTypes"
+          connection-mode="loose"
           fit-view-on-init
           @node-click="onNodeClick"
           @edge-click="onEdgeClick"
@@ -190,13 +193,14 @@
             :regions="worldData.regions"
             :power-systems="worldData.power_systems"
             :project-id="projectId"
-            :all-faction-ids="worldData.factions.map(f => f.id)"
+            :all-factions="worldData.factions"
             @save="saveFaction"
             @delete="deleteFaction"
             @adopt-relation="adoptSuggestedRelation"
           />
         </el-card>
 
+        <div class="right-panel-section-label">力量体系</div>
         <PowerSystemPanel
           :items="worldData.power_systems"
           :selected-id="selectedPowerSystemId"
@@ -269,11 +273,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, markRaw, onMounted, reactive, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   VueFlow,
+  useVueFlow,
   type Connection,
   type Edge,
   type EdgeMouseEvent,
@@ -431,6 +436,7 @@ const flowEdges = computed<Edge[]>(() => {
 // 性能优化: 视口裁剪（节点 > 100 时启用）
 const vfViewport = ref({ x: 0, y: 0, zoom: 1 })
 const canvasPanelRef = ref<HTMLElement | null>(null)
+const { fitView } = useVueFlow('wb-graph')
 
 function onViewportChange(vp: { x: number; y: number; zoom: number }) {
   vfViewport.value = vp
@@ -542,6 +548,9 @@ function autoLayout() {
       region.y = sn.y
     }
   })
+
+  // 布局完成后自动 FitView，确保所有节点可见
+  nextTick(() => fitView({ padding: 0.15 }))
 }
 
 // View mode camera state save/restore
@@ -1144,6 +1153,24 @@ async function finalizeWorld() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.overlay-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--wb-glass-border, rgba(255,255,255,0.12));
+  flex-shrink: 0;
+}
+
+.right-panel-section-label {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--wb-neon-cyan, #2ef2ff);
+  border-top: 1px solid var(--wb-glass-border, rgba(255,255,255,0.08));
+  opacity: 0.7;
+  text-transform: uppercase;
 }
 
 .wb-icon-btn {

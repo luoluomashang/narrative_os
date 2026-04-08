@@ -30,8 +30,50 @@
         <el-option v-for="item in powerSystems" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
     </el-form-item>
-    <el-form-item label="势力关系映射（每行：势力ID=关系值）">
-      <el-input v-model="relationMapText" type="textarea" :rows="4" @change="syncRelationMap" />
+    <el-form-item label="势力关系映射">
+      <div class="relation-map-editor">
+        <div
+          v-for="[fid, score] in Object.entries(model.relation_map || {})"
+          :key="fid"
+          class="relation-map-row"
+        >
+          <span class="relation-faction-name" :title="fid">{{ nameById(fid) }}</span>
+          <el-slider
+            :model-value="score as number"
+            :min="-1" :max="1" :step="0.1"
+            style="flex: 1; margin: 0 10px"
+            @update:model-value="(v: number) => updateRelationScore(fid, v)"
+          />
+          <span class="relation-score-badge" :class="scoreClass(score as number)">
+            {{ (score as number) >= 0 ? '+' : '' }}{{ (score as number).toFixed(1) }}
+          </span>
+          <el-button text type="danger" size="small" @click="removeRelationEntry(fid)">×</el-button>
+        </div>
+        <div class="relation-map-add">
+          <el-select
+            v-model="newRelationFid"
+            placeholder="选择势力…"
+            size="small"
+            style="flex: 1"
+            clearable
+            filterable
+          >
+            <el-option
+              v-for="f in availableFactions"
+              :key="f.id"
+              :label="f.name"
+              :value="f.id"
+            />
+          </el-select>
+          <el-button
+            type="primary"
+            plain
+            size="small"
+            :disabled="!newRelationFid"
+            @click="addRelationEntry"
+          >+ 添加</el-button>
+        </div>
+      </div>
     </el-form-item>
     <el-form-item label="备注">
       <el-input v-model="model.notes" type="textarea" :rows="3" />
@@ -61,7 +103,7 @@
     <div v-if="suggestions.length" class="suggest-list">
       <div v-for="(s, idx) in suggestions" :key="idx" class="suggest-card">
         <div class="suggest-info">
-          <strong>{{ s.source_id }} → {{ s.target_id }}</strong>
+          <strong>{{ nameById(s.source_id) }} → {{ nameById(s.target_id) }}</strong>
           <span class="suggest-type">{{ s.relation_type }}</span>
         </div>
         <div class="suggest-reason">{{ s.reason }}</div>
@@ -76,13 +118,17 @@ import { computed, ref, watch } from 'vue'
 import type { Faction } from '@/api/world'
 import { world } from '@/api/world'
 
+function nameById(id: string): string {
+  return props.allFactions.find(f => f.id === id)?.name || id
+}
+
 const props = defineProps<{
   model: Faction
   loading: boolean
   regions: Array<{ id: string; name: string }>
   powerSystems: Array<{ id: string; name: string }>
   projectId: string
-  allFactionIds: string[]
+  allFactions: Array<{ id: string; name: string }>
 }>()
 defineEmits<{ (e: 'save'): void; (e: 'delete'): void; (e: 'adopt-relation', s: { source_id: string; target_id: string; relation_type: string; reason: string }): void }>()
 
@@ -106,28 +152,34 @@ const alignmentOptions = [
   { value: 'transcendent', label: '超越阵营' },
 ]
 
-const relationMapText = computed({
-  get: () => {
-    const entries = Object.entries(props.model.relation_map || {})
-    return entries.map(([id, value]) => `${id}=${value}`).join('\n')
-  },
-  set: (v: string) => {
-    const next: Record<string, number> = {}
-    for (const line of v.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      const [idPart, valuePart] = trimmed.split('=')
-      const id = (idPart || '').trim()
-      const score = Number((valuePart || '').trim())
-      if (!id || Number.isNaN(score)) continue
-      next[id] = Math.max(-1, Math.min(1, score))
-    }
-    props.model.relation_map = next
-  },
-})
+const newRelationFid = ref('')
 
-function syncRelationMap() {
-  relationMapText.value = relationMapText.value
+const availableFactions = computed(() =>
+  props.allFactions.filter(
+    f => f.id !== props.model.id && !Object.prototype.hasOwnProperty.call(props.model.relation_map || {}, f.id)
+  )
+)
+
+function scoreClass(score: number): string {
+  if (score >= 0.5) return 'score-positive'
+  if (score <= -0.5) return 'score-negative'
+  return 'score-neutral'
+}
+
+function updateRelationScore(fid: string, value: number) {
+  props.model.relation_map = { ...(props.model.relation_map || {}), [fid]: Math.round(value * 10) / 10 }
+}
+
+function removeRelationEntry(fid: string) {
+  const next = { ...(props.model.relation_map || {}) }
+  delete next[fid]
+  props.model.relation_map = next
+}
+
+function addRelationEntry() {
+  if (!newRelationFid.value) return
+  props.model.relation_map = { ...(props.model.relation_map || {}), [newRelationFid.value]: 0 }
+  newRelationFid.value = ''
 }
 
 // Parse advanced fields from notes on model change
@@ -169,7 +221,7 @@ async function onSuggestRelations() {
   suggestLoading.value = true
   suggestions.value = []
   try {
-    const res = await world.suggestRelations(props.projectId, props.allFactionIds)
+    const res = await world.suggestRelations(props.projectId, props.allFactions.map(f => f.id))
     suggestions.value = res.data.suggestions || []
   } catch {
     suggestions.value = []
@@ -244,5 +296,52 @@ async function onExpand(field: string) {
   font-size: 12px;
   color: rgba(255,255,255,0.6);
   margin-bottom: 6px;
+}
+
+/* relation_map 结构化编辑器 */
+.relation-map-editor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relation-map-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.relation-faction-name {
+  min-width: 80px;
+  max-width: 110px;
+  font-size: 12px;
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.relation-score-badge {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.relation-score-badge.score-positive { color: #2eff8a; }
+.relation-score-badge.score-neutral  { color: #aaa; }
+.relation-score-badge.score-negative { color: #ff8080; }
+
+.relation-map-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 4px;
 }
 </style>

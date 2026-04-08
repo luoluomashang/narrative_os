@@ -62,6 +62,7 @@ class PlannerInput(BaseModel):
     character_names: list[str] = Field(default_factory=list)
     world_rules: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
+    motivation_context: str = ""     # 角色动机冲突参考（由上层注入）
 
 
 class PlannedNode(BaseModel):
@@ -191,6 +192,9 @@ class PlannerAgent:
             lines.append("世界法则：" + " / ".join(inp.world_rules[:3]))
         if inp.constraints:
             lines.append("额外约束：" + "；".join(inp.constraints[:3]))
+        if inp.motivation_context:
+            lines.append("")
+            lines.append(inp.motivation_context)
         lines.append("\n请生成结构化剧情骨架（JSON 格式）：")
         return "\n".join(lines)
 
@@ -269,3 +273,26 @@ def _extract_json(text: str) -> dict[str, Any] | None:
         except json.JSONDecodeError:
             pass
     return None
+
+
+# ------------------------------------------------------------------ #
+# 角色动机上下文                                                         #
+# ------------------------------------------------------------------ #
+
+def build_motivation_context(characters: "list[Any]") -> str:
+    """
+    为 Planner 提供动机驱动的场景规划提示。
+
+    参数为 list[CharacterState]，使用 Any 避免循环导入。
+    调用方在构建 PlannerInput 时将结果传入 motivation_context 字段。
+    """
+    lines: list[str] = []
+    for char in characters:
+        motivations = getattr(char, "motivations", [])
+        high = [m for m in motivations if m.tension >= 0.6]
+        if high:
+            desires = "、".join(m.desire for m in high)
+            lines.append(f"- {char.name}：当前高张力驱动为「{desires}」，适合安排关键冲突")
+    if not lines:
+        return ""
+    return "角色动机冲突参考（供 Planner 规划时参考，无需全部采用）：\n" + "\n".join(lines)

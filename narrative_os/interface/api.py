@@ -24,7 +24,7 @@ from contextlib import asynccontextmanager
 from threading import Lock
 from typing import Any, Literal, Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import Body, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -1114,6 +1114,144 @@ async def get_character_detail(project_id: str, name: str) -> dict[str, Any]:
         status_code=status.HTTP_404_NOT_FOUND,
         detail={"detail": f"角色 '{name}' 不存在。", "code": "NOT_FOUND"},
     )
+
+
+# ------------------------------------------------------------------ #
+# Character CRUD + Test-Voice                                          #
+# ------------------------------------------------------------------ #
+
+class CharacterCreateRequest(BaseModel):
+    name: str
+    traits: list[str] = Field(default_factory=list)
+    goal: str = ""
+    backstory: str = ""
+    description: str = ""
+    personality: str = ""
+    alias: list[str] = Field(default_factory=list)
+    speech_style: str = ""
+    catchphrases: list[str] = Field(default_factory=list)
+    dialogue_examples: list[dict] = Field(default_factory=list)
+    motivations: list[dict] = Field(default_factory=list)
+    scenario_context: str = ""
+    system_instructions: str = ""
+    faction: str = ""
+
+
+@app.post("/projects/{project_id}/characters", summary="创建角色")
+async def create_character(project_id: str, req: CharacterCreateRequest) -> dict[str, Any]:
+    mgr = _try_load_project(project_id)
+    if mgr is None:
+        raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
+    kb = mgr.load_kb()
+    characters = kb.get("characters", [])
+    if not isinstance(characters, list):
+        characters = []
+    # 名称唯一性校验
+    if any(isinstance(c, dict) and c.get("name") == req.name for c in characters):
+        raise HTTPException(status_code=409, detail={"detail": f"角色「{req.name}」已存在", "code": "CONFLICT"})
+    new_char = req.model_dump()
+    new_char.update({"emotion": "平静", "health": 1.0, "relationships": {}, "arc_stage": "防御",
+                     "memory": [], "behavior_constraints": [], "voice_fingerprint": {},
+                     "snapshot_history": [], "is_alive": True, "chapter_introduced": 1})
+    characters.append(new_char)
+    kb["characters"] = characters
+    mgr.save_kb(kb)
+    return new_char
+
+
+@app.put("/projects/{project_id}/characters/{name}", summary="更新角色")
+async def update_character(project_id: str, name: str, req: dict = Body(...)) -> dict[str, Any]:
+    mgr = _try_load_project(project_id)
+    if mgr is None:
+        raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
+    kb = mgr.load_kb()
+    characters = kb.get("characters", [])
+    if not isinstance(characters, list):
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    for i, c in enumerate(characters):
+        if isinstance(c, dict) and c.get("name") == name:
+            # 合并更新，保留不在 req 中的字段
+            merged = {**c, **req}
+            merged["name"] = name  # name 不可通过 PUT 修改
+            characters[i] = merged
+            kb["characters"] = characters
+            mgr.save_kb(kb)
+            return merged
+    raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+
+
+@app.delete("/projects/{project_id}/characters/{name}", summary="删除角色")
+async def delete_character(project_id: str, name: str) -> dict[str, str]:
+    mgr = _try_load_project(project_id)
+    if mgr is None:
+        raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
+    kb = mgr.load_kb()
+    characters = kb.get("characters", [])
+    if not isinstance(characters, list):
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    original_count = len(characters)
+    characters = [c for c in characters if not (isinstance(c, dict) and c.get("name") == name)]
+    if len(characters) == original_count:
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    kb["characters"] = characters
+    mgr.save_kb(kb)
+    return {"deleted": name}
+
+
+class TestVoiceRequest(BaseModel):
+    scenario: str  # 场景描述，如"被敌人包围时"
+
+
+@app.post("/projects/{project_id}/characters/{name}/test-voice", summary="口吻试戏")
+async def test_character_voice(project_id: str, name: str, req: TestVoiceRequest) -> dict[str, str]:
+    """
+    给定场景描述，生成该角色视角的 1-2 句对话，用于验证口吻是否符合预期。
+    使用角色的 voice_fingerprint、speech_style、dialogue_examples 作为参考。
+    """
+    mgr = _try_load_project(project_id)
+    if mgr is None:
+        raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
+    kb = mgr.load_kb()
+    characters = kb.get("characters", [])
+    char = next(
+        (c for c in characters if isinstance(c, dict) and c.get("name") == name),
+        None
+    )
+    if char is None:
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+
+    # 构建提示词
+    vf = char.get("voice_fingerprint", {})
+    examples = char.get("dialogue_examples", [])
+    examples_text = "\n".join(
+        f'[{e.get("context", "")}] {e.get("dialogue", "")}' for e in examples[:3]
+    ) if examples else "（无示例）"
+
+    prompt = (
+        f"你是角色「{char.get('name', name)}」。\n"
+        f"性格：{char.get('personality', char.get('backstory', ''))}\n"
+        f"语言风格：{char.get('speech_style', '自然')}\n"
+        f"口头禅：{'、'.join(char.get('catchphrases', [])) or '无'}\n"
+        f"高压时的说话方式：{vf.get('under_pressure', '') or '无特殊表现'}\n"
+        f"历史对话示例：\n{examples_text}\n\n"
+        f"当前场景：{req.scenario}\n"
+        f"请以该角色的口吻，用 1-2 句话（可含动作描写）回应当前场景。直接输出对话，无需前缀。"
+    )
+
+    from narrative_os.execution.llm_router import LLMRequest, LLMRouter
+    router = LLMRouter()
+    try:
+        llm_req = LLMRequest(
+            task_type="voice_test",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200,
+            temperature=0.8,
+            skill_name="test_voice",
+        )
+        resp = await router.call(llm_req)
+        return {"dialogue": resp.content.strip()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"detail": f"生成失败：{e}", "code": "LLM_ERROR"})
 
 
 @app.get("/projects/{project_id}/memory", summary="三层记忆快照")

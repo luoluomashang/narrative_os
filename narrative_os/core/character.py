@@ -34,6 +34,27 @@ class ArcStage(str):
     TRANSFORMED = "改变"      # 阶段5：完成转变
 
 
+class DialogueExample(BaseModel):
+    """
+    Few-Shot 对话示例（参考 SillyTavern mes_example 实现）。
+    用于 Writer Agent 生成时的风格少样本注入。
+    """
+    context: str = ""      # 情境描述，如"被逼入绝境"
+    dialogue: str = ""     # 角色说的话（可含动作描写）
+    action: str = ""       # 伴随动作/内心活动（可选）
+
+
+class Motivation(BaseModel):
+    """
+    内在动机冲突（来自 GPT 方案核心建议）。
+    desire(驱力) vs fear(恐惧) 的张力产生"人味"。
+    """
+    desire: str = ""       # 欲望/驱力，如"变得更强"
+    fear: str = ""         # 恐惧/压力，如"失去同伴"
+    tension: float = Field(default=0.5, ge=0.0, le=1.0)  # 当前张力（0低-1高）
+    notes: str = ""        # 补充说明
+
+
 class BehaviorConstraint(BaseModel):
     """
     行为约束规则（硬约束，Critic Agent 必须校验）。
@@ -109,6 +130,25 @@ class CharacterState(BaseModel):
     faction: str = ""
     is_alive: bool = True
     chapter_introduced: int = 1
+
+    # === 新增字段（Phase: 角色矩阵优化，向后兼容）===
+
+    # 形象与性格
+    description: str = ""              # 外貌/形象描述（从 backstory 分离）
+    personality: str = ""              # 性格核心描述
+    alias: list[str] = Field(default_factory=list)  # 别名/称号
+
+    # 口吻与对话引导
+    speech_style: str = ""             # 语言风格描述（口癖、用词习惯）
+    catchphrases: list[str] = Field(default_factory=list)  # 口头禅列表
+    dialogue_examples: list[DialogueExample] = Field(default_factory=list)  # Few-Shot 对话示例
+
+    # 动机冲突层
+    motivations: list[Motivation] = Field(default_factory=list)  # 内在动机冲突列表
+    scenario_context: str = ""         # 当前场景语境（Planner 生成意图时参考）
+
+    # 系统级控制
+    system_instructions: str = ""      # 角色专属系统提示词（注入 Writer Agent）
 
     model_config = {"frozen": False}
 

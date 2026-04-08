@@ -54,7 +54,9 @@ const computedLayers = computed(() => {
   props.regions.forEach(r => {
     let layerNum = 0 // 默认归入"未分层"
     if (r.tags) {
-      const layerTag = r.tags.find(t => /^layer:\d+$/.test(t))
+      // 展开每个 tag 条目中可能包含的空格分隔内容，兼容 "layer:1 标签名" 写法
+      const allTagParts = r.tags.flatMap(t => t.split(/\s+/))
+      const layerTag = allTagParts.find(t => /^layer:\d+$/.test(t))
       if (layerTag) {
         layerNum = parseInt(layerTag.split(':')[1], 10)
       }

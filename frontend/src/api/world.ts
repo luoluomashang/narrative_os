@@ -59,6 +59,9 @@ export interface Faction {
   alignment: string
   relation_map: Record<string, number>
   power_system_id: string | null
+  color: string | null
+  x: number
+  y: number
   notes: string
 }
 
@@ -87,6 +90,15 @@ export interface WorldRelation {
   description: string
 }
 
+export interface TimelineSandboxEvent {
+  id: string
+  year: string
+  title: string
+  description: string
+  linked_entity_id: string | null
+  event_type: string
+}
+
 export interface WorldSandboxData {
   world_name: string
   world_type: string
@@ -95,6 +107,7 @@ export interface WorldSandboxData {
   factions: Faction[]
   power_systems: PowerSystem[]
   relations: WorldRelation[]
+  timeline_events: TimelineSandboxEvent[]
   world_rules: string[]
 }
 
@@ -184,5 +197,27 @@ export const world = {
   aiConsistencyCheck: (projectId: string) =>
     client.post<{ issues: Array<{ severity: string; node_ref: string; message: string }> }>(
       `/projects/${projectId}/world/ai/consistency-check`
+    ),
+
+  // Timeline
+  listTimeline: (projectId: string) =>
+    client.get<TimelineSandboxEvent[]>(`/projects/${projectId}/world/timeline`),
+  createTimelineEvent: (projectId: string, data: { year?: string; title: string; description?: string; linked_entity_id?: string | null; event_type?: string }) =>
+    client.post<TimelineSandboxEvent>(`/projects/${projectId}/world/timeline`, data),
+  getTimelineEvent: (projectId: string, eventId: string) =>
+    client.get<TimelineSandboxEvent>(`/projects/${projectId}/world/timeline/${eventId}`),
+  updateTimelineEvent: (projectId: string, eventId: string, data: Partial<TimelineSandboxEvent>) =>
+    client.put<TimelineSandboxEvent>(`/projects/${projectId}/world/timeline/${eventId}`, data),
+  deleteTimelineEvent: (projectId: string, eventId: string) =>
+    client.delete(`/projects/${projectId}/world/timeline/${eventId}`),
+
+  // Overview & Layout
+  overview: (projectId: string) =>
+    client.get<{ statistics: Record<string, number>; orphan_nodes: Array<{ id: string; name: string; type: string }>; completeness_hints: string[] }>(
+      `/projects/${projectId}/world/overview`
+    ),
+  mapLayout: (projectId: string) =>
+    client.get<{ nodes: Array<{ id: string; name: string; region_type: string; x: number; y: number; faction_ids: string[] }>; edges: Array<{ source_id: string; target_id: string; relation_type: string }> }>(
+      `/projects/${projectId}/world/map-layout`
     ),
 }

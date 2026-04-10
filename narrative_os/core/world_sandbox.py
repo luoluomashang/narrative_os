@@ -43,6 +43,19 @@ class FactionScope(str, Enum):
     EXTERNAL = "external"  # 域外势力
 
 
+class RelationType(str, Enum):
+    """标准化关系类型"""
+    ADJACENT = "adjacent"        # 相邻
+    BORDER = "border"            # 边界
+    TRADE = "trade"              # 贸易
+    WAR = "war"                  # 战争
+    ALLIANCE = "alliance"        # 联盟
+    VASSAL = "vassal"            # 附属
+    BLOCKADE = "blockade"        # 封锁
+    TELEPORT = "teleport"        # 传送
+    CONNECTION = "connection"    # 通用连接（默认 / 旧数据回退）
+
+
 class PowerSystemTemplateType(str, Enum):
     CULTIVATION = "cultivation"  # 修真
     SYSTEM = "system"            # 系统
@@ -117,6 +130,9 @@ class Faction(BaseModel):
     alignment: AlignmentType = AlignmentType.TRUE_NEUTRAL
     relation_map: dict[str, float] = Field(default_factory=dict)  # faction_id -> -1.0(盟友)~+1.0(敌对)
     power_system_id: Optional[str] = None
+    color: Optional[str] = None   # HEX 色值，用于前端疆域着色，如 "#3b82f6"
+    x: float = 0.0                # 画布定位 X（图视图分组布局）
+    y: float = 0.0                # 画布定位 Y
     notes: str = ""
 
 
@@ -143,9 +159,19 @@ class WorldRelation(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_id: str    # Region.id 或 Faction.id
     target_id: str
-    relation_type: str = "connection"  # 如：贸易、战争、联盟、附属、封锁、传送
+    relation_type: str = RelationType.CONNECTION  # 标准化关系类型，旧数据自动回退为 connection
     label: str = ""
     description: str = ""
+
+
+class TimelineSandboxEvent(BaseModel):
+    """时间轴事件（世界沙盘专用）"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    year: str = ""                        # 故事内年份/时间标记
+    title: str = ""
+    description: str = ""
+    linked_entity_id: Optional[str] = None  # 关联实体 ID（地区/势力）
+    event_type: str = "general"             # general / conflict / founding / collapse / discovery
 
 
 class WorldSandboxData(BaseModel):
@@ -158,6 +184,7 @@ class WorldSandboxData(BaseModel):
     power_systems: list[PowerSystem] = Field(default_factory=list)
     world_rules: list[str] = Field(default_factory=list)  # 绝对规则/硬约束
     relations: list[WorldRelation] = Field(default_factory=list)
+    timeline_events: list[TimelineSandboxEvent] = Field(default_factory=list)  # 时间轴事件
     canvas_viewport: dict[str, Any] = Field(default_factory=dict)  # 保存 Vue-Flow 视口位置
 
 
@@ -359,3 +386,59 @@ WORLD_TYPE_LABELS: dict[WorldType, str] = {
     WorldType.INTERSTELLAR: "星际/宇宙流",
     WorldType.MULTI_LAYER: "多层世界",
 }
+
+RELATION_TYPE_LABELS: dict[RelationType, str] = {
+    RelationType.ADJACENT: "相邻",
+    RelationType.BORDER: "边界",
+    RelationType.TRADE: "贸易",
+    RelationType.WAR: "战争",
+    RelationType.ALLIANCE: "联盟",
+    RelationType.VASSAL: "附属",
+    RelationType.BLOCKADE: "封锁",
+    RelationType.TELEPORT: "传送",
+    RelationType.CONNECTION: "连接",
+}
+
+# 旧数据中文关系类型到标准枚举的映射（向后兼容）
+_LEGACY_RELATION_MAP: dict[str, str] = {
+    "贸易": RelationType.TRADE,
+    "trade": RelationType.TRADE,
+    "战争": RelationType.WAR,
+    "war": RelationType.WAR,
+    "conflict": RelationType.WAR,
+    "联盟": RelationType.ALLIANCE,
+    "alliance": RelationType.ALLIANCE,
+    "附属": RelationType.VASSAL,
+    "vassal": RelationType.VASSAL,
+    "封锁": RelationType.BLOCKADE,
+    "blockade": RelationType.BLOCKADE,
+    "传送": RelationType.TELEPORT,
+    "teleport": RelationType.TELEPORT,
+    "相邻": RelationType.ADJACENT,
+    "adjacent": RelationType.ADJACENT,
+    "边界": RelationType.BORDER,
+    "border": RelationType.BORDER,
+    "connection": RelationType.CONNECTION,
+    "连接": RelationType.CONNECTION,
+}
+
+
+def normalize_relation_type(raw: str) -> str:
+    """将旧数据关系类型标准化为 RelationType 枚举值，未识别类型回退为 connection。"""
+    if not raw:
+        return RelationType.CONNECTION
+    lower = raw.strip().lower()
+    # 已经是标准枚举值
+    try:
+        return RelationType(lower).value
+    except ValueError:
+        pass
+    # 尝试旧数据映射
+    mapped = _LEGACY_RELATION_MAP.get(raw.strip())
+    if mapped:
+        return mapped
+    mapped = _LEGACY_RELATION_MAP.get(lower)
+    if mapped:
+        return mapped
+    # 未识别 → 回退
+    return RelationType.CONNECTION

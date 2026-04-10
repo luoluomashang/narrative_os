@@ -13,7 +13,7 @@
           v-for="event in sortedEvents"
           :key="event.id"
           class="timeline-event"
-          :class="event.type"
+          :class="event.event_type"
           :style="{ left: `${getEventOffset(event.year)}px` }"
         >
           <div class="event-year">{{ event.year }}</div>
@@ -29,7 +29,8 @@
       </div>
     </div>
 
-    <!-- Add event dialog -->
+    <!-- Add event dialog — teleport to body to avoid stacking context issues -->
+    <Teleport to="body">
     <div v-if="showAddDialog" class="tl-dialog-overlay" @click.self="showAddDialog = false">
       <div class="tl-dialog">
         <div class="tl-dialog-title">添加年表事件</div>
@@ -48,10 +49,11 @@
           </label>
           <label>
             类型
-            <select v-model="newEvent.type">
+            <select v-model="newEvent.event_type">
               <option value="historical">历史</option>
               <option value="conflict">冲突</option>
               <option value="growth">发展</option>
+              <option value="general">通用</option>
               <option value="custom">自定义</option>
             </select>
           </label>
@@ -62,11 +64,15 @@
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { world } from '@/api/world'
+import type { TimelineSandboxEvent } from '@/api/world'
+import { ElMessage } from 'element-plus'
 
 interface TimelineEvent {
   id: string
@@ -74,7 +80,7 @@ interface TimelineEvent {
   title: string
   description: string
   linkedEntityId?: string
-  type: 'historical' | 'conflict' | 'growth' | 'custom'
+  event_type: string
 }
 
 const props = defineProps<{
@@ -84,26 +90,46 @@ const props = defineProps<{
 const timelineOpen = ref(false)
 const showAddDialog = ref(false)
 const events = ref<TimelineEvent[]>([])
+const loading = ref(false)
 
 const newEvent = ref({
-  year: 0,
+  year: 1,
   title: '',
   description: '',
-  type: 'historical' as TimelineEvent['type'],
+  event_type: 'historical',
 })
 
-const storageKey = () => `wb-timeline-${props.projectId}`
-
-onMounted(() => {
-  const saved = localStorage.getItem(storageKey())
-  if (saved) {
-    try { events.value = JSON.parse(saved) } catch { /* ignore */ }
+function toLocalEvent(e: TimelineSandboxEvent): TimelineEvent {
+  return {
+    id: e.id,
+    year: parseInt(e.year) || 0,
+    title: e.title,
+    description: e.description || '',
+    linkedEntityId: e.linked_entity_id || undefined,
+    event_type: e.event_type || 'historical',
   }
-})
+}
 
-watch(events, (val) => {
-  localStorage.setItem(storageKey(), JSON.stringify(val))
-}, { deep: true })
+async function loadEvents() {
+  if (!props.projectId) return
+  loading.value = true
+  try {
+    const res = await world.listTimeline(props.projectId)
+    events.value = res.data.map(toLocalEvent)
+  } catch {
+    // Fallback: try localStorage for migration
+    const saved = localStorage.getItem(`wb-timeline-${props.projectId}`)
+    if (saved) {
+      try { events.value = JSON.parse(saved) } catch { /* ignore */ }
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadEvents)
+
+watch(() => props.projectId, loadEvents)
 
 const sortedEvents = computed(() =>
   [...events.value].sort((a, b) => a.year - b.year)
@@ -117,21 +143,31 @@ function getEventOffset(year: number): number {
   return 40 + ((year - minYear) / range) * 600
 }
 
-function addEvent() {
-  if (!newEvent.value.title.trim()) return
-  events.value.push({
-    id: crypto.randomUUID(),
-    year: newEvent.value.year,
-    title: newEvent.value.title.trim(),
-    description: newEvent.value.description.trim(),
-    type: newEvent.value.type,
-  })
-  newEvent.value = { year: 0, title: '', description: '', type: 'historical' }
-  showAddDialog.value = false
+async function addEvent() {
+  if (!newEvent.value.title.trim() || !props.projectId) return
+  try {
+    const res = await world.createTimelineEvent(props.projectId, {
+      year: String(newEvent.value.year),
+      title: newEvent.value.title.trim(),
+      description: newEvent.value.description.trim(),
+      event_type: newEvent.value.event_type,
+    })
+    events.value.push(toLocalEvent(res.data))
+    newEvent.value = { year: 1, title: '', description: '', event_type: 'historical' }
+    showAddDialog.value = false
+  } catch {
+    ElMessage.error('添加事件失败，请稍后重试')
+  }
 }
 
-function removeEvent(id: string) {
-  events.value = events.value.filter(e => e.id !== id)
+async function removeEvent(id: string) {
+  if (!props.projectId) return
+  try {
+    await world.deleteTimelineEvent(props.projectId, id)
+    events.value = events.value.filter(e => e.id !== id)
+  } catch {
+    ElMessage.error('删除事件失败，请稍后重试')
+  }
 }
 </script>
 
@@ -151,7 +187,7 @@ function removeEvent(id: string) {
 }
 
 .timeline-container.open {
-  height: 152px;
+  height: 180px;
 }
 
 .timeline-toggle {
@@ -173,7 +209,7 @@ function removeEvent(id: string) {
 }
 
 .timeline-content {
-  height: 120px;
+  height: 148px;
   background: rgba(8, 8, 16, 0.9);
   backdrop-filter: blur(10px);
   padding: 8px 16px;

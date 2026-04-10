@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="visible" :title="mode === 'region' ? '新建地区' : '新建势力'" width="760px" @close="$emit('close')">
+  <el-dialog :model-value="visible" :title="mode === 'region' ? '新建地区' : '新建势力'" width="760px" class="world-node-dialog" @close="$emit('close')">
     <el-form v-if="mode === 'region'" label-position="top" size="small">
       <el-row :gutter="12">
         <el-col :span="12">
@@ -129,6 +129,20 @@
     </template>
   </el-dialog>
 </template>
+
+<style>
+/* 对话框内容区域可滚动，底部按钮始终可见 */
+.world-node-dialog {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.world-node-dialog .el-dialog__body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(90vh - 130px);
+}
+</style>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'

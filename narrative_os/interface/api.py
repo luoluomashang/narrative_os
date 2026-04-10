@@ -46,9 +46,12 @@ from narrative_os.core.world_sandbox import (
     Faction,
     PowerSystem,
     WorldRelation,
+    TimelineSandboxEvent,
+    RelationType,
     PowerSystemTemplateType,
     POWER_SYSTEM_TEMPLATES,
     get_template_summary,
+    normalize_relation_type,
 )
 
 # Module-level imports so tests can monkeypatch cleanly
@@ -2425,12 +2428,26 @@ class RegionCreateRequest(BaseModel):
     region_type: str = ""
     x: float = 100.0
     y: float = 100.0
+    # Optional full fields — accepted but not required for quick creation
+    geography: Optional[dict] = None
+    race: Optional[dict] = None
+    civilization: Optional[dict] = None
+    power_access: Optional[dict] = None
+    faction_ids: list[str] = Field(default_factory=list)
+    alignment: str = "true_neutral"
+    tags: list[str] = Field(default_factory=list)
+    notes: str = ""
 
 
 class FactionCreateRequest(BaseModel):
     name: str
     scope: str = "internal"
     description: str = ""
+    territory_region_ids: list[str] = Field(default_factory=list)
+    alignment: str = "true_neutral"
+    color: Optional[str] = None
+    power_system_id: Optional[str] = None
+    notes: str = ""
 
 
 class PowerSystemCreateRequest(BaseModel):
@@ -2452,6 +2469,22 @@ class RelationUpdateRequest(BaseModel):
     description: Optional[str] = None
 
 
+class TimelineEventCreateRequest(BaseModel):
+    year: str = ""
+    title: str
+    description: str = ""
+    linked_entity_id: Optional[str] = None
+    event_type: str = "general"
+
+
+class TimelineEventUpdateRequest(BaseModel):
+    year: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    linked_entity_id: Optional[str] = None
+    event_type: Optional[str] = None
+
+
 def _collect_world_node_ids(sandbox: WorldSandboxData) -> set[str]:
     region_ids = {r.id for r in sandbox.regions}
     faction_ids = {f.id for f in sandbox.factions}
@@ -2467,6 +2500,29 @@ def _ensure_relation_nodes_exist(sandbox: WorldSandboxData, source_id: str, targ
 
 
 # ----- 辅助函数 -----
+
+def _sync_territory_links(sandbox: WorldSandboxData) -> None:
+    """双向同步 region.faction_ids ↔ faction.territory_region_ids，
+    合并两侧已有数据，确保两方始终一致。"""
+    # 1. 收集 faction → {region_ids}（来自 faction 侧）
+    faction_region_map: dict[str, set[str]] = {f.id: set(f.territory_region_ids) for f in sandbox.factions}
+    region_set = {r.id for r in sandbox.regions}
+    # 2. 合并 region 侧
+    for r in sandbox.regions:
+        for fid in list(r.faction_ids):
+            if fid in faction_region_map:
+                faction_region_map[fid].add(r.id)
+            else:
+                r.faction_ids.remove(fid)  # 引用不存在的 faction，清除
+    # 3. 写回 faction.territory_region_ids（只保留存在的 region）
+    for f in sandbox.factions:
+        f.territory_region_ids = [rid for rid in faction_region_map.get(f.id, set()) if rid in region_set]
+    # 4. 写回 region.faction_ids（确保 faction 侧新增的 region 也在 region.faction_ids 中）
+    for f in sandbox.factions:
+        for rid in f.territory_region_ids:
+            r = next((x for x in sandbox.regions if x.id == rid), None)
+            if r and f.id not in r.faction_ids:
+                r.faction_ids.append(f.id)
 
 async def _get_sandbox(project_id: str, db) -> WorldSandboxData:
     """从 DB 读取沙盘数据，不存在则返回默认空数据"""
@@ -2585,8 +2641,23 @@ async def update_world_meta(project_id: str, req: WorldMetaUpdateRequest) -> dic
 async def create_region(project_id: str, req: RegionCreateRequest) -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
         sandbox = await _get_sandbox(project_id, db)
-        region = Region(name=req.name, region_type=req.region_type, x=req.x, y=req.y)
+        from narrative_os.core.world_sandbox import RegionGeography, RegionRace, RegionCivilization, RegionPowerAccess
+        region = Region(
+            name=req.name,
+            region_type=req.region_type,
+            x=req.x,
+            y=req.y,
+            faction_ids=req.faction_ids,
+            alignment=req.alignment,
+            tags=req.tags,
+            notes=req.notes,
+            geography=RegionGeography(**(req.geography or {})),
+            race=RegionRace(**(req.race or {})),
+            civilization=RegionCivilization(**(req.civilization or {})),
+            power_access=RegionPowerAccess(**(req.power_access or {})),
+        )
         sandbox.regions.append(region)
+        _sync_territory_links(sandbox)
         await _save_sandbox(project_id, sandbox, db)
     return region.model_dump()
 
@@ -2613,6 +2684,7 @@ async def update_region(project_id: str, region_id: str, req: Region) -> dict[st
         payload = req.model_dump()
         payload["id"] = region_id
         sandbox.regions[idx] = Region(**payload)
+        _sync_territory_links(sandbox)
         await _save_sandbox(project_id, sandbox, db)
     return sandbox.regions[idx].model_dump()
 
@@ -2628,6 +2700,7 @@ async def delete_region(project_id: str, region_id: str) -> None:
         # 同时清理引用该地区的关系
         sandbox.relations = [rel for rel in sandbox.relations
                              if rel.source_id != region_id and rel.target_id != region_id]
+        _sync_territory_links(sandbox)
         await _save_sandbox(project_id, sandbox, db)
 
 
@@ -2637,8 +2710,18 @@ async def delete_region(project_id: str, region_id: str) -> None:
 async def create_faction(project_id: str, req: FactionCreateRequest) -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
         sandbox = await _get_sandbox(project_id, db)
-        faction = Faction(name=req.name, scope=req.scope, description=req.description)  # type: ignore[arg-type]
+        faction = Faction(
+            name=req.name,
+            scope=req.scope,
+            description=req.description,
+            territory_region_ids=req.territory_region_ids,
+            alignment=req.alignment,
+            color=req.color,
+            power_system_id=req.power_system_id,
+            notes=req.notes,
+        )  # type: ignore[arg-type]
         sandbox.factions.append(faction)
+        _sync_territory_links(sandbox)
         await _save_sandbox(project_id, sandbox, db)
     return faction.model_dump()
 
@@ -2665,6 +2748,7 @@ async def update_faction(project_id: str, faction_id: str, req: Faction) -> dict
         payload = req.model_dump()
         payload["id"] = faction_id
         sandbox.factions[idx] = Faction(**payload)
+        _sync_territory_links(sandbox)
         await _save_sandbox(project_id, sandbox, db)
     return sandbox.factions[idx].model_dump()
 
@@ -2679,6 +2763,7 @@ async def delete_faction(project_id: str, faction_id: str) -> None:
             raise HTTPException(status_code=404, detail=f"Faction {faction_id} not found")
         sandbox.relations = [rel for rel in sandbox.relations
                              if rel.source_id != faction_id and rel.target_id != faction_id]
+        _sync_territory_links(sandbox)
         await _save_sandbox(project_id, sandbox, db)
 
 
@@ -2809,6 +2894,212 @@ async def delete_relation(project_id: str, relation_id: str) -> None:
         await _save_sandbox(project_id, sandbox, db)
 
 
+# --- Timeline Events ---
+
+@app.get("/projects/{project_id}/world/timeline", summary="获取全部时间轴事件")
+async def list_timeline_events(project_id: str) -> list[dict[str, Any]]:
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+    return [e.model_dump() for e in sandbox.timeline_events]
+
+
+@app.post("/projects/{project_id}/world/timeline", summary="创建时间轴事件", status_code=201)
+async def create_timeline_event(project_id: str, req: TimelineEventCreateRequest) -> dict[str, Any]:
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+        event = TimelineSandboxEvent(
+            year=req.year,
+            title=req.title,
+            description=req.description,
+            linked_entity_id=req.linked_entity_id,
+            event_type=req.event_type,
+        )
+        sandbox.timeline_events.append(event)
+        await _save_sandbox(project_id, sandbox, db)
+    return event.model_dump()
+
+
+@app.get("/projects/{project_id}/world/timeline/{event_id}", summary="获取时间轴事件详情")
+async def get_timeline_event(project_id: str, event_id: str) -> dict[str, Any]:
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+    event = next((e for e in sandbox.timeline_events if e.id == event_id), None)
+    if event is None:
+        raise HTTPException(status_code=404, detail=f"TimelineEvent {event_id} not found")
+    return event.model_dump()
+
+
+@app.put("/projects/{project_id}/world/timeline/{event_id}", summary="更新时间轴事件")
+async def update_timeline_event(
+    project_id: str, event_id: str, req: TimelineEventUpdateRequest
+) -> dict[str, Any]:
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+        idx = next((i for i, e in enumerate(sandbox.timeline_events) if e.id == event_id), None)
+        if idx is None:
+            raise HTTPException(status_code=404, detail=f"TimelineEvent {event_id} not found")
+        existing = sandbox.timeline_events[idx].model_dump()
+        for key, value in req.model_dump(exclude_none=True).items():
+            existing[key] = value
+        sandbox.timeline_events[idx] = TimelineSandboxEvent(**existing)
+        await _save_sandbox(project_id, sandbox, db)
+    return sandbox.timeline_events[idx].model_dump()
+
+
+@app.delete("/projects/{project_id}/world/timeline/{event_id}", summary="删除时间轴事件", status_code=204)
+async def delete_timeline_event(project_id: str, event_id: str) -> None:
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+        original_len = len(sandbox.timeline_events)
+        sandbox.timeline_events = [e for e in sandbox.timeline_events if e.id != event_id]
+        if len(sandbox.timeline_events) == original_len:
+            raise HTTPException(status_code=404, detail=f"TimelineEvent {event_id} not found")
+        await _save_sandbox(project_id, sandbox, db)
+
+
+# --- 世界概览 ---
+
+@app.get("/projects/{project_id}/world/overview", summary="世界概览（统计、孤立节点、数据完整性提示）")
+async def get_world_overview(project_id: str) -> dict[str, Any]:
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+
+    # 统计
+    region_count = len(sandbox.regions)
+    faction_count = len(sandbox.factions)
+    relation_count = len(sandbox.relations)
+    power_system_count = len(sandbox.power_systems)
+    timeline_event_count = len(sandbox.timeline_events)
+
+    # 孤立节点检测（无任何关系的节点）
+    connected_ids: set[str] = set()
+    for rel in sandbox.relations:
+        connected_ids.add(rel.source_id)
+        connected_ids.add(rel.target_id)
+    all_node_ids = {r.id for r in sandbox.regions} | {f.id for f in sandbox.factions}
+    orphan_ids = all_node_ids - connected_ids
+    orphan_nodes = []
+    for oid in orphan_ids:
+        r = next((r for r in sandbox.regions if r.id == oid), None)
+        f = next((f for f in sandbox.factions if f.id == oid), None)
+        if r:
+            orphan_nodes.append({"id": oid, "name": r.name, "type": "region"})
+        elif f:
+            orphan_nodes.append({"id": oid, "name": f.name, "type": "faction"})
+
+    # 数据完整性提示
+    completeness_hints: list[str] = []
+    if region_count == 0:
+        completeness_hints.append("尚未创建任何地区")
+    if faction_count == 0:
+        completeness_hints.append("尚未创建任何势力")
+    if relation_count == 0 and (region_count > 0 or faction_count > 0):
+        completeness_hints.append("尚未建立任何关系")
+    # 检查无归属地区
+    regions_with_faction = set()
+    for f in sandbox.factions:
+        regions_with_faction.update(f.territory_region_ids)
+    regions_no_faction = [r.name for r in sandbox.regions if r.id not in regions_with_faction]
+    if regions_no_faction:
+        completeness_hints.append(f"以下地区无势力归属：{', '.join(regions_no_faction[:5])}")
+    # 检查势力无领地
+    factions_no_territory = [f.name for f in sandbox.factions if not f.territory_region_ids]
+    if factions_no_territory:
+        completeness_hints.append(f"以下势力无领地：{', '.join(factions_no_territory[:5])}")
+    # 检查势力无颜色
+    factions_no_color = [f.name for f in sandbox.factions if not f.color]
+    if factions_no_color:
+        completeness_hints.append(f"以下势力未设置颜色：{', '.join(factions_no_color[:5])}")
+
+    return {
+        "statistics": {
+            "regions": region_count,
+            "factions": faction_count,
+            "relations": relation_count,
+            "power_systems": power_system_count,
+            "timeline_events": timeline_event_count,
+        },
+        "orphan_nodes": orphan_nodes,
+        "completeness_hints": completeness_hints,
+    }
+
+
+# --- 地图布局 ---
+
+@app.get("/projects/{project_id}/world/map-layout", summary="基于邻接关系的地图布局坐标")
+async def get_map_layout(project_id: str) -> dict[str, Any]:
+    """基于地区节点 + 邻接关系返回自动布局坐标。使用简单的力导引式布局。"""
+    import math
+
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+
+    if not sandbox.regions:
+        return {"nodes": [], "edges": []}
+
+    # 收集邻接边（adjacent/border/connection 等空间关系）
+    spatial_types = {
+        RelationType.ADJACENT, RelationType.BORDER,
+        RelationType.CONNECTION, RelationType.TELEPORT,
+    }
+    region_ids = {r.id for r in sandbox.regions}
+    edges = []
+    adjacency: dict[str, set[str]] = {r.id: set() for r in sandbox.regions}
+    for rel in sandbox.relations:
+        rel_type = normalize_relation_type(rel.relation_type)
+        if rel.source_id in region_ids and rel.target_id in region_ids:
+            if rel_type in {t.value for t in spatial_types}:
+                adjacency[rel.source_id].add(rel.target_id)
+                adjacency[rel.target_id].add(rel.source_id)
+                edges.append({
+                    "source_id": rel.source_id,
+                    "target_id": rel.target_id,
+                    "relation_type": rel_type,
+                })
+
+    # 简单力导引布局：BFS 层次 + 圆形布局
+    placed: dict[str, dict[str, float]] = {}
+    visited: set[str] = set()
+
+    # 使用已有坐标作为初始位置，否则使用圆形布局
+    has_user_positions = any(r.x != 0.0 or r.y != 0.0 for r in sandbox.regions)
+
+    if has_user_positions:
+        # 保持用户手动设置的坐标
+        for r in sandbox.regions:
+            placed[r.id] = {"x": r.x, "y": r.y}
+    else:
+        # 无用户坐标时使用圆形布局
+        n = len(sandbox.regions)
+        radius = max(150, n * 40)
+        for i, r in enumerate(sandbox.regions):
+            angle = 2 * math.pi * i / n
+            placed[r.id] = {
+                "x": round(radius * math.cos(angle), 2),
+                "y": round(radius * math.sin(angle), 2),
+            }
+
+    # 构造节点输出（含所属势力信息）
+    region_faction_map: dict[str, list[str]] = {}
+    for f in sandbox.factions:
+        for rid in f.territory_region_ids:
+            region_faction_map.setdefault(rid, []).append(f.id)
+
+    nodes = []
+    for r in sandbox.regions:
+        pos = placed.get(r.id, {"x": 0, "y": 0})
+        nodes.append({
+            "id": r.id,
+            "name": r.name,
+            "region_type": r.region_type,
+            "x": pos["x"],
+            "y": pos["y"],
+            "faction_ids": region_faction_map.get(r.id, []),
+        })
+
+    return {"nodes": nodes, "edges": edges}
+
+
 # ----- 工具端点：力量体系模板摘要 -----
 
 @app.get("/projects/{project_id}/world/power-templates", summary="获取内置力量体系模板列表")
@@ -2871,6 +3162,7 @@ async def finalize_world(project_id: str) -> dict[str, Any]:
             "factions": len(sandbox.factions),
             "power_systems": len(sandbox.power_systems),
             "relations": len(sandbox.relations),
+            "timeline_events": len(sandbox.timeline_events),
         },
     }
 

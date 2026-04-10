@@ -122,6 +122,35 @@ function checkConsistency(data: WorldSandboxData): ConsistencyIssue[] {
     }
   })
 
+  // Rule 5: Relation endpoints must reference existing region or faction
+  const regionIds = new Set(data.regions.map(r => r.id))
+  const validIds = new Set([...regionIds, ...factionIds])
+  const nodeName = (id: string) => {
+    const r = data.regions.find(r => r.id === id)
+    if (r) return `地区「${r.name}」`
+    const f = data.factions.find(f => f.id === id)
+    if (f) return `势力「${f.name}」`
+    return `节点(${id.slice(0, 8)}…)`
+  }
+  data.relations.forEach(rel => {
+    if (!validIds.has(rel.source_id)) {
+      issues.push({
+        nodeId: rel.id,
+        nodeType: 'region',
+        severity: 'error',
+        message: `关系「${rel.label || rel.id.slice(0, 8)}」的源节点 ID(${rel.source_id.slice(0, 8)}…) 未在已定义的地区或势力列表中出现`,
+      })
+    }
+    if (!validIds.has(rel.target_id)) {
+      issues.push({
+        nodeId: rel.id,
+        nodeType: 'region',
+        severity: 'error',
+        message: `关系「${rel.label || rel.id.slice(0, 8)}」的目标节点 ${nodeName(rel.target_id)} 未在已定义的地区或势力列表中出现`,
+      })
+    }
+  })
+
   return issues
 }
 

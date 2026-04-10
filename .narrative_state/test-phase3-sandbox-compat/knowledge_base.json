@@ -1,0 +1,207 @@
+{
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": null,
+    "factions": [
+      "旧势力",
+      "旧势力",
+      "旧势力"
+    ],
+    "key_locations": [
+      "旧城",
+      "旧城",
+      "旧城"
+    ],
+    "rules": [],
+    "world_name": "",
+    "world_type": "continental",
+    "world_description": "",
+    "sandbox_raw": {
+      "world_name": "",
+      "world_type": "continental",
+      "world_description": "",
+      "regions": [
+        {
+          "id": "e3db57f1-233b-4fc0-9df6-c60d884e8924",
+          "name": "旧城",
+          "region_type": "",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        },
+        {
+          "id": "c27099e7-868b-42a2-9e8b-7da4e2b16ba4",
+          "name": "旧城",
+          "region_type": "",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        },
+        {
+          "id": "39f22ec6-7a90-4894-9f5b-2c10ad09b924",
+          "name": "旧城",
+          "region_type": "",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        }
+      ],
+      "factions": [
+        {
+          "id": "2946e458-02de-4ec4-a353-c935015ac474",
+          "name": "旧势力",
+          "scope": "internal",
+          "description": "",
+          "territory_region_ids": [],
+          "alignment": "true_neutral",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": null,
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        },
+        {
+          "id": "8b92ef7f-59b1-4ae6-ba8e-ddc93f20ba88",
+          "name": "旧势力",
+          "scope": "internal",
+          "description": "",
+          "territory_region_ids": [],
+          "alignment": "true_neutral",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": null,
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        },
+        {
+          "id": "41b43021-8f39-49f2-acb3-5b91f4cd83b3",
+          "name": "旧势力",
+          "scope": "internal",
+          "description": "",
+          "territory_region_ids": [],
+          "alignment": "true_neutral",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": null,
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        }
+      ],
+      "power_systems": [],
+      "world_rules": [],
+      "relations": [
+        {
+          "id": "8cde0f1d-85d1-4673-9238-6ec054dfe937",
+          "source_id": "e3db57f1-233b-4fc0-9df6-c60d884e8924",
+          "target_id": "2946e458-02de-4ec4-a353-c935015ac474",
+          "relation_type": "connection",
+          "label": "",
+          "description": ""
+        },
+        {
+          "id": "362f4641-acb6-46fa-a1ab-25ab995a1004",
+          "source_id": "c27099e7-868b-42a2-9e8b-7da4e2b16ba4",
+          "target_id": "8b92ef7f-59b1-4ae6-ba8e-ddc93f20ba88",
+          "relation_type": "connection",
+          "label": "",
+          "description": ""
+        },
+        {
+          "id": "34b750a5-a5da-4b2c-a12a-f558e17f1bf2",
+          "source_id": "39f22ec6-7a90-4894-9f5b-2c10ad09b924",
+          "target_id": "41b43021-8f39-49f2-acb3-5b91f4cd83b3",
+          "relation_type": "connection",
+          "label": "",
+          "description": ""
+        }
+      ],
+      "timeline_events": [],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

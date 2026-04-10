@@ -120,12 +120,21 @@
         >
           <Background :gap="22" :size="1" pattern-color="var(--wb-canvas-grid)" />
           <Controls />
-          <MiniMap />
+          <MiniMap :width="150" :height="100" />
         </VueFlow>
+
+        <WorldLegend
+          v-if="activeView === 'graph'"
+          :factions="worldData.factions"
+          :regions="worldData.regions"
+          @highlight="onLegendHighlight"
+        />
 
         <MapViewCanvas
           v-else-if="activeView === 'map'"
           :regions="worldData.regions"
+          :factions="worldData.factions"
+          :relations="worldData.relations"
           :project-id="projectId"
           @node-click="onSubViewNodeClick"
         />
@@ -275,7 +284,7 @@
 <script setup lang="ts">
 import { computed, markRaw, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   VueFlow,
   useVueFlow,
@@ -296,6 +305,8 @@ import { world } from '@/api/world'
 import type { Faction, Region, WorldRelation, WorldSandboxData } from '@/api/world'
 import RegionNode from './components/RegionNode.vue'
 import FactionNode from './components/FactionNode.vue'
+import FactionGroupNode from './components/FactionGroupNode.vue'
+import WorldLegend from './components/WorldLegend.vue'
 import RegionDetailPanel from './components/RegionDetailPanel.vue'
 import FactionDetailPanel from './components/FactionDetailPanel.vue'
 import PowerSystemPanel from './components/PowerSystemPanel.vue'
@@ -364,6 +375,7 @@ const importPreview = ref<{ regions: Array<{ name: string; region_type?: string;
 const nodeTypes: Record<string, NodeComponent> = {
   region: markRaw(RegionNode) as unknown as NodeComponent,
   faction: markRaw(FactionNode) as unknown as NodeComponent,
+  factionGroup: markRaw(FactionGroupNode) as unknown as NodeComponent,
 }
 
 // View mode system
@@ -371,6 +383,18 @@ const { activeView, saveViewState, getViewState } = useViewMode()
 
 // Focus mode
 const focusNodeId = ref<string | null>(null)
+// Legend highlight
+const highlightFactionId = ref<string | null>(null)
+
+// Clear focus mode and highlight when switching views
+watch(activeView, () => {
+  focusNodeId.value = null
+  highlightFactionId.value = null
+})
+
+function onLegendHighlight(factionId: string | null) {
+  highlightFactionId.value = factionId
+}
 
 const focusNeighborIds = computed(() => {
   if (!focusNodeId.value) return new Set<string>()
@@ -384,34 +408,127 @@ const focusNeighborIds = computed(() => {
   return related
 })
 
-const flowNodes = computed<Node[]>(() => {
-  const regionNodes = worldData.regions.map((r) => ({
-    id: r.id,
-    type: 'region',
-    position: { x: r.x || 120, y: r.y || 120 },
-    data: { label: r.name, kind: 'region', regionType: r.region_type },
-    style: focusNodeId.value && !focusNeighborIds.value.has(r.id)
-      ? { opacity: '0.15', transition: 'opacity 0.3s' }
-      : { opacity: '1', transition: 'opacity 0.3s' },
-  }))
-  const factionNodes = worldData.factions.map((f, idx) => ({
-    id: f.id,
-    type: 'faction',
-    position: { x: 680, y: 120 + idx * 110 },
-    data: { label: f.name, kind: 'faction', scope: f.scope },
-    style: focusNodeId.value && !focusNeighborIds.value.has(f.id)
-      ? { opacity: '0.15', transition: 'opacity 0.3s' }
-      : { opacity: '1', transition: 'opacity 0.3s' },
-  }))
-  return [...regionNodes, ...factionNodes]
+// Build region-to-faction ownership map (bidirectional):
+// Prefers faction.territory_region_ids; falls back to region.faction_ids[0]
+const regionOwnerMap = computed(() => {
+  const map: Record<string, string> = {}
+  // faction side: faction lists which regions it controls
+  worldData.factions.forEach((f) => {
+    f.territory_region_ids.forEach((rid) => {
+      map[rid] = f.id
+    })
+  })
+  // region side: region lists which factions it belongs to (take first faction)
+  worldData.regions.forEach((r) => {
+    if (map[r.id]) return // already mapped from faction side
+    const firstFactionId = (r as any).faction_ids?.[0]
+    if (firstFactionId) map[r.id] = firstFactionId
+  })
+  return map
 })
 
-// relation_type → edge 视觉映射
+// Compute effective region list per faction derived from bidirectional regionOwnerMap
+const effectiveFactionRegions = computed(() => {
+  const byFaction: Record<string, string[]> = {}
+  worldData.factions.forEach((f) => { byFaction[f.id] = [] })
+  Object.entries(regionOwnerMap.value).forEach(([rid, fid]) => {
+    if (byFaction[fid]) byFaction[fid].push(rid)
+  })
+  return byFaction
+})
+
+function isNodeDimmed(nodeId: string, kind: string): boolean {
+  // Focus mode dimming
+  if (focusNodeId.value && !focusNeighborIds.value.has(nodeId)) return true
+  // Legend highlight dimming
+  if (!highlightFactionId.value) return false
+  if (highlightFactionId.value === '__none__') {
+    if (kind === 'faction') return true
+    return !!regionOwnerMap.value[nodeId]
+  }
+  if (kind === 'faction') return nodeId !== highlightFactionId.value
+  const owner = regionOwnerMap.value[nodeId]
+  return owner !== highlightFactionId.value
+}
+
+const flowNodes = computed<Node[]>(() => {
+  const nodes: Node[] = []
+
+  // 1) Faction group container nodes (rendered as background)
+  worldData.factions.forEach((f) => {
+    const effRegions = effectiveFactionRegions.value[f.id] ?? []
+    if (effRegions.length === 0) return
+    const groupId = `group-${f.id}`
+    nodes.push({
+      id: groupId,
+      type: 'factionGroup',
+      position: { x: f.x || 100, y: f.y || 100 },
+      data: {
+        label: f.name,
+        kind: 'factionGroup',
+        color: f.color || '#4d7cff',
+        regionCount: effRegions.length,
+        scope: f.scope,
+      },
+      style: {
+        width: '260px',
+        height: `${Math.max(140, effRegions.length * 100 + 60)}px`,
+        opacity: isNodeDimmed(f.id, 'faction') ? '0.15' : '1',
+        transition: 'opacity 0.3s',
+        zIndex: -1,
+      },
+    } as Node)
+  })
+
+  // 2) Region nodes — attach to parent group if owned
+  const regionNodes = worldData.regions.map((r) => {
+    const ownerId = regionOwnerMap.value[r.id]
+    const parentGroupId = ownerId ? `group-${ownerId}` : undefined
+    const effRegions = ownerId ? (effectiveFactionRegions.value[ownerId] ?? []) : []
+    return {
+      id: r.id,
+      type: 'region',
+      position: parentGroupId
+        ? { x: 20, y: 40 + (effRegions.indexOf(r.id) || 0) * 100 }
+        : { x: r.x || 120, y: r.y || 120 },
+      parentNode: parentGroupId,
+      expandParent: true,
+      data: { label: r.name, kind: 'region', regionType: r.region_type },
+      style: {
+        opacity: isNodeDimmed(r.id, 'region') ? '0.15' : '1',
+        transition: 'opacity 0.3s',
+      },
+    }
+  })
+
+  // 3) Standalone faction nodes (no territory)
+  const factionNodes = worldData.factions
+    .filter((f) => (effectiveFactionRegions.value[f.id]?.length ?? 0) === 0)
+    .map((f, idx) => ({
+      id: f.id,
+      type: 'faction',
+      position: { x: 680, y: 120 + idx * 110 },
+      data: { label: f.name, kind: 'faction', scope: f.scope },
+      style: {
+        opacity: isNodeDimmed(f.id, 'faction') ? '0.15' : '1',
+        transition: 'opacity 0.3s',
+      },
+    }))
+
+  return [...nodes, ...regionNodes, ...factionNodes]
+})
+
+// relation_type → edge 视觉映射（覆盖全部 9 种关系类型）
 const EDGE_STYLE_MAP: Record<string, { style: Record<string, string | number>; animated: boolean }> = {
-  alliance:   { style: { stroke: '#2ef2ff', strokeWidth: 2 },                            animated: true },
-  conflict:   { style: { stroke: '#ff4040', strokeWidth: 2, strokeDasharray: '6,3' },     animated: true },
-  war:        { style: { stroke: '#ff2e88', strokeWidth: 3 },                            animated: true },
-  connection: { style: { stroke: '#666688', strokeWidth: 1.5 },                          animated: false },
+  adjacent:   { style: { stroke: '#888899', strokeWidth: 1.5, strokeDasharray: '6,4' },   animated: false },
+  border:     { style: { stroke: '#888899', strokeWidth: 2 },                              animated: false },
+  trade:      { style: { stroke: '#f0c040', strokeWidth: 2 },                              animated: true },
+  war:        { style: { stroke: '#ff2e88', strokeWidth: 3 },                              animated: true },
+  alliance:   { style: { stroke: '#2ef2ff', strokeWidth: 2 },                              animated: true },
+  vassal:     { style: { stroke: '#a855f7', strokeWidth: 2, strokeDasharray: '8,3' },      animated: false },
+  blockade:   { style: { stroke: '#ff4040', strokeWidth: 2, strokeDasharray: '4,4' },      animated: false },
+  teleport:   { style: { stroke: '#34d399', strokeWidth: 2, strokeDasharray: '2,4' },      animated: true },
+  connection: { style: { stroke: '#666688', strokeWidth: 1.5 },                            animated: false },
 }
 
 // 性能优化: 节点 > 200 时关闭边动画
@@ -509,11 +626,12 @@ function openCreateDialog(mode: 'region' | 'faction') {
   nodeDialogVisible.value = true
 }
 
-// d3-force auto layout
+// d3-force auto layout (group-aware)
 function autoLayout() {
   if (!worldData) return
-  const allNodes = flowNodes.value
-  if (allNodes.length === 0) return
+  const regions = worldData.regions
+  const factions = worldData.factions
+  if (regions.length === 0 && factions.length === 0) return
 
   interface SimNode extends d3.SimulationNodeDatum {
     id: string
@@ -521,36 +639,103 @@ function autoLayout() {
     y: number
   }
 
-  const simNodes: SimNode[] = allNodes.map(n => ({
-    id: n.id,
-    x: n.position.x,
-    y: n.position.y,
-  }))
-
-  const simLinks = flowEdges.value.map(e => ({
-    source: e.source as string,
-    target: e.target as string,
-  }))
-
-  const simulation = d3.forceSimulation<SimNode>(simNodes)
-    .force('link', d3.forceLink(simLinks).id((d: any) => d.id).distance(180).strength(0.8))
-    .force('charge', d3.forceManyBody().strength(-400))
-    .force('center', d3.forceCenter(600, 400))
-    .force('collision', d3.forceCollide(90))
-    .stop()
-
-  for (let i = 0; i < 300; i++) simulation.tick()
-
-  simNodes.forEach(sn => {
-    const region = worldData.regions.find(r => r.id === sn.id)
-    if (region) {
-      region.x = sn.x
-      region.y = sn.y
+  // Build ownership map: regionId → factionId (bidirectional)
+  const ownerMap: Record<string, string> = {}
+  // faction side
+  factions.forEach((f) => {
+    f.territory_region_ids.forEach((rid) => {
+      ownerMap[rid] = f.id
+    })
+  })
+  // region side (fallback)
+  regions.forEach((r) => {
+    if (!ownerMap[r.id]) {
+      const firstFactionId = (r as any).faction_ids?.[0]
+      if (firstFactionId) ownerMap[r.id] = firstFactionId
     }
   })
 
-  // 布局完成后自动 FitView，确保所有节点可见
-  nextTick(() => fitView({ padding: 0.15 }))
+  // Compute effective territories per faction
+  const effectiveTerr: Record<string, string[]> = {}
+  factions.forEach((f) => { effectiveTerr[f.id] = [] })
+  Object.entries(ownerMap).forEach(([rid, fid]) => {
+    if (effectiveTerr[fid]) effectiveTerr[fid].push(rid)
+  })
+
+  // Collect faction group centroids first
+  const factionIds = factions.filter((f) => (effectiveTerr[f.id]?.length ?? 0) > 0).map((f) => f.id)
+  const standaloneFactions = factions.filter((f) => (effectiveTerr[f.id]?.length ?? 0) === 0)
+  const unownedRegions = regions.filter((r) => !ownerMap[r.id])
+
+  // Step 1: Layout faction groups + unowned regions + standalone factions as macro nodes
+  const macroNodes: SimNode[] = [
+    ...factionIds.map((fid) => {
+      const f = factions.find((x) => x.id === fid)!
+      return { id: `group-${fid}`, x: f.x || 200, y: f.y || 200 }
+    }),
+    ...unownedRegions.map((r) => ({ id: r.id, x: r.x || 120, y: r.y || 120 })),
+    ...standaloneFactions.map((f, idx) => ({ id: f.id, x: 680, y: 120 + idx * 110 })),
+  ]
+
+  // Macro edges: relations between groups / unowned regions
+  const macroEdgeSet = new Set<string>()
+  const macroLinks: { source: string; target: string }[] = []
+  flowEdges.value.forEach((e) => {
+    const sOwner = ownerMap[e.source as string]
+    const tOwner = ownerMap[e.target as string]
+    const sId = sOwner ? `group-${sOwner}` : (e.source as string)
+    const tId = tOwner ? `group-${tOwner}` : (e.target as string)
+    if (sId === tId) return
+    const key = [sId, tId].sort().join('|')
+    if (macroEdgeSet.has(key)) return
+    macroEdgeSet.add(key)
+    if (macroNodes.find((n) => n.id === sId) && macroNodes.find((n) => n.id === tId)) {
+      macroLinks.push({ source: sId, target: tId })
+    }
+  })
+
+  if (macroNodes.length > 0) {
+    const macroSim = d3.forceSimulation<SimNode>(macroNodes)
+      .force('link', d3.forceLink(macroLinks).id((d: any) => d.id).distance(300).strength(0.6))
+      .force('charge', d3.forceManyBody().strength(-500))
+      .force('center', d3.forceCenter(600, 400))
+      .force('collision', d3.forceCollide(140))
+      .stop()
+    for (let i = 0; i < 300; i++) macroSim.tick()
+  }
+
+  // Apply macro positions: group nodes → faction x/y, unowned regions → region x/y
+  macroNodes.forEach((mn) => {
+    if (mn.id.startsWith('group-')) {
+      const fid = mn.id.slice(6)
+      const f = factions.find((x) => x.id === fid)
+      if (f) { f.x = mn.x; f.y = mn.y }
+    } else {
+      const r = regions.find((x) => x.id === mn.id)
+      if (r) { r.x = mn.x; r.y = mn.y }
+    }
+  })
+
+  // Step 2: Layout regions within each faction group
+  factions.forEach((f) => {
+    const memberIds = effectiveTerr[f.id] ?? []
+    if (memberIds.length === 0) return
+    const memberRegions = memberIds
+      .map((rid) => regions.find((r) => r.id === rid))
+      .filter(Boolean) as typeof regions
+
+    // Arrange in a compact grid within the group
+    const cols = Math.ceil(Math.sqrt(memberRegions.length))
+    memberRegions.forEach((r, idx) => {
+      const col = idx % cols
+      const row = Math.floor(idx / cols)
+      r.x = f.x + 30 + col * 120
+      r.y = f.y + 60 + row * 100
+    })
+  })
+
+  // 布局完成后自动 FitView，确保所有节点可见（需双 tick 等待 DOM 完全更新）
+  nextTick(() => nextTick(() => fitView({ padding: 0.15 })))
 }
 
 // View mode camera state save/restore
@@ -629,6 +814,19 @@ function onNodeClick(event: NodeMouseEvent) {
 
   selectedRelation.value = null
   relationDraft.value = null
+
+  // Group node click → select the owning faction
+  if ((node.data as any)?.kind === 'factionGroup') {
+    const factionId = node.id.replace('group-', '')
+    const found = worldData.factions.find((f) => f.id === factionId)
+    if (found) {
+      selectedNode.value = { id: factionId, position: node.position, data: { label: found.name, kind: 'faction' } }
+      factionDraft.value = JSON.parse(JSON.stringify(found))
+      regionDraft.value = null
+    }
+    return
+  }
+
   selectedNode.value = node
   if ((node.data as any)?.kind === 'region') {
     const found = worldData.regions.find((r) => r.id === node.id)
@@ -667,14 +865,34 @@ async function onConnect(connection: Connection) {
 async function onNodeDragStop(event: NodeDragEvent) {
   const node = event.node
   if (!projectId.value) return
+
+  // Faction group node — save the faction's x/y
+  if ((node.data as any)?.kind === 'factionGroup') {
+    const factionId = node.id.replace('group-', '')
+    const target = worldData.factions.find((f) => f.id === factionId)
+    if (!target) return
+    target.x = node.position.x
+    target.y = node.position.y
+    try {
+      await world.updateFaction(projectId.value, target.id, { ...target, id: target.id })
+    } catch {
+      // non-critical, position will restore on reload
+    }
+    return
+  }
+
+  // Region node — only save if not inside a faction group (standalone)
   const target = worldData.regions.find((r) => r.id === node.id)
   if (!target) return
+  // Skip regions that live inside a group (their internal position is layout-managed)
+  if (regionOwnerMap.value[target.id]) return
   target.x = node.position.x
   target.y = node.position.y
-  await world.updateRegion(projectId.value, target.id, {
-    ...target,
-    id: target.id,
-  })
+  try {
+    await world.updateRegion(projectId.value, target.id, { ...target, id: target.id })
+  } catch {
+    // non-critical
+  }
 }
 
 async function saveRegion() {
@@ -932,6 +1150,7 @@ function closeDetailPanel() {
   regionDraft.value = null
   factionDraft.value = null
   relationDraft.value = null
+  focusNodeId.value = null
 }
 
 async function deletePowerSystem(psId: string) {
@@ -951,6 +1170,40 @@ async function deletePowerSystem(psId: string) {
 
 async function finalizeWorld() {
   if (!projectId.value) return
+
+  // Quality gate: minimum completeness checks
+  const warnings: string[] = []
+  if (worldData.regions.length === 0) warnings.push('至少需要 1 个地区')
+  if (worldData.factions.length === 0) warnings.push('至少需要 1 个势力')
+  if (!worldData.world_name?.trim()) warnings.push('缺少世界名称')
+  if (worldData.relations.length === 0) warnings.push('尚未建立任何关系')
+  const factionsNoTerritory = worldData.factions.filter(f => f.territory_region_ids.length === 0)
+  if (factionsNoTerritory.length > 0) {
+    warnings.push(`${factionsNoTerritory.length} 个势力无领地：${factionsNoTerritory.map(f => f.name).join('、')}`)
+  }
+  const regionsNoDesc = worldData.regions.filter(r => !r.notes?.trim())
+  if (regionsNoDesc.length > 0) {
+    warnings.push(`${regionsNoDesc.length} 个地区无描述`)
+  }
+
+  if (warnings.length > 0) {
+    try {
+      const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      await ElMessageBox.confirm(
+        warnings.map((w, i) => `${i + 1}. ${escapeHtml(w)}`).join('<br>'),
+        '世界数据完整性提示',
+        {
+          confirmButtonText: '仍然继续',
+          cancelButtonText: '返回完善',
+          type: 'warning',
+          dangerouslyUseHTMLString: true,
+        }
+      )
+    } catch {
+      return
+    }
+  }
+
   finalizing.value = true
   try {
     const res = await world.finalize(projectId.value)

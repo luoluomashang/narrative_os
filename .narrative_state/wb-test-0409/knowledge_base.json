@@ -1,0 +1,366 @@
+{
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": null,
+    "factions": [
+      "天玄宗",
+      "魔焰教",
+      "皇朝"
+    ],
+    "key_locations": [
+      "玄天城",
+      "焰炎谷",
+      "帝都皇城",
+      "荒野边境",
+      "仙灵沼泽",
+      "月影谷"
+    ],
+    "rules": [],
+    "world_name": "",
+    "world_type": "continental",
+    "world_description": "",
+    "sandbox_raw": {
+      "world_name": "",
+      "world_type": "continental",
+      "world_description": "",
+      "regions": [
+        {
+          "id": "26110c48-40b4-47ac-837d-148459caf36c",
+          "name": "玄天城",
+          "region_type": "城市",
+          "x": 200.0,
+          "y": 150.0,
+          "geography": {
+            "terrain": "平原",
+            "climate": "温带",
+            "special_features": [
+              "灵气充沛"
+            ],
+            "landmarks": [
+              "天玄宗山门"
+            ]
+          },
+          "race": {
+            "primary_race": "人族",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "玄天文明",
+            "belief_system": "",
+            "culture_tags": [
+              "修仙"
+            ],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "405cf69f-cb9c-4cef-b96f-e85b1b968657"
+          ],
+          "alignment": "lawful_good",
+          "tags": [
+            "修仙圣地"
+          ],
+          "notes": ""
+        },
+        {
+          "id": "9e0d8a82-1261-4b86-a059-f8b55fb23d2c",
+          "name": "焰炎谷",
+          "region_type": "山谷",
+          "x": 480.0,
+          "y": 180.0,
+          "geography": {
+            "terrain": "山地",
+            "climate": "炎热",
+            "special_features": [
+              "火焰法阵"
+            ],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "魔族",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "7118965b-2d54-487c-b775-95ad7d670dec"
+          ],
+          "alignment": "chaotic_evil",
+          "tags": [
+            "危险区域"
+          ],
+          "notes": ""
+        },
+        {
+          "id": "a1a68328-8e02-4fa7-8b66-847492ed8438",
+          "name": "帝都皇城",
+          "region_type": "都城",
+          "x": 0.0,
+          "y": 176.5,
+          "geography": {
+            "terrain": "平原",
+            "climate": "四季分明",
+            "special_features": [
+              "护城阵法"
+            ],
+            "landmarks": [
+              "皇宫"
+            ]
+          },
+          "race": {
+            "primary_race": "人族",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "皇朝文明",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": "君主制"
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "7574ef50-8d97-4003-ad75-92a2b0973e82"
+          ],
+          "alignment": "lawful_neutral",
+          "tags": [
+            "政治中心"
+          ],
+          "notes": ""
+        },
+        {
+          "id": "a68ff672-196c-4b83-acaa-5de4b2b132f4",
+          "name": "荒野边境",
+          "region_type": "荒地",
+          "x": 613.5300046482683,
+          "y": 703.0238780269926,
+          "geography": {
+            "terrain": "荒漠",
+            "climate": "干旱",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "混杂",
+            "secondary_races": [],
+            "is_mixed": true,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        },
+        {
+          "id": "a43858e2-00a1-4e3e-bc36-dcec1cafc071",
+          "name": "仙灵沼泽",
+          "region_type": "沼泽",
+          "x": 140.0,
+          "y": 400.0,
+          "geography": {
+            "terrain": "沼泽",
+            "climate": "湿润",
+            "special_features": [
+              "灵植密布"
+            ],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "精灵族",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "405cf69f-cb9c-4cef-b96f-e85b1b968657"
+          ],
+          "alignment": "neutral_good",
+          "tags": [
+            "灵草产地"
+          ],
+          "notes": ""
+        },
+        {
+          "id": "f703c001-62b0-4e5f-82f7-52ee75faa31e",
+          "name": "月影谷",
+          "region_type": "峡谷",
+          "x": 350.0190062384405,
+          "y": 117.91306856480483,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        }
+      ],
+      "factions": [
+        {
+          "id": "405cf69f-cb9c-4cef-b96f-e85b1b968657",
+          "name": "天玄宗",
+          "scope": "internal",
+          "description": "修仙第一大宗",
+          "territory_region_ids": [
+            "a43858e2-00a1-4e3e-bc36-dcec1cafc071",
+            "26110c48-40b4-47ac-837d-148459caf36c"
+          ],
+          "alignment": "lawful_good",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": "#00bcd4",
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        },
+        {
+          "id": "7118965b-2d54-487c-b775-95ad7d670dec",
+          "name": "魔焰教",
+          "scope": "internal",
+          "description": "邪修势力",
+          "territory_region_ids": [
+            "9e0d8a82-1261-4b86-a059-f8b55fb23d2c"
+          ],
+          "alignment": "chaotic_evil",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": "#f44336",
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        },
+        {
+          "id": "7574ef50-8d97-4003-ad75-92a2b0973e82",
+          "name": "皇朝",
+          "scope": "internal",
+          "description": "中原皇朝",
+          "territory_region_ids": [
+            "a1a68328-8e02-4fa7-8b66-847492ed8438"
+          ],
+          "alignment": "lawful_neutral",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": "#ffc107",
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        }
+      ],
+      "power_systems": [],
+      "world_rules": [],
+      "relations": [
+        {
+          "id": "ebcd43cb-f8b2-4389-bad8-87f2b34807a9",
+          "source_id": "26110c48-40b4-47ac-837d-148459caf36c",
+          "target_id": "a1a68328-8e02-4fa7-8b66-847492ed8438",
+          "relation_type": "alliance",
+          "label": "宗皇同盟",
+          "description": "天玄宗与皇朝结盟"
+        },
+        {
+          "id": "bb5881a2-b448-4036-81d1-f609fd75df44",
+          "source_id": "9e0d8a82-1261-4b86-a059-f8b55fb23d2c",
+          "target_id": "a1a68328-8e02-4fa7-8b66-847492ed8438",
+          "relation_type": "war",
+          "label": "魔皇战争",
+          "description": "魔焰教与皇朝交战"
+        },
+        {
+          "id": "5c47c8ed-97b3-4ea7-b98a-bf35515288ce",
+          "source_id": "26110c48-40b4-47ac-837d-148459caf36c",
+          "target_id": "a43858e2-00a1-4e3e-bc36-dcec1cafc071",
+          "relation_type": "adjacent",
+          "label": "相邻",
+          "description": "玄天城与仙灵沼泽相邻"
+        },
+        {
+          "id": "cf164990-9606-4840-a440-8902c7f3e8d7",
+          "source_id": "a68ff672-196c-4b83-acaa-5de4b2b132f4",
+          "target_id": "9e0d8a82-1261-4b86-a059-f8b55fb23d2c",
+          "relation_type": "border",
+          "label": "边境接壤",
+          "description": "荒野边境与焰炎谷接壤"
+        }
+      ],
+      "timeline_events": [
+        {
+          "id": "590d534c-9e27-4245-85f8-7a668d4b0052",
+          "year": "1",
+          "title": "天玄宗建立",
+          "description": "天玄宗在九州天玄界成立，统领北方数地",
+          "linked_entity_id": null,
+          "event_type": "historical"
+        }
+      ],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

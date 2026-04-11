@@ -1,0 +1,82 @@
+{
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": null,
+    "factions": [
+      "测试势力"
+    ],
+    "key_locations": [
+      "测试地区"
+    ],
+    "rules": [],
+    "world_name": "测试世界",
+    "world_type": "continental",
+    "world_description": "",
+    "sandbox_raw": {
+      "world_name": "测试世界",
+      "world_type": "continental",
+      "world_description": "",
+      "regions": [
+        {
+          "id": "24b4cd98-1c4e-4a03-886e-d984a9539151",
+          "name": "测试地区",
+          "region_type": "",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        }
+      ],
+      "factions": [
+        {
+          "id": "ce539053-8ff7-4b9a-ac6b-fa7d5b17afa8",
+          "name": "测试势力",
+          "scope": "internal",
+          "description": "",
+          "territory_region_ids": [],
+          "alignment": "true_neutral",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": null,
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        }
+      ],
+      "power_systems": [],
+      "world_rules": [],
+      "relations": [],
+      "timeline_events": [],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

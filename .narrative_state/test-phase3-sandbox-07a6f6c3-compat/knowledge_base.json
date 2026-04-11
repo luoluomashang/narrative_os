@@ -1,0 +1,91 @@
+{
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": null,
+    "factions": [
+      "旧势力"
+    ],
+    "key_locations": [
+      "旧城"
+    ],
+    "rules": [],
+    "world_name": "",
+    "world_type": "continental",
+    "world_description": "",
+    "sandbox_raw": {
+      "world_name": "",
+      "world_type": "continental",
+      "world_description": "",
+      "regions": [
+        {
+          "id": "b672645d-d11a-43f4-aa30-897476f053d4",
+          "name": "旧城",
+          "region_type": "",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        }
+      ],
+      "factions": [
+        {
+          "id": "397a3c51-207f-4105-af31-7e0f1f078389",
+          "name": "旧势力",
+          "scope": "internal",
+          "description": "",
+          "territory_region_ids": [],
+          "alignment": "true_neutral",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": null,
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        }
+      ],
+      "power_systems": [],
+      "world_rules": [],
+      "relations": [
+        {
+          "id": "18b451b8-fb4f-4aac-9a33-fb24143b5d52",
+          "source_id": "b672645d-d11a-43f4-aa30-897476f053d4",
+          "target_id": "397a3c51-207f-4105-af31-7e0f1f078389",
+          "relation_type": "connection",
+          "label": "",
+          "description": ""
+        }
+      ],
+      "timeline_events": [],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

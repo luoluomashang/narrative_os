@@ -92,6 +92,48 @@ class MemoryEntry(BaseModel):
 
 
 # ------------------------------------------------------------------ #
+# Phase 2：四层深化模型                                                 #
+# ------------------------------------------------------------------ #
+
+class CharacterDrive(BaseModel):
+    """Drive 层 — 角色行为驱动力（B 层）。"""
+    core_desire: str = ""       # 核心欲望
+    core_fear: str = ""         # 核心恐惧
+    current_obsession: str = "" # 当前执念（可变）
+    short_term_goal: str = ""   # 短期目标（章节级）
+    long_term_goal: str = ""    # 长期目标（全书级）
+    compromisable: list[str] = Field(default_factory=list)     # 可妥协项
+    non_negotiable: list[str] = Field(default_factory=list)    # 不可妥协底线
+    self_deception: str = ""    # 自我欺骗点（角色不承认的自身弱点）
+
+
+class RelationshipProfile(BaseModel):
+    """Social 层 — 多维关系画像（C 层）。"""
+    target_name: str
+    affinity: float = Field(default=0.0, ge=-1.0, le=1.0)       # 好感 -1~+1
+    trust: float = Field(default=0.5, ge=0.0, le=1.0)           # 信任 0~1
+    dependency: float = Field(default=0.0, ge=0.0, le=1.0)      # 依赖 0~1
+    fear: float = Field(default=0.0, ge=0.0, le=1.0)            # 忌惮 0~1
+    jealousy: float = Field(default=0.0, ge=0.0, le=1.0)        # 嫉妒 0~1
+    control_desire: float = Field(default=0.0, ge=0.0, le=1.0)  # 欲控制 0~1
+    debt_sense: float = Field(default=0.0, ge=-1.0, le=1.0)     # 欠债感 -1~+1（负值=对方欠我）
+    cognitive_tags: list[str] = Field(default_factory=list)     # 认知标签
+    notes: str = ""                                              # 补充说明
+
+
+class CharacterRuntime(BaseModel):
+    """Runtime 层 — 角色当前运行状态（D 层，由运行时更新）。"""
+    current_location: str = ""
+    current_companions: list[str] = Field(default_factory=list)
+    current_agenda: str = ""            # 本轮行动意图
+    current_pressure: float = Field(default=0.0, ge=0.0, le=1.0)   # 压力值 0~1
+    emotion_trigger_source: str = ""    # 当前情绪来源
+    recent_key_events: list[str] = Field(default_factory=list)      # 最近3个关键事件（滚动更新）
+    can_advance_plot: bool = True       # 是否可主动推进剧情
+    stance_mode: str = "normal"         # normal / danger / stubborn / defensive
+
+
+# ------------------------------------------------------------------ #
 # CharacterState                                                        #
 # ------------------------------------------------------------------ #
 
@@ -150,6 +192,21 @@ class CharacterState(BaseModel):
     # 系统级控制
     system_instructions: str = ""      # 角色专属系统提示词（注入 Writer Agent）
 
+    # === Phase 2：四层深化字段 ===
+
+    # A. Persona 层扩展
+    worldview: str = ""                # 世界观/价值观简述
+    character_tags: list[str] = Field(default_factory=list)  # 角色标签
+
+    # B. Drive 层
+    drive: CharacterDrive | None = None
+
+    # C. Social 层 — 多维关系矩阵（兼容旧 relationships 字段）
+    social_matrix: dict[str, RelationshipProfile] = Field(default_factory=dict)
+
+    # D. Runtime 层
+    runtime: CharacterRuntime = Field(default_factory=CharacterRuntime)
+
     model_config = {"frozen": False}
 
     # ---------------------------------------------------------------- #
@@ -163,9 +220,21 @@ class CharacterState(BaseModel):
     def update_relationship(self, character_name: str, delta: float) -> None:
         """
         更新与另一角色的关系值（累加），钳制到 -1.0 ~ 1.0。
+        同步更新 social_matrix 中的 affinity 字段。
         """
         current = self.relationships.get(character_name, 0.0)
-        self.relationships[character_name] = max(-1.0, min(1.0, current + delta))
+        new_val = max(-1.0, min(1.0, current + delta))
+        self.relationships[character_name] = new_val
+        # 同步 social_matrix
+        if character_name in self.social_matrix:
+            self.social_matrix[character_name].affinity = new_val
+
+    def get_relationship(self, target: str) -> RelationshipProfile:
+        """获取与目标角色的关系画像；不存在时返回默认值（以旧字段 affinity 初始化）。"""
+        if target in self.social_matrix:
+            return self.social_matrix[target]
+        affinity = self.relationships.get(target, 0.0)
+        return RelationshipProfile(target_name=target, affinity=affinity)
 
     def record_event(self, chapter: int, event: str, emotion: str = "", importance: float = 0.5) -> None:
         """记录一条事件记忆。"""

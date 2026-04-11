@@ -1,0 +1,28 @@
+{
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": null,
+    "factions": [],
+    "key_locations": [],
+    "rules": [],
+    "world_name": "",
+    "world_type": "continental",
+    "world_description": "",
+    "sandbox_raw": {
+      "world_name": "",
+      "world_type": "continental",
+      "world_description": "",
+      "regions": [],
+      "factions": [],
+      "power_systems": [],
+      "world_rules": [],
+      "relations": [],
+      "timeline_events": [],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

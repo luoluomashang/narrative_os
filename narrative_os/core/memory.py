@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
 
@@ -33,6 +34,18 @@ from narrative_os.infra.config import settings
 
 MemoryType = Literal["semantic", "event", "style"]
 MemoryLayer = Literal["short", "mid", "long"]
+
+
+class MemoryPool(str, Enum):
+    """记忆分池 — Phase 4.4 新增。
+
+    AUTHOR : 创作写入池（默认池，保存写作流水线产生的记忆）
+    TRPG   : 互动模式池（TRPG 会话写入，不污染主线）
+    CANON  : 正史池（CanonCommit 审批通过后转入）
+    """
+    AUTHOR = "author"
+    TRPG = "trpg"
+    CANON = "canon"
 
 
 # ------------------------------------------------------------------ #
@@ -109,6 +122,9 @@ class MemorySystem:
         self._db_path = persist_dir or db_path or settings.chroma_db_path
         self._use_ephemeral = persist_dir is not None  # ephemeral for test isolation
         self._client = None
+        # Phase 4.4: pool-aware collections — key: (pool_value, layer)
+        self._pool_collections: dict[tuple[str, str], Any] = {}
+        # Backward-compat alias: _collections[layer] → AUTHOR pool
         self._collections: dict[MemoryLayer, Any] = {}
         self._initialized = False
         # 记忆锚点（≤150字关键转折快照，来自 chapter_anchor_template）
@@ -124,11 +140,14 @@ class MemorySystem:
             else:
                 self._client = chromadb.PersistentClient(path=self._db_path)
             for layer in ("short", "mid", "long"):
-                coll_name = f"narrative_{layer}_{self.project_id}"
-                self._collections[layer] = self._client.get_or_create_collection(  # type: ignore
+                # Phase 4.4: create AUTHOR pool collections (default pool)
+                coll_name = f"narrative_{MemoryPool.AUTHOR.value}_{layer}_{self.project_id}"
+                coll = self._client.get_or_create_collection(  # type: ignore
                     name=coll_name,
                     metadata={"hnsw:space": "cosine"},
                 )
+                self._pool_collections[(MemoryPool.AUTHOR.value, layer)] = coll
+                self._collections[layer] = coll  # backward-compat alias
             self._initialized = True
         except ImportError:
             raise ImportError(
@@ -141,6 +160,18 @@ class MemorySystem:
     # Write                                                              #
     # ---------------------------------------------------------------- #
 
+    def _get_pool_collection(self, pool: MemoryPool, layer: MemoryLayer) -> Any:
+        """按池+层获取/懒创建 ChromaDB collection。"""
+        self._ensure_initialized()
+        key = (pool.value, layer)
+        if key not in self._pool_collections:
+            coll_name = f"narrative_{pool.value}_{layer}_{self.project_id}"
+            self._pool_collections[key] = self._client.get_or_create_collection(  # type: ignore
+                name=coll_name,
+                metadata={"hnsw:space": "cosine"},
+            )
+        return self._pool_collections[key]
+
     def write_memory(
         self,
         content: str,
@@ -152,6 +183,7 @@ class MemorySystem:
         characters: list[str] | None = None,
         tags: list[str] | None = None,
         record_id: str | None = None,
+        pool: MemoryPool = MemoryPool.AUTHOR,
     ) -> MemoryRecord:
         """
         写入一条记忆到指定层（默认 short）。
@@ -172,12 +204,12 @@ class MemorySystem:
             tags=tags or [],
         )
         doc_id, document, metadata = record.to_chroma_doc()
-        coll = self._collections[layer]
+        coll = self._get_pool_collection(pool, layer)
         # 如已存在则 upsert，否则 add
         try:
             coll.upsert(ids=[doc_id], documents=[document], metadatas=[metadata])
         except Exception as e:
-            raise RuntimeError(f"写入 ChromaDB 失败 (layer={layer}): {e}") from e
+            raise RuntimeError(f"写入 ChromaDB 失败 (pool={pool.value}, layer={layer}): {e}") from e
         return record
 
     # ---------------------------------------------------------------- #
@@ -193,15 +225,20 @@ class MemorySystem:
         memory_type: MemoryType | None = None,
         min_importance: float = 0.0,
         chapter_range: tuple[int, int] | None = None,
+        pools: list[MemoryPool] | None = None,
     ) -> list[RetrievalResult]:
         """
         语义检索记忆。
 
         layer=None 时跨三层检索并按 similarity * importance 排序。
+        pools=None 时默认检索 AUTHOR + CANON 池（不检索 TRPG 池，防止污染主线）。
         返回 RetrievalResult 列表（含 similarity，供 UI 知识图谱透视展示）。
         """
         self._ensure_initialized()
 
+        pools_to_search: list[MemoryPool] = pools if pools is not None else [
+            MemoryPool.AUTHOR, MemoryPool.CANON
+        ]
         layers_to_search: list[MemoryLayer] = (
             [layer] if layer else ["short", "mid", "long"]
         )
@@ -213,39 +250,40 @@ class MemorySystem:
             where_filter["importance"] = {"$gte": min_importance}
 
         all_results: list[RetrievalResult] = []
-        for lyr in layers_to_search:
-            coll = self._collections[lyr]
-            try:
-                results = coll.query(
-                    query_texts=[query],
-                    n_results=min(top_k, coll.count() or 1),
-                    where=where_filter or None,
-                    include=["documents", "metadatas", "distances"],
-                )
-            except Exception:
-                continue
-
-            docs = results.get("documents", [[]])[0]
-            metas = results.get("metadatas", [[]])[0]
-            dists = results.get("distances", [[]])[0]
-
-            for doc, meta, dist in zip(docs, metas, dists):
-                similarity = max(0.0, 1.0 - dist)  # cosine distance → similarity
-
-                # 章节范围过滤
-                if chapter_range is not None:
-                    chap = meta.get("chapter", 0)
-                    if not (chapter_range[0] <= chap <= chapter_range[1]):
-                        continue
-
-                all_results.append(
-                    RetrievalResult(
-                        record_id=meta.get("id", ""),
-                        content=doc,
-                        similarity=similarity,
-                        metadata=meta,
+        for pool in pools_to_search:
+            for lyr in layers_to_search:
+                coll = self._get_pool_collection(pool, lyr)
+                try:
+                    results = coll.query(
+                        query_texts=[query],
+                        n_results=min(top_k, coll.count() or 1),
+                        where=where_filter or None,
+                        include=["documents", "metadatas", "distances"],
                     )
-                )
+                except Exception:
+                    continue
+
+                docs = results.get("documents", [[]])[0]
+                metas = results.get("metadatas", [[]])[0]
+                dists = results.get("distances", [[]])[0]
+
+                for doc, meta, dist in zip(docs, metas, dists):
+                    similarity = max(0.0, 1.0 - dist)  # cosine distance → similarity
+
+                    # 章节范围过滤
+                    if chapter_range is not None:
+                        chap = meta.get("chapter", 0)
+                        if not (chapter_range[0] <= chap <= chapter_range[1]):
+                            continue
+
+                    all_results.append(
+                        RetrievalResult(
+                            record_id=meta.get("id", ""),
+                            content=doc,
+                            similarity=similarity,
+                            metadata=meta,
+                        )
+                    )
 
         # 按 similarity * importance 综合排序
         all_results.sort(

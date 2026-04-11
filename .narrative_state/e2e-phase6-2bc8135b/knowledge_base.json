@@ -1,0 +1,66 @@
+{
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "d2fc4ad2-bb2f-45f1-9872-d0ac0aa5ad44": {
+        "id": "d2fc4ad2-bb2f-45f1-9872-d0ac0aa5ad44",
+        "name": "中央圣地",
+        "region_type": "capital",
+        "terrain": "",
+        "climate": "",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "d2fc4ad2-bb2f-45f1-9872-d0ac0aa5ad44": {
+        "id": "d2fc4ad2-bb2f-45f1-9872-d0ac0aa5ad44",
+        "name": "中央圣地",
+        "region_type": "capital",
+        "terrain": "",
+        "climate": "",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

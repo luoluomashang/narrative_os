@@ -26,7 +26,8 @@
     </transition-group>
 
     <!-- Waveform area chart -->
-    <div ref="chartEl" class="waveform-chart" />
+    <div v-if="metrics.length > 0" ref="chartEl" class="waveform-chart" />
+    <div v-else class="empty-state">暂无章节指标数据，请先生成章节后再查看趋势。</div>
 
     <!-- Chapter detail popup -->
     <div v-if="selectedChapter" class="chapter-popup">
@@ -82,7 +83,14 @@ const fatigueWarning = computed(() => {
 })
 
 const summaryStats = computed(() => {
-  if (metrics.value.length === 0) return []
+  if (metrics.value.length === 0) {
+    return [
+      { label: '章节数', value: 0 },
+      { label: '平均张力', value: '0.0' },
+      { label: '峰值张力', value: 0 },
+      { label: '谷值张力', value: 0 },
+    ]
+  }
   const avg = metrics.value.reduce((s, m) => s + m.tension, 0) / metrics.value.length
   const maxT = Math.max(...metrics.value.map(m => m.tension))
   const minT = Math.min(...metrics.value.map(m => m.tension))
@@ -172,7 +180,7 @@ function buildOption(data: ChapterMetric[]) {
 }
 
 async function refreshMetrics() {
-  // Try to load from real API first
+  metrics.value = []
   try {
     const res = await projects.metricsHistory(projectId.value)
     if (Array.isArray(res.data) && res.data.length > 0) {
@@ -211,31 +219,16 @@ async function refreshMetrics() {
         const m = metrics.value[params.dataIndex]
         if (m) selectedChapter.value = m
       })
-      return
     }
-  } catch { /* fallback to placeholder */ }
+  } catch {
+    metrics.value = []
+  }
 
-  // Fallback: placeholder data
-  metrics.value = Array.from({ length: 8 }, (_, i) => ({
-    chapter: i + 1,
-    tension: [2, 4, 6, 8, 9, 7, 3, 5][i],
-    pacing: [0.3, 0.5, 0.6, 0.8, 0.9, 0.7, 0.2, 0.5][i],
-    score: [6, 7, 7, 9, 9, 8, 5, 7][i],
-    qd: [
-      [5,4,3,6,7,5,6,6],
-      [6,5,5,7,7,6,7,7],
-      [7,6,6,7,8,7,7,7],
-      [9,8,8,8,9,9,9,8],
-      [9,9,9,8,9,9,9,9],
-      [8,7,7,8,8,8,8,8],
-      [4,3,2,5,6,4,4,5],
-      [6,5,5,6,7,6,6,6],
-    ][i],
-    dimensions: [
-      { label: '张力', value: [2, 4, 6, 8, 9, 7, 3, 5][i], trend: '→' },
-      { label: '节奏', value: Math.round([0.3, 0.5, 0.6, 0.8, 0.9, 0.7, 0.2, 0.5][i] * 10), trend: '↑' },
-    ],
-  }))
+  chart?.clear()
+  if (metrics.value.length === 0) {
+    selectedChapter.value = null
+    return
+  }
 
   chart?.setOption(buildOption(metrics.value))
   chart?.off('click')
@@ -346,6 +339,20 @@ onBeforeUnmount(() => { chart?.dispose(); radarChart?.dispose() })
 
 /* Waveform chart */
 .waveform-chart { flex: 1; min-height: 180px; }
+
+.empty-state {
+  flex: 1;
+  min-height: 180px;
+  border: 1px dashed var(--color-surface-l2);
+  border-radius: var(--radius-card);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 16px;
+}
 
 /* Chapter popup */
 .chapter-popup {

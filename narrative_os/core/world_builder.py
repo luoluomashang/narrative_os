@@ -56,6 +56,8 @@ class WorldBuilderState:
     initial_plot_nodes: list[dict[str, Any]] = field(default_factory=list)
     initial_characters: list[dict[str, Any]] = field(default_factory=list)
     initial_world: dict[str, Any] = field(default_factory=dict)
+    # Phase 6 Stage 1: WorldSandboxData 初始种子（供沙盘精修页导入）
+    initial_world_sandbox: Any = None
 
 
 @dataclass
@@ -534,7 +536,14 @@ class WorldBuilder:
         return arcs
 
     def _finalize(self) -> dict[str, Any]:
-        """生成种子数据并存入 state。"""
+        """
+        生成种子数据并存入 state。
+
+        变更（Phase 6 Stage 1）：
+          _finalize() 现在同时生成 WorldSandboxData（初始种子），
+          存储在 state.initial_world_sandbox 中，供后续沙盘精修使用。
+          原有 state.initial_world 字段保留（向后兼容，已有项目不受影响）。
+        """
         parsed = self.state.one_page_outline
 
         # ── 情节节点 ──────────────────────────────────────────────────
@@ -559,7 +568,7 @@ class WorldBuilder:
             c["arc_stages"] = arc_map.get(c["name"], [])
         self.state.initial_characters = raw_chars
 
-        # ── 世界状态 ──────────────────────────────────────────────────
+        # ── 世界状态（向后兼容字段） ──────────────────────────────────
         world_from_parse = parsed.get("world", {})
         self.state.initial_world = {
             "power_system": self.state.world_power_system or {},
@@ -570,4 +579,72 @@ class WorldBuilder:
             "four_pages_raw": self.state.four_pages_outline.get("raw_text", ""),
         }
 
-        return self.get_seed_data()
+        # ── WorldSandboxData（初始种子，Phase 6 Stage 1 新增） ────────
+        # 从 one_page_outline 提取的文本数据构建初始沙盘种子，供沙盘精修页使用
+        self.state.initial_world_sandbox = self._build_initial_sandbox()
+
+        seed = self.get_seed_data()
+        # 在 seed 中附带沙盘数据（用于 API 层直接保存到 DB）
+        if self.state.initial_world_sandbox is not None:
+            seed["world_sandbox"] = self.state.initial_world_sandbox.model_dump()
+        return seed
+
+    def _build_initial_sandbox(self) -> "WorldSandboxData | None":
+        """
+        从 WorldBuilderState 的积累数据构建 WorldSandboxData 初始种子。
+        这个种子会被导入沙盘精修页，由用户进一步完善。
+        """
+        try:
+            from narrative_os.core.world_sandbox import (
+                WorldSandboxData,
+                Faction,
+                PowerSystem as SbPowerSystem,
+                PowerLevel as SbPowerLevel,
+                FactionScope,
+            )
+
+            world_from_parse = self.state.one_page_outline.get("world", {})
+
+            # 初始势力（从一页大纲提取）
+            factions: list[Faction] = []
+            for raw_faction_name in world_from_parse.get("factions", []):
+                if isinstance(raw_faction_name, str) and raw_faction_name.strip():
+                    factions.append(
+                        Faction(name=raw_faction_name.strip(), scope=FactionScope.INTERNAL)
+                    )
+
+            # 初始力量体系（从 world_power_system 提取）
+            power_systems: list[SbPowerSystem] = []
+            wp = self.state.world_power_system
+            if wp:
+                ps_name = wp.get("system_name", "力量体系")
+                tiers = wp.get("tiers", [])
+                desc_raw = wp.get("description", "")
+                levels = [
+                    SbPowerLevel(name=tier, description="") for tier in tiers
+                ] if tiers else []
+                if not levels and desc_raw:
+                    # 从描述文字中提取境界（如 "炼气→筑基→金丹"）
+                    import re as _re
+                    parts = [p.strip() for p in _re.split(r'[→>、，,]', desc_raw) if p.strip()]
+                    levels = [SbPowerLevel(name=p, description="") for p in parts[:15]]
+                if levels or ps_name:
+                    power_systems.append(
+                        SbPowerSystem(name=ps_name or "力量体系", levels=levels)
+                    )
+
+            # 世界规则
+            world_rules: list[str] = list(world_from_parse.get("rules", []))
+
+            # 世界描述
+            world_desc = self.state.one_paragraph or self.state.one_sentence or ""
+
+            return WorldSandboxData(
+                world_name=self.state.one_sentence[:50] if self.state.one_sentence else "",
+                world_description=world_desc,
+                factions=factions,
+                power_systems=power_systems,
+                world_rules=world_rules,
+            )
+        except Exception:
+            return None

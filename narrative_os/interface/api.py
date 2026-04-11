@@ -900,6 +900,277 @@ async def session_end(session_id: str) -> dict[str, Any]:
     }
 
 
+# ================================================================== #
+# Phase 3: SL 存档 + 控制权模式 + Agenda 端点                          #
+# ================================================================== #
+
+class SaveRequest(BaseModel):
+    trigger: str = "manual"   # manual / scene_start / major_decision / high_risk
+
+
+@app.post(
+    "/projects/{project_id}/sessions/{session_id}/save",
+    status_code=status.HTTP_201_CREATED,
+    summary="手动存档",
+)
+async def create_save(
+    project_id: str,
+    session_id: str,
+    req: SaveRequest,
+) -> dict[str, Any]:
+    """将当前会话状态快照写入 SaveStore，返回 save_id。"""
+    from narrative_os.core.save_load import get_save_store
+    session = _get_session(session_id)
+    store = get_save_store(session_id)
+
+    sp = store.create(
+        session=session,
+        trigger=req.trigger,
+        memory_summary=session.memory_summary_cache,
+    )
+    return {"save_id": sp.save_id, "trigger": sp.trigger, "timestamp": sp.timestamp, "turn": sp.turn}
+
+
+@app.get(
+    "/projects/{project_id}/sessions/{session_id}/saves",
+    summary="列出存档点",
+)
+async def list_saves(project_id: str, session_id: str) -> list[dict[str, Any]]:
+    """返回该会话的所有存档列表（不含完整快照数据）。"""
+    from narrative_os.core.save_load import get_save_store
+    _get_session(session_id)   # 验证会话存在
+    store = get_save_store(session_id)
+    saves = store.list_saves(session_id)
+    return [
+        {
+            "save_id": s.save_id,
+            "trigger": s.trigger,
+            "timestamp": s.timestamp,
+            "turn": s.turn,
+            "scene_pressure": s.scene_pressure,
+        }
+        for s in saves
+    ]
+
+
+@app.post(
+    "/projects/{project_id}/sessions/{session_id}/load/{save_id}",
+    summary="读档",
+)
+async def load_save(project_id: str, session_id: str, save_id: str) -> dict[str, Any]:
+    """从指定存档点恢复会话状态（软回退）。"""
+    from narrative_os.core.save_load import SoftRollback, get_save_store
+    session = _get_session(session_id)
+    store = get_save_store(session_id)
+
+    sp = store.get(save_id)
+    if sp is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"存档 '{save_id}' 不存在")
+
+    rollback = SoftRollback()
+    rollback.restore(session, sp)
+    return {
+        "save_id": save_id,
+        "restored_turn": session.turn,
+        "memory_summary_preserved": bool(session.memory_summary_cache),
+    }
+
+
+@app.delete(
+    "/projects/{project_id}/sessions/{session_id}/saves/{save_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除存档",
+)
+async def delete_save(project_id: str, session_id: str, save_id: str) -> None:
+    """删除指定存档点。"""
+    from narrative_os.core.save_load import get_save_store
+    _get_session(session_id)
+    store = get_save_store(session_id)
+    store.delete(save_id)
+
+
+class ControlModeRequest(BaseModel):
+    mode: str   # user_driven / semi_agent / full_agent / director
+    ai_controlled_characters: list[str] = []
+    allow_protagonist_proxy: bool = False
+    director_intervention_enabled: bool = True
+
+
+@app.post(
+    "/projects/{project_id}/sessions/{session_id}/control-mode",
+    summary="切换控制权模式",
+)
+async def set_control_mode(
+    project_id: str,
+    session_id: str,
+    req: ControlModeRequest,
+) -> dict[str, Any]:
+    """运行中切换控制权模式（4 档）。"""
+    from narrative_os.core.interactive_modes import ControlMode, ControlModeConfig
+    session = _get_session(session_id)
+
+    try:
+        new_mode = ControlMode(req.mode)
+    except ValueError:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"未知控制模式: {req.mode}")
+
+    session.control_mode = new_mode
+    session.mode_config = ControlModeConfig(
+        mode=new_mode,
+        ai_controlled_characters=req.ai_controlled_characters,
+        allow_protagonist_proxy=req.allow_protagonist_proxy,
+        director_intervention_enabled=req.director_intervention_enabled,
+    )
+    return {
+        "session_id": session_id,
+        "mode": new_mode.value,
+        "prompt_hint": session.mode_config.prompt_hint,
+    }
+
+
+@app.get(
+    "/projects/{project_id}/sessions/{session_id}/agenda",
+    summary="查看当前角色 Agenda 状态",
+)
+async def get_session_agenda(project_id: str, session_id: str) -> dict[str, Any]:
+    """返回上一轮沙盘推演产生的各角色 Agenda 列表。"""
+    session = _get_session(session_id)
+    return {
+        "session_id": session_id,
+        "turn": session.turn,
+        "agenda": session.last_agenda,
+    }
+
+
+# ================================================================== #
+
+
+# ================================================================== #
+# Phase 4: ChangeSet / Canon Commit 端点                               #
+# ================================================================== #
+
+class SessionCommitRequest(BaseModel):
+    mode: str = "session_only"  # session_only / draft_chapter / canon_chapter
+    draft_content: str = ""
+    require_canon_confirm: bool = False
+
+
+@app.get(
+    "/projects/{project_id}/changesets",
+    summary="获取待审变更集列表",
+)
+async def list_changesets(project_id: str) -> list[dict[str, Any]]:
+    """返回该项目的所有变更集（摘要视图）。"""
+    from narrative_os.core.evolution import get_canon_commit
+    cc = get_canon_commit(project_id)
+    changesets = cc.list_changesets(project_id)
+    return [
+        {
+            "changeset_id": cs.changeset_id,
+            "source": cs.source.value,
+            "session_id": cs.session_id,
+            "commit_mode": cs.commit_mode.value,
+            "changes_count": len(cs.changes),
+            "pending_count": len(cs.pending_changes()),
+            "confirmed_count": len(cs.confirmed_changes()),
+            "created_at": cs.created_at,
+        }
+        for cs in changesets
+    ]
+
+
+@app.get(
+    "/projects/{project_id}/changesets/{changeset_id}",
+    summary="查看变更集详情",
+)
+async def get_changeset(project_id: str, changeset_id: str) -> dict[str, Any]:
+    """返回指定变更集的完整信息（包括所有变更条目）。"""
+    from fastapi import HTTPException
+    from narrative_os.core.evolution import get_canon_commit
+    cc = get_canon_commit(project_id)
+    cs = cc.get_changeset(changeset_id)
+    if cs is None:
+        raise HTTPException(status_code=404, detail=f"变更集 '{changeset_id}' 不存在")
+    return cs.model_dump()
+
+
+@app.post(
+    "/projects/{project_id}/changesets/{changeset_id}/approve",
+    summary="批量批准并提交正史",
+)
+async def approve_changeset(project_id: str, changeset_id: str) -> dict[str, Any]:
+    """批量审批变更集中所有草稿变更并提交正史。"""
+    from fastapi import HTTPException
+    from narrative_os.core.evolution import get_canon_commit
+    cc = get_canon_commit(project_id)
+    if cc.get_changeset(changeset_id) is None:
+        raise HTTPException(status_code=404, detail=f"变更集 '{changeset_id}' 不存在")
+    # Phase 1: approve_all → CANON_PENDING
+    approved_count = cc.approve_all(changeset_id)
+    # Phase 2: commit_to_canon → CANON_CONFIRMED
+    committed = cc.commit_to_canon(changeset_id)
+    return {
+        "changeset_id": changeset_id,
+        "approved_count": approved_count,
+        "committed_count": len(committed),
+    }
+
+
+@app.post(
+    "/projects/{project_id}/changesets/{changeset_id}/reject",
+    summary="驳回整个变更集",
+)
+async def reject_changeset(project_id: str, changeset_id: str) -> dict[str, Any]:
+    """驳回指定变更集中所有变更。"""
+    from fastapi import HTTPException
+    from narrative_os.core.evolution import get_canon_commit
+    cc = get_canon_commit(project_id)
+    cs = cc.get_changeset(changeset_id)
+    if cs is None:
+        raise HTTPException(status_code=404, detail=f"变更集 '{changeset_id}' 不存在")
+    rejected_count = 0
+    for change in cs.changes:
+        cc.reject_change(change.change_id)
+        rejected_count += 1
+    return {"changeset_id": changeset_id, "rejected_count": rejected_count}
+
+
+@app.post(
+    "/projects/{project_id}/sessions/{session_id}/commit",
+    summary="互动结束后选择提交方式",
+    status_code=status.HTTP_201_CREATED,
+)
+async def commit_session(
+    project_id: str,
+    session_id: str,
+    req: SessionCommitRequest,
+) -> dict[str, Any]:
+    """TRPG 会话结束后，选择三种提交方式之一。"""
+    from fastapi import HTTPException
+    from narrative_os.core.evolution import SessionCommitMode, get_canon_commit
+    _get_session(session_id)   # 验证会话存在
+    try:
+        mode = SessionCommitMode(req.mode)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"未知提交模式: {req.mode}")
+    cc = get_canon_commit(project_id)
+    cs = cc.commit_session(
+        project_id=project_id,
+        session_id=session_id,
+        mode=mode,
+        draft_content=req.draft_content,
+        require_canon_confirm=req.require_canon_confirm,
+    )
+    return {
+        "changeset_id": cs.changeset_id,
+        "commit_mode": cs.commit_mode.value,
+        "changes_count": len(cs.changes),
+        "canon_confirmed": cs.canon_confirmed,
+    }
+
+
 # ------------------------------------------------------------------ #
 # WebSocket 端点                                                        #
 # ------------------------------------------------------------------ #
@@ -1255,6 +1526,87 @@ async def test_character_voice(project_id: str, name: str, req: TestVoiceRequest
         return {"dialogue": resp.content.strip()}
     except Exception as e:
         raise HTTPException(status_code=500, detail={"detail": f"生成失败：{e}", "code": "LLM_ERROR"})
+
+
+# ------------------------------------------------------------------ #
+# Phase 2: 四层角色端点                                                 #
+# ------------------------------------------------------------------ #
+
+@app.get("/projects/{project_id}/characters/{name}/drive", summary="获取角色Drive层")
+async def get_character_drive(project_id: str, name: str) -> dict[str, Any]:
+    """返回角色 Drive 层（核心欲望/恐惧/执念/目标/底线）。"""
+    from narrative_os.core.character_repository import get_character_repository
+    char = get_character_repository().get_character(project_id, name)
+    if char is None:
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    if char.drive is None:
+        return {}
+    return char.drive.model_dump()
+
+
+@app.put("/projects/{project_id}/characters/{name}/drive", summary="更新角色Drive层")
+async def update_character_drive(project_id: str, name: str, req: dict = Body(...)) -> dict[str, Any]:
+    """更新角色 Drive 层字段（部分更新）。"""
+    from narrative_os.core.character_repository import get_character_repository
+    from narrative_os.core.character import CharacterDrive
+    repo = get_character_repository()
+    char = repo.get_character(project_id, name)
+    if char is None:
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    existing = char.drive.model_dump() if char.drive else {}
+    merged = {**existing, **req}
+    char.drive = CharacterDrive.model_validate(merged)
+    repo.save_character(project_id, char)
+    return char.drive.model_dump()
+
+
+@app.put("/projects/{project_id}/characters/{name}/runtime", summary="更新角色Runtime层")
+async def update_character_runtime(project_id: str, name: str, req: dict = Body(...)) -> dict[str, Any]:
+    """更新角色 Runtime 层状态（互动推进时调用）。"""
+    from narrative_os.core.character_repository import get_character_repository
+    from narrative_os.core.character import CharacterRuntime
+    repo = get_character_repository()
+    char = repo.get_character(project_id, name)
+    if char is None:
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    existing = char.runtime.model_dump()
+    merged = {**existing, **req}
+    char.runtime = CharacterRuntime.model_validate(merged)
+    repo.save_character(project_id, char)
+    return char.runtime.model_dump()
+
+
+@app.get("/projects/{project_id}/characters/{name}/social-matrix", summary="获取角色Social矩阵")
+async def get_character_social_matrix(project_id: str, name: str) -> dict[str, Any]:
+    """返回角色的多维关系矩阵。"""
+    from narrative_os.core.character_repository import get_character_repository
+    char = get_character_repository().get_character(project_id, name)
+    if char is None:
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    return {k: v.model_dump() for k, v in char.social_matrix.items()}
+
+
+@app.put("/projects/{project_id}/characters/{name}/social-matrix", summary="更新角色Social矩阵")
+async def update_character_social_matrix(project_id: str, name: str, req: dict = Body(...)) -> dict[str, Any]:
+    """覆盖更新角色 Social 矩阵（传入目标角色名 → RelationshipProfile 字典）。"""
+    from narrative_os.core.character_repository import get_character_repository
+    from narrative_os.core.character import RelationshipProfile
+    repo = get_character_repository()
+    char = repo.get_character(project_id, name)
+    if char is None:
+        raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
+    new_matrix: dict = {}
+    for target, profile_data in req.items():
+        if not isinstance(profile_data, dict):
+            continue
+        profile_data.setdefault("target_name", target)
+        new_matrix[target] = RelationshipProfile.model_validate(profile_data)
+    char.social_matrix = new_matrix
+    # 同步 relationships 字段（兼容旧字段）
+    for target, profile in new_matrix.items():
+        char.relationships[target] = profile.affinity
+    repo.save_character(project_id, char)
+    return {k: v.model_dump() for k, v in char.social_matrix.items()}
 
 
 @app.get("/projects/{project_id}/memory", summary="三层记忆快照")
@@ -3022,6 +3374,85 @@ async def get_world_overview(project_id: str) -> dict[str, Any]:
         "orphan_nodes": orphan_nodes,
         "completeness_hints": completeness_hints,
     }
+
+
+# --- 发布世界（Phase 6 Stage 1）---
+
+@app.post("/projects/{project_id}/world/publish", summary="发布世界：沙盘 → 运行态 WorldState")
+async def publish_world(project_id: str) -> dict[str, Any]:
+    """
+    发布世界沙盘数据为可运行的 WorldState。
+
+    流程：
+      1. 读取沙盘数据 + 概念数据
+      2. 调用 WorldValidator 校验
+      3. 校验通过后调用 WorldCompiler 编译
+      4. 保存 RuntimeWorldState 到 DB 和文件系统
+      5. 返回 PublishReport
+
+    Returns:
+      status: "published" | "validation_failed"
+      errors: 校验错误列表（validation_failed 时非空）
+      warnings: 编译警告列表
+      publish_report: 编译统计
+    """
+    from narrative_os.core.world_validator import WorldValidator
+    from narrative_os.core.world_compiler import WorldCompiler
+    from narrative_os.core.world_repository import WorldRepository
+
+    async with AsyncSessionLocal() as db:
+        sandbox = await _get_sandbox(project_id, db)
+        concept = await _get_concept(project_id, db)
+
+    # Step 1: 校验
+    validator = WorldValidator()
+    validation_report = validator.validate(sandbox=sandbox, concept=concept)
+
+    if not validation_report.is_valid:
+        return {
+            "status": "validation_failed",
+            "errors": validation_report.errors,
+            "warnings": validation_report.warnings,
+            "suggestions": validation_report.suggestions,
+            "publish_report": None,
+        }
+
+    # Step 2: 编译
+    compiler = WorldCompiler()
+    world, publish_report = compiler.compile(concept=concept, sandbox=sandbox)
+
+    # Step 3: 标记发布版本
+    import time as _time
+    world_version = f"v{int(_time.time())}"
+    publish_report.world_version = world_version
+
+    # Step 4: 持久化（DB + 文件系统）
+    repo = WorldRepository()
+    await repo.asave_runtime_world_state(project_id, world)
+
+    return {
+        "status": "published",
+        "world_version": world_version,
+        "warnings": publish_report.warnings + validation_report.warnings,
+        "suggestions": validation_report.suggestions,
+        "publish_report": {
+            "factions_compiled": publish_report.factions_compiled,
+            "regions_compiled": publish_report.regions_compiled,
+            "power_systems_compiled": publish_report.power_systems_compiled,
+            "rules_compiled": publish_report.rules_compiled,
+            "timeline_events_compiled": publish_report.timeline_events_compiled,
+            "relations_compiled": publish_report.relations_compiled,
+        },
+    }
+
+
+@app.get("/projects/{project_id}/world/runtime-state", summary="获取已发布的运行态 WorldState")
+async def get_world_runtime_state(project_id: str) -> dict[str, Any]:
+    """获取已发布的运行态 WorldState（经过 WorldCompiler 编译产出的版本）。"""
+    from narrative_os.core.world_repository import WorldRepository
+    repo = WorldRepository()
+    world = await repo.aget_world_state(project_id)
+    return world.model_dump()
 
 
 # --- 地图布局 ---

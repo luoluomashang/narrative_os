@@ -12,6 +12,7 @@ tests/test_world_sandbox_phase3.py — 世界构建模块优化三阶段·阶段
 from __future__ import annotations
 
 import json
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 
@@ -38,7 +39,9 @@ def client():
     return TestClient(app, raise_server_exceptions=False)
 
 
-PROJECT_ID = "test-phase3-sandbox"
+# 每次测试会话使用唯一前缀，避免多次运行时 DB 状态积累
+_RUN_ID = uuid.uuid4().hex[:8]
+PROJECT_ID = f"test-phase3-sandbox-{_RUN_ID}"
 
 
 # ------------------------------------------------------------------ #

@@ -1,0 +1,317 @@
+{
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": null,
+    "factions": [
+      "天玄宗",
+      "魔道联盟"
+    ],
+    "key_locations": [
+      "玄天城",
+      "幽冥谷",
+      "龙脉山",
+      "碧波海",
+      "落日荒原"
+    ],
+    "rules": [],
+    "world_name": "九州天玄界",
+    "world_type": "continental",
+    "world_description": "一个由九大洲组成的玄幻世界",
+    "sandbox_raw": {
+      "world_name": "九州天玄界",
+      "world_type": "continental",
+      "world_description": "一个由九大洲组成的玄幻世界",
+      "regions": [
+        {
+          "id": "ce44e96d-740a-4ee9-a030-3034735091d3",
+          "name": "玄天城",
+          "region_type": "capital",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "6b397eaf-20c9-4f57-ba13-ef1d952cd427"
+          ],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        },
+        {
+          "id": "9d47588a-0f0b-4d83-a1f2-791831fa2f7c",
+          "name": "幽冥谷",
+          "region_type": "cave",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "dde73c1d-68f9-42ef-8180-4f40a5cad987"
+          ],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        },
+        {
+          "id": "29de42f0-eda3-40eb-b610-14266a1a94d8",
+          "name": "龙脉山",
+          "region_type": "mountain",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "6b397eaf-20c9-4f57-ba13-ef1d952cd427"
+          ],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        },
+        {
+          "id": "0f126cb8-a6de-4a52-9b71-4a05ce078ae3",
+          "name": "碧波海",
+          "region_type": "ocean",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [
+            "dde73c1d-68f9-42ef-8180-4f40a5cad987"
+          ],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        },
+        {
+          "id": "270171d7-8741-4f97-8a66-ff07309b8071",
+          "name": "落日荒原",
+          "region_type": "desert",
+          "x": 100.0,
+          "y": 100.0,
+          "geography": {
+            "terrain": "",
+            "climate": "",
+            "special_features": [],
+            "landmarks": []
+          },
+          "race": {
+            "primary_race": "",
+            "secondary_races": [],
+            "is_mixed": false,
+            "race_notes": ""
+          },
+          "civilization": {
+            "name": "",
+            "belief_system": "",
+            "culture_tags": [],
+            "govt_type": ""
+          },
+          "power_access": {
+            "inherits_global": true,
+            "custom_system_id": null,
+            "power_notes": ""
+          },
+          "faction_ids": [],
+          "alignment": "true_neutral",
+          "tags": [],
+          "notes": ""
+        }
+      ],
+      "factions": [
+        {
+          "id": "6b397eaf-20c9-4f57-ba13-ef1d952cd427",
+          "name": "天玄宗",
+          "scope": "internal",
+          "description": "最强宗门",
+          "territory_region_ids": [
+            "ce44e96d-740a-4ee9-a030-3034735091d3",
+            "29de42f0-eda3-40eb-b610-14266a1a94d8"
+          ],
+          "alignment": "lawful_good",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": "#2ef2ff",
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        },
+        {
+          "id": "dde73c1d-68f9-42ef-8180-4f40a5cad987",
+          "name": "魔道联盟",
+          "scope": "external",
+          "description": "反派势力",
+          "territory_region_ids": [
+            "0f126cb8-a6de-4a52-9b71-4a05ce078ae3",
+            "9d47588a-0f0b-4d83-a1f2-791831fa2f7c"
+          ],
+          "alignment": "chaotic_evil",
+          "relation_map": {},
+          "power_system_id": null,
+          "color": "#ff2e88",
+          "x": 0.0,
+          "y": 0.0,
+          "notes": ""
+        }
+      ],
+      "power_systems": [],
+      "world_rules": [],
+      "relations": [
+        {
+          "id": "232f3e3a-7373-4375-bc3c-732f8bc177b6",
+          "source_id": "ce44e96d-740a-4ee9-a030-3034735091d3",
+          "target_id": "29de42f0-eda3-40eb-b610-14266a1a94d8",
+          "relation_type": "adjacent",
+          "label": "城山相连",
+          "description": ""
+        },
+        {
+          "id": "b561d075-efce-4da1-90bc-a9c619e85ab1",
+          "source_id": "9d47588a-0f0b-4d83-a1f2-791831fa2f7c",
+          "target_id": "0f126cb8-a6de-4a52-9b71-4a05ce078ae3",
+          "relation_type": "adjacent",
+          "label": "谷海通道",
+          "description": ""
+        },
+        {
+          "id": "c3397edd-82e1-4d50-b41b-61c024089535",
+          "source_id": "6b397eaf-20c9-4f57-ba13-ef1d952cd427",
+          "target_id": "dde73c1d-68f9-42ef-8180-4f40a5cad987",
+          "relation_type": "war",
+          "label": "正邪大战",
+          "description": ""
+        },
+        {
+          "id": "cd73da26-4f2e-4831-84a4-ae98db2d0826",
+          "source_id": "ce44e96d-740a-4ee9-a030-3034735091d3",
+          "target_id": "9d47588a-0f0b-4d83-a1f2-791831fa2f7c",
+          "relation_type": "border",
+          "label": "边境",
+          "description": ""
+        },
+        {
+          "id": "54fb6543-de72-4ecb-bac3-7ee6d0fa93e2",
+          "source_id": "29de42f0-eda3-40eb-b610-14266a1a94d8",
+          "target_id": "270171d7-8741-4f97-8a66-ff07309b8071",
+          "relation_type": "trade",
+          "label": "山原贸易",
+          "description": ""
+        }
+      ],
+      "timeline_events": [
+        {
+          "id": "f94a38af-dcd8-4ac3-b79b-cc0f24eff3fe",
+          "year": "100",
+          "title": "天玄宗建立",
+          "description": "",
+          "linked_entity_id": null,
+          "event_type": "historical"
+        },
+        {
+          "id": "102698b7-bcd4-4da3-a336-f68720e779fe",
+          "year": "500",
+          "title": "正邪大战",
+          "description": "",
+          "linked_entity_id": null,
+          "event_type": "conflict"
+        },
+        {
+          "id": "4766e0d6-321e-4418-a635-2b5e0cd4b9b8",
+          "year": "800",
+          "title": "和平协议",
+          "description": "",
+          "linked_entity_id": null,
+          "event_type": "general"
+        }
+      ],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

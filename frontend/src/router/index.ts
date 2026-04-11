@@ -69,9 +69,19 @@ const routes = [
     meta: { title: '记忆系统', requiresProject: true },
   },
   {
+    path: '/project/:id/memory-search',
+    component: () => import('@/pages/MemorySearch/index.vue'),
+    meta: { title: '记忆检索', requiresProject: true },
+  },
+  {
     path: '/project/:id/metrics',
     component: () => import('@/pages/MetricsDashboard/index.vue'),
     meta: { title: '质量仪表盘', requiresProject: true },
+  },
+  {
+    path: '/project/:id/trace',
+    component: () => import('@/pages/TraceInspectorPage/index.vue'),
+    meta: { title: '执行链路', requiresProject: true },
   },
   {
     path: '/project/:id/style',

@@ -69,6 +69,16 @@
         </div>
 
         <div style="flex:1" />
+        <!-- Phase 3: SL buttons -->
+        <button class="n-btn ghost sm" title="手动存档" @click="doCreateSave">💾 存档</button>
+        <button class="n-btn ghost sm" title="读档" @click="openSLModal">📂 读档</button>
+        <!-- Phase 3: Control mode selector -->
+        <select v-model="controlMode" class="control-mode-select" title="控制权模式" @change="applyControlMode">
+          <option value="user_driven">👤 用户驱动</option>
+          <option value="semi_agent">🤝 半代理</option>
+          <option value="full_agent">🤖 全代理</option>
+          <option value="director">🎬 导演模式</option>
+        </select>
         <button class="n-btn ghost sm" @click="showRollbackModal = true">↩ 回滚</button>
         <button class="n-btn danger sm" @click="confirmEnd">结束会话</button>
       </div>
@@ -268,6 +278,32 @@
           </div>
         </div>
       </div>
+
+      <!-- Phase 3: SL Modal -->
+      <div v-if="showSLModal" class="modal-overlay" @click.self="showSLModal = false">
+        <div class="modal-box sl-modal">
+          <h3>📂 存档管理</h3>
+          <div v-if="savesList.length === 0" class="sl-empty">暂无存档</div>
+          <div v-else class="sl-list">
+            <div v-for="s in savesList" :key="s.save_id" class="sl-item">
+              <div class="sl-info">
+                <span class="sl-trigger">{{ s.trigger }}</span>
+                <span class="sl-turn">回合 {{ s.turn }}</span>
+                <span class="sl-ts">{{ s.timestamp.slice(0, 16) }}</span>
+                <span class="sl-pressure">压力 {{ s.scene_pressure?.toFixed(1) }}</span>
+              </div>
+              <div class="sl-actions">
+                <button class="n-btn primary sm" @click="doLoadSave(s.save_id)">读档</button>
+                <button class="n-btn danger sm" @click="doDeleteSave(s.save_id)">删除</button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="n-btn ghost" @click="showSLModal = false">关闭</button>
+            <button class="n-btn primary" @click="doCreateSave">💾 新建存档</button>
+          </div>
+        </div>
+      </div>
     </Teleport>
 
     <!-- Toast container (bottom-right) -->
@@ -290,6 +326,7 @@ import { useRoute } from 'vue-router'
 import NTypewriter from '@/components/common/NTypewriter.vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useToast } from '@/composables/useToast'
+import { sessions as sessionsApi } from '@/api/sessions'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.id as string) || 'default')
@@ -314,6 +351,12 @@ const agencyWarningText = ref('')
 const dangerConfirm = ref<{ opt: string; idx: number } | null>(null)
 const latestDecisionType = ref<string>('action')
 const latestRiskLevels = ref<string[]>([])
+
+// Phase 3: SL + control mode state
+const showSLModal = ref(false)
+const controlMode = ref<'user_driven' | 'semi_agent' | 'full_agent' | 'director'>('user_driven')
+interface SaveEntry { save_id: string; trigger: string; timestamp: string; turn: number; scene_pressure: number }
+const savesList = ref<SaveEntry[]>([])
 
 interface ToastItem { id: number; type: 'info' | 'warning' | 'error' | 'success'; message: string }
 const toasts = ref<ToastItem[]>([])
@@ -458,6 +501,67 @@ function confirmEnd() { showEndModal.value = true }
 async function doEndSession() {
   showEndModal.value = false
   await store.endSession()
+}
+
+// Phase 3: SL functions
+async function doCreateSave() {
+  if (!store.sessionId) return
+  try {
+    const res = await sessionsApi.createSave(projectId.value, store.sessionId, 'manual')
+    pushToast('success', `存档成功 (回合 ${res.data.turn})`)
+    // Refresh list if modal open
+    if (showSLModal.value) await fetchSaves()
+  } catch {
+    pushToast('error', '存档失败')
+  }
+}
+
+async function fetchSaves() {
+  if (!store.sessionId) return
+  try {
+    const res = await sessionsApi.listSaves(projectId.value, store.sessionId)
+    savesList.value = res.data ?? []
+  } catch {
+    savesList.value = []
+  }
+}
+
+async function openSLModal() {
+  await fetchSaves()
+  showSLModal.value = true
+}
+
+async function doLoadSave(saveId: string) {
+  if (!store.sessionId) return
+  try {
+    const res = await sessionsApi.loadSave(projectId.value, store.sessionId, saveId)
+    showSLModal.value = false
+    store.turn = res.data.restored_turn
+    pushToast('success', `已读档至回合 ${res.data.restored_turn}`)
+  } catch {
+    pushToast('error', '读档失败')
+  }
+}
+
+async function doDeleteSave(saveId: string) {
+  if (!store.sessionId) return
+  try {
+    await sessionsApi.deleteSave(projectId.value, store.sessionId, saveId)
+    await fetchSaves()
+    pushToast('info', '存档已删除')
+  } catch {
+    pushToast('error', '删除失败')
+  }
+}
+
+async function applyControlMode() {
+  if (!store.sessionId) return
+  try {
+    await sessionsApi.setControlMode(projectId.value, store.sessionId, controlMode.value)
+    pushToast('info', `控制模式已切换为 ${controlMode.value}`)
+  } catch {
+    pushToast('error', '控制模式切换失败')
+  }
 }
 
 function setDensity(d: 'dense' | 'normal' | 'sparse') {
@@ -1009,5 +1113,35 @@ onUnmounted(() => {
   0%, 100% { opacity: 0.3; }
   50% { opacity: 0.8; }
 }
+
+/* Phase 3: Control mode selector */
+.control-mode-select {
+  background: var(--color-surface-l1);
+  border: 1px solid var(--color-surface-l2);
+  color: var(--color-text-primary);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.control-mode-select:hover {
+  border-color: var(--color-ai-active);
+}
+
+/* Phase 3: SL Modal */
+.sl-modal { min-width: 400px; }
+.sl-empty { color: var(--color-text-secondary); text-align: center; padding: 20px; }
+.sl-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+.sl-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--color-surface-l1);
+  border-radius: 6px;
+  border: 1px solid var(--color-surface-l2);
+}
+.sl-info { display: flex; gap: 12px; align-items: center; font-size: 12px; }
+.sl-trigger { font-weight: 600; color: var(--color-ai-active); }
+.sl-turn, .sl-ts, .sl-pressure { color: var(--color-text-secondary); }
+.sl-actions { display: flex; gap: 6px; }
 </style>
 

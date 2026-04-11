@@ -3,6 +3,9 @@ import type {
   PlotGraphData,
   CharacterSummary,
   CharacterDetail,
+  CharacterDrive,
+  CharacterRuntime,
+  RelationshipProfile,
   MemorySnapshot,
   MemorySearchResult,
   ProjectListItem,
@@ -44,6 +47,17 @@ export const projects = {
       `/projects/${id}/characters/${encodeURIComponent(name)}/test-voice`,
       { scenario }
     ),
+  // Phase 2: 四层角色端点
+  getCharacterDrive: (id: string, name: string) =>
+    client.get<CharacterDrive>(`/projects/${id}/characters/${encodeURIComponent(name)}/drive`),
+  updateCharacterDrive: (id: string, name: string, data: Partial<CharacterDrive>) =>
+    client.put<CharacterDrive>(`/projects/${id}/characters/${encodeURIComponent(name)}/drive`, data),
+  updateCharacterRuntime: (id: string, name: string, data: Partial<CharacterRuntime>) =>
+    client.put<CharacterRuntime>(`/projects/${id}/characters/${encodeURIComponent(name)}/runtime`, data),
+  getCharacterSocialMatrix: (id: string, name: string) =>
+    client.get<Record<string, RelationshipProfile>>(`/projects/${id}/characters/${encodeURIComponent(name)}/social-matrix`),
+  updateCharacterSocialMatrix: (id: string, name: string, data: Record<string, Partial<RelationshipProfile>>) =>
+    client.put<Record<string, RelationshipProfile>>(`/projects/${id}/characters/${encodeURIComponent(name)}/social-matrix`, data),
   memory: (id: string) =>
     client.get<MemorySnapshot>(`/projects/${id}/memory`),
   memorySearch: (id: string, q: string) =>

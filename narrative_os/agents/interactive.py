@@ -39,6 +39,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from narrative_os.core.interactive_modes import ControlMode, ControlModeConfig
 from narrative_os.execution.llm_router import (
     get_default_routing_strategy,
     LLMRequest,
@@ -145,6 +146,13 @@ class InteractiveSession(BaseModel):
         default_factory=lambda: {"base": "neutral", "current": 5.0, "drift": 0.0}
     )
     turn_char_count: int = 0
+    # Phase 3: 控制权模式
+    control_mode: ControlMode = ControlMode.USER_DRIVEN
+    mode_config: ControlModeConfig = Field(default_factory=ControlModeConfig)
+    # Phase 3: SL / 防死锁
+    memory_summary_cache: str = ""
+    # Phase 3: Agenda 状态缓存（上轮推演结果）
+    last_agenda: list[dict] = Field(default_factory=list)
 
 
 # ------------------------------------------------------------------ #
@@ -466,45 +474,121 @@ class InteractiveAgent:
     def _build_system_prompt(
         self, session: InteractiveSession, bangui_mode: str | None
     ) -> str:
+        """
+        五层分层 Prompt 结构（Phase 3.5）：
+          第1层：世界层 — 世界规则 + 禁忌 + 势力格局
+          第2层：场景层 — 当前地点/压力/最近事件/可交互对象
+          第3层：角色层 — 出场角色 persona + drive + key relationships + runtime
+          第4层：控制层 — 控制权模式 + AI 接管范围 + DM 叙事密度
+          第5层：安全/收束层 — 死锁检测/代理隔离/节奏纠偏/SL 建议时机
+        """
         cfg = self._load_trpg_cfg()
-
         anti_proxy = cfg.get("anti_proxy_rule", "DM 绝对禁止替玩家做决策。")
         trunc_rule = cfg.get("truncation_priority", "到达决策节点立即截断输出。")
-
         density_cfg = cfg.get("decision_density", {}).get(session.density, {})
         density_desc = density_cfg.get("description", f"片段长度: {session.density}")
         length_limit = _DENSITY_LIMITS[session.density]
 
-        parts = [
-            f"你是一位专业的 TRPG 地下城主（DM），正在主持一场中文网文风格的桌游推演。",
-            f"主角名字：{session.character_name}。",
-            f"世界背景：{session.world_summary or '未指定'}。",
-            "",
-            "## 最高优先级规则",
-            anti_proxy,
-            "",
-            "## 截断规则",
-            trunc_rule,
-            "",
-            f"## 当前决策密度：{session.density}（每片段上限 {length_limit} 字）",
+        # ── 第1层：世界层 ────────────────────────────────────────────────
+        world_rules_text = "（无世界规则）"
+        factions_text = "（无势力信息）"
+        world_events_text = "（无近期事件）"
+        if session.world_summary:
+            world_rules_text = session.world_summary[:400] if len(session.world_summary) > 400 else session.world_summary
+
+        layer1 = [
+            "## 【第1层：世界层】",
+            f"世界背景摘要：{world_rules_text}",
+            f"关键势力：{factions_text}",
+            f"近期世界事件：{world_events_text}",
+            f"关键禁忌：任何违反 rules_of_world 的行动须先经裁定层过滤，不得直接执行。",
+        ]
+
+        # ── 第2层：场景层 ────────────────────────────────────────────────
+        recent_3_turns = [
+            t.content[:60] for t in session.history[-6:] if t.who == "dm"
+        ][-3:]
+        recent_summary = "；".join(recent_3_turns) or "（会话刚开始，暂无事件摘要）"
+
+        layer2 = [
+            "## 【第2层：场景层】",
+            f"当前场景压力：{session.scene_pressure:.1f}/10  密度模式：{session.density}",
+            f"最近3轮DM事件摘要：{recent_summary}",
+            f"可交互对象：（由世界状态注入，当前默认开放）",
+        ]
+
+        # ── 第3层：角色层 ────────────────────────────────────────────────
+        agenda_text = "（无 Agenda 推演数据）"
+        if session.last_agenda:
+            agenda_lines = []
+            for item in session.last_agenda[:3]:
+                name = item.get("character_name", "?")
+                agenda = item.get("agenda_text", "")
+                if name and agenda:
+                    agenda_lines.append(f"  - {name}：{agenda[:60]}")
+            if agenda_lines:
+                agenda_text = "\n".join(agenda_lines)
+
+        layer3 = [
+            "## 【第3层：角色层】",
+            f"主角名称：{session.character_name}",
+            f"非玩家角色本轮 Agenda：\n{agenda_text}",
+            "角色行为约束：角色不得做出与 behavior_constraints 矛盾的行为。",
+        ]
+
+        # ── 第4层：控制层 ────────────────────────────────────────────────
+        mode_hint = session.mode_config.prompt_hint if hasattr(session, 'mode_config') else ""
+        ai_chars = getattr(session.mode_config, 'ai_controlled_characters', []) if hasattr(session, 'mode_config') else []
+        proxy_allowed = getattr(session.mode_config, 'allow_protagonist_proxy', False) if hasattr(session, 'mode_config') else False
+
+        layer4 = [
+            "## 【第4层：控制层】",
+            f"当前控制模式：{session.control_mode.value if hasattr(session, 'control_mode') else 'user_driven'}",
+            mode_hint,
+            f"AI 接管角色：{', '.join(ai_chars) if ai_chars else '无（全部由用户控制）'}",
+            f"允许AI代主角补全动作：{'是' if proxy_allowed else '否'}",
+            f"DM叙事密度：{session.density}（每片段上限 {length_limit} 字）",
             density_desc,
             "",
             "## 决策选项格式",
             "[选项 A]：{行动描述}",
             "[选项 B]：{行动描述}",
-            "",
         ]
 
+        # ── 第5层：安全/收束层 ───────────────────────────────────────────
+        layer5 = [
+            "## 【第5层：安全/收束层】",
+            anti_proxy,
+            trunc_rule,
+            "死锁检测：若玩家连续3次输入重复或无效，系统将自动注入解套事件，DM 协助推进。",
+            "失控保护：若角色行动与 non_negotiable 底线冲突，DM 须延迟或提示后果，不得直接替玩家解决。",
+            "节奏纠偏：连续3轮 scene_pressure >= 8 时，触发 PACING_ALERT；需在后续叙事中主动下压。",
+            "SL 建议时机：角色面临死亡/极端后果时，DM 可在叙事末尾加注 [📎存档建议]。",
+        ]
+
+        # ── 帮回附加层（可选） ───────────────────────────────────────────
+        bangui_parts: list[str] = []
         if bangui_mode:
             bcfg = self._load_bangui_cfg()
             for s in bcfg.get("suggestions", []):
                 if s.get("trigger") == bangui_mode:
-                    parts.append(f"## 帮回模式：{bangui_mode}")
-                    parts.append(s.get("description", ""))
-                    parts.append(f"逻辑：{s.get('logic', '')}")
+                    bangui_parts = [
+                        f"## 帮回模式：{bangui_mode}",
+                        s.get("description", ""),
+                        f"逻辑：{s.get('logic', '')}",
+                    ]
                     break
 
-        return "\n".join(parts)
+        all_parts = (
+            [f"你是一位专业的 TRPG 地下城主（DM），正在主持一场中文网文风格的桌游推演。", ""]
+            + layer1 + [""]
+            + layer2 + [""]
+            + layer3 + [""]
+            + layer4 + [""]
+            + layer5
+            + ([""] + bangui_parts if bangui_parts else [])
+        )
+        return "\n".join(all_parts)
 
     def _build_history_context(
         self, session: InteractiveSession

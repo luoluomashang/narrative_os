@@ -1,5 +1,8 @@
 # Narrative OS
 
+> 项目版本基线：v2.0.0
+> 更新日期：2026-04-11
+
 面向长篇小说创作的多智能体叙事操作系统。
 
 从 prompts-only 流程升级为结构化工程化体系：
@@ -8,6 +11,19 @@
 - CLI + REST API + Web UI 三端一致
 - TRPG 互动写作（终端与网页）
 - 世界构建沙盘（可视化节点与关系编辑）
+
+## v2.0.0 本次优化新增
+
+- 新增独立页面：`/project/:id/memory-search`（记忆检索）与 `/project/:id/trace`（执行链路）
+- Metrics 仪表盘移除固定示例曲线，空项目显示真实空态与 0 统计
+- Agent 工坊移除 mock 运行卡片，改为真实 Trace 数据驱动与空态展示
+- 角色矩阵 Drive/Social 页移除运行时模板组件，消除 Vue runtime 编译告警
+- 侧边栏信息架构补齐入口，记忆检索和执行链路支持真实用户点击可达
+
+## v2.0.0 废弃与清理
+
+- 废弃 Metrics 与 Agent 页面中的占位演示数据回退逻辑
+- 清理 Trace 视图中的技术占位文案（`tracing not yet available`）对用户的直接暴露
 
 ## 当前功能总览
 
@@ -40,6 +56,14 @@
 - 力量体系保存时可选“同步到全局继承节点”
 - Finalize：将世界设定写入知识库
 
+### 世界书能力说明（当前版本）
+- 当前版本不单独提供“世界书”页面。
+- 世界书能力由三部分组成：
+	- WorldBuilder 结构化编辑（地区/势力/力量体系/关系/时间线）
+	- `POST /projects/{project_id}/world/finalize` 写入 `knowledge_base.json`
+	- MemorySystem 提供记忆检索与召回能力
+- 推荐做法：将“世界书”视作现有能力组合，而非新增独立模块。
+
 详细说明见 [docs/ui/07_worldbuilder_module_spec.md](docs/ui/07_worldbuilder_module_spec.md)。
 
 ### 4. 角色矩阵（Character Matrix）
@@ -56,8 +80,25 @@
 - 会话创建、行动推进、帮回、回滚、结束摘要
 - WebSocket 流式叙事
 - 密度模式：dense / normal / sparse
+- **四档控制模式**：`user_driven / semi_agent / directed / director`，动态切换
+- **SL 系统（存/读档）**：`SaveStore.create()` 手动存档 + `SoftRollback.restore()` 软回退，保留 memory_summary 防止完全失忆
+- **防死锁**：`DeadlockBreaker.detect()` + `DeadlockBreaker.resolve()` 自动解套叙事
 
-### 6. 可视化与运营面板
+### 6. 世界发布管线（World Publish）
+- `POST /projects/{project_id}/world/publish` — 沙盘 → WorldState 编译 + 持久化
+- WorldValidator：校验世界逻辑一致性，输出错误/警告/建议三级报告
+- WorldCompiler：将沙盘数据编译为可运行的 WorldState（地区、势力、力量体系、规则）
+- WorldRepository：将 RuntimeWorldState 写入 DB + 文件系统
+
+### 7. CanonCommit（正史提交管线）
+- 三种提交模式：
+  - `SESSION_ONLY` — 仅保留TRPG会话记录，不影响主线
+  - `DRAFT_CHAPTER` — 生成草稿，等待人工确认
+  - `CANON_CHAPTER` — 二次确认后直接提交正史
+- 变更集 API：`GET /projects/{project_id}/changesets`、approve/reject 端点
+- `CanonCommit.create_changeset()` → `WorldChangeSet`
+
+### 8. 可视化与运营面板
 - 情节画布、角色矩阵、记忆系统、质量仪表盘、风格控制台
 - Agent 工坊、消耗统计、插件市场、全局与项目设置
 
@@ -119,6 +160,15 @@ narrative check --chapter 1 --draft chapter1.md
 narrative humanize --input chapter1.md --output chapter1_human.md
 ```
 
+## 推荐工作流（含世界书）
+
+1. 在故事概念页完成一句话/一段话设定（`/project/:id/concept`）。
+2. 在世界构建页完善地区、势力、关系与时间线（`/project/:id/worldbuilder`）。
+3. 点击世界构建中的“完成世界设定”，将结构化数据写入知识库。
+4. 进入角色矩阵补齐角色口吻、约束与动机（`/project/:id/characters`）。
+5. 在章节撰写页进行章节生成与改写（`/project/:id/write`）。
+6. 用一致性检查与人味化进行质检（`/project/:id/check`、`/project/:id/humanize`）。
+
 ## CLI 命令
 
 - `narrative run` 完整章节生成
@@ -151,11 +201,13 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 - `/project/:id/write` 章节撰写
 - `/project/:id/trpg` TRPG 互动
 - `/project/:id/memory` 记忆系统
+- `/project/:id/memory-search` 记忆检索
 - `/project/:id/metrics` 质量仪表盘
 - `/project/:id/style` 风格控制台
 - `/project/:id/check` 一致性检查
 - `/project/:id/humanize` 去 AI 痕迹
 - `/project/:id/agents` Agent 工坊
+- `/project/:id/trace` 执行链路
 - `/project/:id/chapters` 章节管理
 - `/project/:id/settings` 项目设置
 
@@ -232,6 +284,22 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 - `DELETE /projects/{project_id}/world/relations/{relation_id}`
 - `GET /projects/{project_id}/world/power-templates`
 - `POST /projects/{project_id}/world/finalize`
+
+### 世界发布
+- `POST /projects/{project_id}/world/publish` — 沙盘→WorldState 编译
+- `GET /projects/{project_id}/world/overview` — 世界统计摘要
+
+### 变更集
+- `GET /projects/{project_id}/changesets` — 列出变更集
+- `GET /projects/{project_id}/changesets/{cs_id}` — 变更集详情
+- `POST /projects/{project_id}/changesets/{cs_id}/approve` — 批量审批 + 提交
+- `POST /projects/{project_id}/changesets/{cs_id}/reject` — 驳回变更集
+- `POST /projects/{project_id}/sessions/{session_id}/commit` — 会话结束时提交
+
+### SL 存档
+- `GET /projects/{project_id}/sessions/{session_id}/saves` — 存档列表
+- `POST /projects/{project_id}/sessions/{session_id}/save` — 手动存档
+- `POST /projects/{project_id}/sessions/{session_id}/saves/{save_id}/restore` — 读档回退
 
 ### 角色矩阵
 - `GET /projects/{project_id}/characters` — 角色列表摘要

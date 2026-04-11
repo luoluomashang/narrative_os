@@ -138,6 +138,42 @@ export interface CharacterSummary {
   is_alive: boolean
 }
 
+// Phase 2: 四层深化类型
+export interface CharacterDrive {
+  core_desire?: string
+  core_fear?: string
+  current_obsession?: string
+  short_term_goal?: string
+  long_term_goal?: string
+  compromisable?: string[]
+  non_negotiable?: string[]
+  self_deception?: string
+}
+
+export interface RelationshipProfile {
+  target_name: string
+  affinity: number       // -1~+1
+  trust: number          // 0~1
+  dependency: number     // 0~1
+  fear: number           // 0~1
+  jealousy: number       // 0~1
+  control_desire: number // 0~1
+  debt_sense: number     // -1~+1
+  cognitive_tags: string[]
+  notes?: string
+}
+
+export interface CharacterRuntime {
+  current_location?: string
+  current_companions?: string[]
+  current_agenda?: string
+  current_pressure?: number    // 0~1
+  emotion_trigger_source?: string
+  recent_key_events?: string[]
+  can_advance_plot?: boolean
+  stance_mode?: 'normal' | 'danger' | 'stubborn' | 'defensive'
+}
+
 export interface CharacterDetail extends CharacterSummary {
   // 原有字段
   traits: string[]
@@ -159,6 +195,12 @@ export interface CharacterDetail extends CharacterSummary {
   scenario_context: string
   system_instructions: string
   chapter_introduced: number
+  // Phase 2: 四层扩展
+  worldview?: string
+  character_tags?: string[]
+  drive?: CharacterDrive
+  social_matrix?: Record<string, RelationshipProfile>
+  runtime?: CharacterRuntime
 }
 
 // Memory

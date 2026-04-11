@@ -49,6 +49,21 @@
           <NCard v-if="activeTab === '动机冲突'" style="margin-top:12px">
             <MotivationTab :model="detail" :loading="saving" @save="onTabSave" />
           </NCard>
+
+          <!-- Drive 层 -->
+          <NCard v-if="activeTab === 'Drive'" style="margin-top:12px">
+            <DriveTab :model="detail" :loading="saving" @save="onTabSave" />
+          </NCard>
+
+          <!-- Social 矩阵 -->
+          <NCard v-if="activeTab === 'Social'" style="margin-top:12px">
+            <SocialMatrixTab :model="detail" :loading="saving" @save="onTabSave" />
+          </NCard>
+
+          <!-- Runtime 状态 -->
+          <NCard v-if="activeTab === 'Runtime'" style="margin-top:12px">
+            <RuntimeTab :model="detail" />
+          </NCard>
         </div>
         <div v-else-if="loading" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--color-text-secondary)">
           <NBreathingLight :size="8" /> 加载中…
@@ -79,6 +94,9 @@ import ConstraintTab from './components/ConstraintTab.vue'
 import RelationTab from './components/RelationTab.vue'
 import DialogueTab from './components/DialogueTab.vue'
 import MotivationTab from './components/MotivationTab.vue'
+import DriveTab from './components/DriveTab.vue'
+import SocialMatrixTab from './components/SocialMatrixTab.vue'
+import RuntimeTab from './components/RuntimeTab.vue'
 import { projects } from '@/api/projects'
 import type { CharacterSummary, CharacterDetail, BehaviorConstraintDetail } from '@/types/api'
 
@@ -92,7 +110,7 @@ const characters = ref<CharacterSummary[]>([])
 const selected = ref<CharacterSummary | null>(null)
 const detail = ref<CharacterDetail | null>(null)
 const activeTab = ref('档案')
-const tabs = ['档案', '状态', '限制', '关系', '对话口吻', '动机冲突']
+const tabs = ['档案', '状态', '限制', '关系', '对话口吻', '动机冲突', 'Drive', 'Social', 'Runtime']
 const showCreateForm = ref(false)
 
 async function load() {

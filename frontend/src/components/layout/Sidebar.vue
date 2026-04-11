@@ -76,6 +76,9 @@
           <el-menu-item :index="`/project/${store.projectId}/memory`">
             <el-icon><Notebook /></el-icon>记忆系统
           </el-menu-item>
+          <el-menu-item :index="`/project/${store.projectId}/memory-search`">
+            <el-icon><Search /></el-icon>记忆检索
+          </el-menu-item>
           <el-menu-item :index="`/project/${store.projectId}/chapters`">
             <el-icon><Document /></el-icon>章节管理
           </el-menu-item>
@@ -101,6 +104,9 @@
           </el-menu-item>
           <el-menu-item :index="`/project/${store.projectId}/agents`">
             <el-icon><Cpu /></el-icon>Agent 工坊
+          </el-menu-item>
+          <el-menu-item :index="`/project/${store.projectId}/trace`">
+            <el-icon><Share /></el-icon>执行链路
           </el-menu-item>
         </el-sub-menu>
 
@@ -149,6 +155,8 @@ import {
   Memo,
   Notebook,
   Promotion,
+  Search,
+  Share,
   Setting,
   StarFilled,
   Tools,

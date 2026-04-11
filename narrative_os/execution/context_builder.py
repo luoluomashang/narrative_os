@@ -53,6 +53,9 @@ class CharacterSnapshot(BaseModel):
     arc_stage: str
     relationships: dict[str, float] = Field(default_factory=dict)
     recent_events: list[str] = Field(default_factory=list)
+    # Phase 2 新增字段
+    top_drives: list[str] = Field(default_factory=list)           # Drive 层前3条关键项
+    key_relationships: list[dict] = Field(default_factory=list)   # 关系矩阵片段（按张力排序）
 
 
 class WorldSnapshot(BaseModel):
@@ -117,6 +120,8 @@ class WriteContext(BaseModel):
                 lines.append(
                     f"- **{c.name}**：情绪={c.emotion}，目标={c.goal}，弧光={c.arc_stage}"
                 )
+                if c.top_drives:
+                    lines.append(f"  驱动：{' | '.join(c.top_drives)}")
             lines.append("")
 
         w = self.world
@@ -228,6 +233,7 @@ class ContextBuilder:
         characters: "list[CharacterState] | None" = None,
         world: "WorldState | None" = None,
         memory: "MemorySystem | None" = None,
+        project_id: str | None = None,
     ) -> WriteContext:
         self._ensure_loaded()
 
@@ -243,8 +249,16 @@ class ContextBuilder:
             ctx.character_voice_notes = _build_all_voice_notes(characters)
 
         # Gate 4: 世界快照
-        if world is not None:
-            ctx.world = self._gate4_world(world)
+        # Phase 6 Stage 1: 优先使用 WorldRepository 统一入口
+        resolved_world = world
+        if resolved_world is None and project_id:
+            try:
+                from narrative_os.core.world_repository import get_world_repository
+                resolved_world = get_world_repository().get_world_state(project_id)
+            except Exception:
+                pass
+        if resolved_world is not None:
+            ctx.world = self._gate4_world(resolved_world)
 
         # Gate 5+6: 记忆检索
         if memory is not None:
@@ -288,10 +302,47 @@ class ContextBuilder:
     def _gate3_characters(
         self, characters: "list[CharacterState]"
     ) -> list[CharacterSnapshot]:
-        """将完整 CharacterState 压缩为 CharacterSnapshot。"""
+        """将完整 CharacterState 压缩为 CharacterSnapshot（含 Drive + Social 摘要）。"""
+        scene_names = {ch.name for ch in characters}
         snaps = []
         for ch in characters:
             arc = ch.get_arc_progression()
+
+            # Drive 层摘要（前3条关键项）
+            top_drives: list[str] = []
+            if ch.drive is not None:
+                d = ch.drive
+                if d.core_desire:
+                    top_drives.append(f"欲望：{d.core_desire}")
+                if d.core_fear:
+                    top_drives.append(f"恐惧：{d.core_fear}")
+                if d.current_obsession:
+                    top_drives.append(f"执念：{d.current_obsession}")
+                top_drives = top_drives[:3]
+
+            # Social 层 — 与本章出场角色交集的关系，按综合张力排序
+            key_rels: list[dict] = []
+            for target_name in scene_names - {ch.name}:
+                profile = ch.get_relationship(target_name)
+                # 综合张力 = fear + jealousy + |affinity| + control_desire
+                tension_score = (
+                    profile.fear
+                    + profile.jealousy
+                    + abs(profile.affinity)
+                    + profile.control_desire
+                )
+                key_rels.append({
+                    "target": target_name,
+                    "affinity": profile.affinity,
+                    "trust": profile.trust,
+                    "fear": profile.fear,
+                    "cognitive_tags": profile.cognitive_tags,
+                    "_tension": tension_score,
+                })
+            key_rels.sort(key=lambda r: r["_tension"], reverse=True)
+            for r in key_rels:
+                r.pop("_tension", None)
+
             snaps.append(CharacterSnapshot(
                 name=ch.name,
                 emotion=ch.emotion,
@@ -299,6 +350,8 @@ class ContextBuilder:
                 arc_stage=arc.get("current_stage_name", ""),
                 relationships=dict(list(ch.relationships.items())[:5]),
                 recent_events=list(ch.memory[-3:]) if ch.memory else [],
+                top_drives=top_drives,
+                key_relationships=key_rels,
             ))
         return snaps
 

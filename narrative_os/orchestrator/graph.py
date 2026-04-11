@@ -34,10 +34,13 @@ from narrative_os.agents.critic import CriticAgent, CriticReport
 from narrative_os.agents.editor import EditedChapter, EditorAgent
 from narrative_os.agents.interactive import InteractiveAgent, InteractiveSession, SessionConfig, SessionPhase
 from narrative_os.agents.planner import PlannerAgent, PlannerInput, PlannerOutput
+from narrative_os.agents.rule_resolver import RuleResolver
+from narrative_os.agents.sandbox_simulator import SandboxSimulator
 from narrative_os.agents.writer import ChapterDraft, WriterAgent
 from narrative_os.core.character import CharacterState
 from narrative_os.core.memory import MemorySystem
 from narrative_os.core.plot import PlotGraph
+from narrative_os.core.save_load import DeadlockBreaker, get_save_store
 from narrative_os.core.world import WorldState
 from narrative_os.execution.context_builder import (
     ChapterTarget,
@@ -120,6 +123,143 @@ async def planner_lite_node(state: InteractiveGraphState) -> dict[str, Any]:
         "context_summary": f"第 {volume} 卷第 {chapter} 章交互场景",
     }
     return {"lite_plan": lite_plan}
+
+
+# ------------------------------------------------------------------ #
+# Phase 3 新增节点                                                      #
+# ------------------------------------------------------------------ #
+
+async def rule_resolution_node(state: InteractiveGraphState) -> dict[str, Any]:
+    """
+    Phase 3.6: 世界裁定节点。
+    在 interactive_node 前对 user_action 进行 RuleResolver 三层校验。
+    若行动被阻止，写入 error_message 并将 user_action 替换为提示文本。
+    """
+    user_action: str = state.get("user_action", "")
+    if not user_action:
+        return {}  # 没有用户输入（开幕轮），跳过
+
+    session_id: str = state.get("session_id", "")
+    session: InteractiveSession | None = _session_registry.get(session_id)
+    if session is None:
+        return {}
+
+    characters = state.get("characters", [])
+    world = state.get("world")
+
+    # 找到主角角色状态
+    actor: CharacterState | None = None
+    for c in characters:
+        if c.name == session.character_name:
+            actor = c
+            break
+
+    if actor is None and characters:
+        actor = characters[0]
+    if actor is None:
+        return {}  # 无角色信息，跳过裁定
+
+    resolver = RuleResolver()
+    try:
+        result = await resolver.resolve(
+            user_action=user_action,
+            actor_character=actor,
+            world_state=world,
+        )
+    except Exception:
+        return {}  # 裁定失败，放行
+
+    if not result.allowed:
+        # 将阻止信息写入 error_message，并用系统提示替换 user_action
+        blocked_msg = (
+            f"[裁定系统] 行动被阻止：{result.blocked_reason}\n"
+            + ("提示：" + "；".join(result.warnings) if result.warnings else "")
+        )
+        return {
+            "error_message": blocked_msg,
+            "user_action": f"[行动被世界规则阻止] {result.blocked_reason}",
+        }
+
+    # 行动允许但有警告/修正
+    updates: dict[str, Any] = {}
+    if result.modified_action != user_action:
+        updates["user_action"] = result.modified_action
+    if result.warnings:
+        updates["error_message"] = "警告：" + "；".join(result.warnings)
+    return updates
+
+
+async def agenda_simulation_node(state: InteractiveGraphState) -> dict[str, Any]:
+    """
+    Phase 3.6: Agenda 推演节点。
+    在 interactive_node 后推演非玩家受控角色本轮 agenda。
+    结果写入 session.last_agenda（用于 5 层 prompt 第 3 层）。
+    """
+    session_id: str = state.get("session_id", "")
+    session: InteractiveSession | None = _session_registry.get(session_id)
+    if session is None:
+        return {}
+
+    characters = state.get("characters", [])
+    world = state.get("world")
+    if not characters or world is None:
+        return {}
+
+    recent_turn_records: list[dict] = state.get("turn_records", [])
+    recent_events = [
+        r.get("content", "")[:80]
+        for r in recent_turn_records[-4:]
+        if r.get("who") == "dm" and r.get("content")
+    ]
+
+    sim = SandboxSimulator()
+    try:
+        deltas = await sim.simulate_turn(
+            active_characters=characters,
+            world_state=world,
+            recent_events=recent_events,
+            control_mode=session.control_mode,
+        )
+        session.last_agenda = [d.model_dump() for d in deltas]
+    except Exception:
+        pass  # 推演失败不影响主流程
+
+    return {}
+
+
+async def deadlock_check_node(state: InteractiveGraphState) -> dict[str, Any]:
+    """
+    Phase 3.6: 死锁检测节点。
+    在 should_continue 路由前检查是否进入死锁，若检测到则注入解套叙事。
+    """
+    session_id: str = state.get("session_id", "")
+    session: InteractiveSession | None = _session_registry.get(session_id)
+    if session is None:
+        return {}
+
+    breaker = DeadlockBreaker()
+    condition = breaker.detect(session)
+    if condition is None:
+        return {}
+
+    # 注入解套文本作为 DM 系统轮
+    try:
+        resolve_text = await breaker.resolve(condition, session)
+        from narrative_os.agents.interactive import TurnRecord
+        system_turn = TurnRecord(
+            turn_id=session.turn,
+            who="system",
+            content=f"[解套: {condition.value}] {resolve_text}",
+            scene_pressure=session.scene_pressure,
+            density=session.density,
+            phase=session.phase,
+        )
+        session.history.append(system_turn)
+        session.turn += 1
+        prev_records: list[dict] = state.get("turn_records", [])
+        return {"turn_records": [*prev_records, system_turn.model_dump()]}
+    except Exception:
+        return {}
 
 
 async def interactive_node(state: InteractiveGraphState) -> dict[str, Any]:
@@ -216,26 +356,33 @@ def build_interactive_graph() -> StateGraph:
     """
     构建 TRPG 交互模式图（未编译）。
 
-    拓扑：
-      planner_lite → interactive → should_continue?
-                                     ├─ "user_input"   → interactive（循环，经 LangGraph interrupt）
+    拓扑（Phase 3 升级后）：
+      planner_lite → rule_resolution → interactive → agenda_simulation
+                                                    → deadlock_check → should_continue?
+                                     ├─ "user_input"   → rule_resolution（循环，经 LangGraph interrupt）
                                      ├─ "landing"      → landing → maintenance_interactive → END
                                      └─ "pacing_alert" → landing → END（跳过记忆更新）
     """
     graph: StateGraph = StateGraph(InteractiveGraphState)
 
     graph.add_node("planner_lite", planner_lite_node)
+    graph.add_node("rule_resolution", rule_resolution_node)
     graph.add_node("interactive", interactive_node)
+    graph.add_node("agenda_simulation", agenda_simulation_node)
+    graph.add_node("deadlock_check", deadlock_check_node)
     graph.add_node("landing", landing_node)
     graph.add_node("maintenance_interactive", maintenance_node_interactive)
 
     graph.set_entry_point("planner_lite")
-    graph.add_edge("planner_lite", "interactive")
+    graph.add_edge("planner_lite", "rule_resolution")
+    graph.add_edge("rule_resolution", "interactive")
+    graph.add_edge("interactive", "agenda_simulation")
+    graph.add_edge("agenda_simulation", "deadlock_check")
     graph.add_conditional_edges(
-        "interactive",
+        "deadlock_check",
         should_continue,
         path_map={
-            "user_input": "interactive",      # 自循环（经 interrupt 恢复）
+            "user_input": "rule_resolution",      # 循环经 rule_resolution 再入 interactive
             "landing": "landing",
             "pacing_alert": "landing",
         },
@@ -251,7 +398,8 @@ def compile_interactive_graph(checkpointer: MemorySaver | None = None) -> Any:
     g = build_interactive_graph()
     if checkpointer is None:
         checkpointer = MemorySaver()
-    return g.compile(checkpointer=checkpointer, interrupt_before=["interactive"])
+    # interrupt_before rule_resolution so the graph pauses for user input on each cycle
+    return g.compile(checkpointer=checkpointer, interrupt_before=["rule_resolution"])
 
 
 # ------------------------------------------------------------------ #
@@ -271,6 +419,9 @@ class AgentGraphState(TypedDict, total=False):
     world_rules: list[str]
     constraints: list[str]
     strategy: str              # RoutingStrategy 枚举名
+
+    # Phase 6 Stage 1: 项目 ID，供 WorldRepository 懒加载世界状态
+    project_id: str | None
 
     # 依赖资源（运行时注入，不序列化）
     plot_graph: PlotGraph | None
@@ -564,11 +715,14 @@ async def _build_write_context(
         tension_target=float(plan.tension_curve[-1][1]) if plan.tension_curve else 0.6,
         hook_type=plan.hook_type,
     )
+    # Phase 6 Stage 1: 通过 WorldRepository 统一入口获取世界状态（project_id 懒加载）
+    project_id: str | None = state.get("project_id")  # type: ignore[assignment]
     ctx = builder.build(
         chapter_target=target,
         plot_graph=state.get("plot_graph"),
         characters=state.get("characters", []),
         world=state.get("world"),
         memory=state.get("memory"),
+        project_id=project_id,
     )
     return ctx

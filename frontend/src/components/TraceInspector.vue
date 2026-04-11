@@ -105,7 +105,10 @@ const rootNodes = computed<TraceNodeData[]>(() => {
 const isEmptyTree = computed(() => rootNodes.value.length === 0)
 const emptyNote = computed(() => {
   const d = props.data as { note?: string } | null
-  return d?.note ?? '无 Trace 数据'
+  const note = d?.note ?? ''
+  if (!note) return '暂无执行链路数据'
+  if (note.toLowerCase().includes('not yet available')) return '当前章节暂无可视化执行链路'
+  return note
 })
 
 const flatNodes = computed<TraceNodeData[]>(() => {

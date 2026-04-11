@@ -1,0 +1,31 @@
+{
+  "description": "自动化走查与修复回归验证项目",
+  "characters": [
+    {
+      "name": "林策",
+      "traits": [],
+      "goal": "",
+      "backstory": "",
+      "description": "",
+      "personality": "",
+      "alias": [],
+      "speech_style": "",
+      "catchphrases": [],
+      "dialogue_examples": [],
+      "motivations": [],
+      "scenario_context": "",
+      "system_instructions": "",
+      "faction": "",
+      "emotion": "平静",
+      "health": 1.0,
+      "relationships": {},
+      "arc_stage": "防御",
+      "memory": [],
+      "behavior_constraints": [],
+      "voice_fingerprint": {},
+      "snapshot_history": [],
+      "is_alive": true,
+      "chapter_introduced": 1
+    }
+  ]
+}

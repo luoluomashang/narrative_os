@@ -106,6 +106,7 @@ export const useSessionStore = defineStore('session', () => {
       summary.value = {
         duration_minutes: 0,
         turn_count: turn.value,
+        word_count: 0,
         bangui_count: 0,
         key_decisions: [],
         next_hook: '',

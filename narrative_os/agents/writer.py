@@ -22,10 +22,13 @@ agents/writer.py — Phase 3: Writer Agent
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from narrative_os.agents.planner import PlannedNode, PlannerOutput
 from narrative_os.execution.context_builder import WriteContext
+from narrative_os.execution.narrative_compiler import AuthoringRuntimePackage
 from narrative_os.execution.llm_router import (
     LLMRouter,
     RoutingStrategy,
@@ -33,6 +36,7 @@ from narrative_os.execution.llm_router import (
     router as default_router,
 )
 from narrative_os.infra.logging import logger
+from narrative_os.schemas.traces import Artifact, ArtifactType
 from narrative_os.skills.scene import SceneGenerator, SceneOutput
 
 
@@ -75,10 +79,15 @@ class WriterAgent:
     async def write(
         self,
         plan: PlannerOutput,
-        context: WriteContext,
+        context_package: AuthoringRuntimePackage | WriteContext,
         strategy: RoutingStrategy = get_default_routing_strategy(),
+        run_context: Any | None = None,
+        retry_count: int = 0,
+        retry_reason: str | None = None,
     ) -> ChapterDraft:
         """根据剧情规划生成章节草稿。"""
+        package = _coerce_context_package(context_package, plan)
+        context = package.write_context
         chapter = context.chapter_target.chapter
         volume = context.chapter_target.volume
         scenes: list[SceneOutput] = []
@@ -121,7 +130,7 @@ class WriterAgent:
         logger.info("writer_agent_complete",
                     chapter=chapter, scenes=len(scenes), total_words=total_words)
 
-        return ChapterDraft(
+        draft = ChapterDraft(
             chapter=chapter,
             volume=volume,
             scenes=scenes,
@@ -130,6 +139,25 @@ class WriterAgent:
             avg_tension=round(avg_tension, 3),
             hook_score=round(hook_score, 3),
         )
+        if run_context is not None:
+            await run_context.emit_artifact(
+                Artifact(
+                    artifact_type=ArtifactType.DRAFT,
+                    agent_name="writer",
+                        input_summary=package.to_system_prompt()[:200],
+                    output_content=draft.draft_text,
+                    quality_scores={
+                        "avg_tension": draft.avg_tension,
+                        "hook_score": draft.hook_score,
+                    },
+                    token_in=run_context.last_token_in,
+                    token_out=run_context.last_token_out,
+                    latency_ms=run_context.last_latency_ms,
+                    retry_count=retry_count,
+                    retry_reason=retry_reason,
+                )
+            )
+        return draft
 
 
 # ------------------------------------------------------------------ #
@@ -185,4 +213,21 @@ def _fallback_scene(node: PlannedNode, budget: int, chapter: int, volume: int) -
         volume=volume,
         model_used="fallback",
         attempts=0,
+    )
+
+
+def _coerce_context_package(
+    context_package: AuthoringRuntimePackage | WriteContext,
+    plan: PlannerOutput,
+) -> AuthoringRuntimePackage:
+    if isinstance(context_package, AuthoringRuntimePackage):
+        return context_package
+
+    return AuthoringRuntimePackage(
+        project_id="legacy",
+        chapter=context_package.chapter_target.chapter,
+        write_context=context_package,
+        previous_hook="",
+        current_volume_goal=plan.chapter_outline,
+        author_memory_anchors=list(context_package.long_term_anchors),
     )

@@ -26,15 +26,20 @@ agents/maintenance.py — Phase 3 (补全): Maintenance Agent
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from narrative_os.agents.critic import CriticReport
 from narrative_os.agents.planner import PlannerOutput
 from narrative_os.agents.writer import ChapterDraft
 from narrative_os.core.character import ArcStage, CharacterState
-from narrative_os.core.memory import MemorySystem
+from narrative_os.core.memory import MemoryPool, MemorySystem
 from narrative_os.core.plot import NodeStatus, PlotGraph
+from narrative_os.core.state import StateManager
+from narrative_os.infra.database import fire_and_forget
 from narrative_os.infra.logging import logger
+from narrative_os.schemas.traces import Artifact, ArtifactType
 
 
 # ArcStage 顺序（对应 ArcStage 常量字符串）
@@ -53,6 +58,7 @@ _ARC_ORDER: list[str] = [
 
 class MaintenanceInput(BaseModel):
     """Maintenance Agent 输入。"""
+    project_id: str = "default"
     chapter_draft: ChapterDraft
     critic_report: CriticReport | None = None
     planner_output: PlannerOutput | None = None
@@ -65,8 +71,11 @@ class MaintenanceOutput(BaseModel):
     chapter: int
     updated_characters: list[CharacterState] = Field(default_factory=list)
     memory_summary: str = ""
+    memory_anchor: str = ""
     next_hook: str = ""
     completed_nodes: list[str] = Field(default_factory=list)
+    activated_nodes: list[str] = Field(default_factory=list)
+    changeset_id: str | None = None
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -89,8 +98,15 @@ class MaintenanceAgent:
         *,
         plot_graph: PlotGraph | None = None,
         memory: MemorySystem | None = None,
+        run_context: Any | None = None,
     ) -> MaintenanceOutput:
         warnings: list[str] = []
+        successful_steps = 0
+        state_manager = StateManager(project_id=inp.project_id, base_dir=".narrative_state")
+        try:
+            state_manager.load_state()
+        except FileNotFoundError:
+            state_manager.initialize(project_name=inp.project_id)
 
         # 1. 推进角色弧
         updated = self._update_arcs(
@@ -103,35 +119,128 @@ class MaintenanceAgent:
         # 1.5 动机张力宣泄：若本章涉及关键冲突，降低相关角色 motivation.tension
         updated = self._release_tension(updated, inp.critic_report, warnings)
 
+        if self._persist_characters(inp.project_id, updated, inp, warnings):
+            successful_steps += 1
+
         # 2. 标记本章节点已完成
         completed = self._mark_completed_nodes(
             plot_graph,
             inp.chapter_draft.chapter,
             warnings,
         )
+        activated = self._activate_followup_nodes(plot_graph, completed, warnings)
+        if completed or activated or plot_graph is not None:
+            successful_steps += 1
 
         # 3. 压缩短期记忆 → mid 层
         mem_summary = self._compress_memory(memory, inp.chapter_draft, warnings)
+        anchor = self._write_memory_anchor(memory, inp.chapter_draft, warnings)
+        if mem_summary or anchor:
+            successful_steps += 1
+
+        changeset_id = self._create_world_changeset(inp, warnings)
+        if changeset_id is not None:
+            successful_steps += 1
 
         # 4. 提取下一章钩子
         hook = self._extract_next_hook(inp.chapter_draft)
+        if self._persist_hook(state_manager, inp.chapter_draft.chapter, hook, warnings):
+            successful_steps += 1
+
+        if successful_steps == 0 and inp.chapter_draft.draft_text.strip():
+            raise RuntimeError("Maintenance 所有回写步骤均失败")
 
         logger.info(
             "maintenance_done",
             chapter=inp.chapter_draft.chapter,
             arc_advanced=len(updated),
             completed_nodes=len(completed),
+            changeset_id=changeset_id,
             warnings=len(warnings),
         )
 
-        return MaintenanceOutput(
+        result = MaintenanceOutput(
             chapter=inp.chapter_draft.chapter,
             updated_characters=updated,
             memory_summary=mem_summary,
+            memory_anchor=anchor,
             next_hook=hook,
             completed_nodes=completed,
+            activated_nodes=activated,
+            changeset_id=changeset_id,
             warnings=warnings,
         )
+        if run_context is not None:
+            fire_and_forget(
+                run_context.emit_artifact(
+                    Artifact(
+                        artifact_type=ArtifactType.MAINTENANCE,
+                        agent_name="maintenance",
+                        input_summary=inp.chapter_draft.draft_text[:200],
+                        output_content=result.model_dump_json(),
+                        quality_scores={
+                            "completed_nodes": float(len(result.completed_nodes)),
+                            "warnings": float(len(result.warnings)),
+                        },
+                    )
+                )
+            )
+        return result
+
+    def _persist_characters(
+        self,
+        project_id: str,
+        characters: list[CharacterState],
+        inp: MaintenanceInput,
+        warnings: list[str],
+    ) -> bool:
+        if not characters:
+            return False
+
+        from narrative_os.core.character_repository import get_character_repository
+
+        repo = get_character_repository()
+        updated_any = False
+        key_event = self._summarize_key_event(inp.chapter_draft)
+        default_agenda = ""
+        if inp.planner_output is not None and inp.planner_output.planned_nodes:
+            default_agenda = inp.planner_output.planned_nodes[-1].summary
+
+        for character in characters:
+            runtime = character.runtime.model_copy(
+                update={
+                    "current_location": self._infer_location(inp, character),
+                    "current_agenda": default_agenda or character.runtime.current_agenda,
+                    "current_pressure": round(
+                        max(character.runtime.current_pressure, inp.chapter_draft.avg_tension),
+                        3,
+                    ),
+                    "recent_key_events": [
+                        key_event,
+                        *character.runtime.recent_key_events,
+                    ][:3],
+                }
+            )
+            persisted_character = character.model_copy(update={"runtime": runtime})
+            try:
+                repo.save_character(project_id, persisted_character)
+                updated_any = True
+            except Exception as exc:
+                warnings.append(f"角色持久化失败：{persisted_character.name} - {exc}")
+
+        return updated_any
+
+    def _infer_location(self, inp: MaintenanceInput, character: CharacterState) -> str:
+        if inp.planner_output is not None:
+            for node in inp.planner_output.planned_nodes:
+                location = getattr(node, "location", "")
+                if character.name in node.characters and location:
+                    return location
+            for node in inp.planner_output.planned_nodes:
+                location = getattr(node, "location", "")
+                if location:
+                    return location
+        return character.runtime.current_location
 
     # ---------------------------------------------------------------- #
     # 角色弧推进                                                          #
@@ -256,6 +365,20 @@ class MaintenanceAgent:
 
         return completed
 
+    def _activate_followup_nodes(
+        self,
+        graph: PlotGraph | None,
+        completed: list[str],
+        warnings: list[str],
+    ) -> list[str]:
+        if graph is None or not completed:
+            return []
+        try:
+            return graph.activate_next_nodes(completed)
+        except Exception as exc:
+            warnings.append(f"后续节点激活失败: {exc}")
+            return []
+
     # ---------------------------------------------------------------- #
     # 记忆压缩                                                            #
     # ---------------------------------------------------------------- #
@@ -278,12 +401,99 @@ class MaintenanceAgent:
                 layer="mid",
                 chapter=draft.chapter,
                 importance=0.7,
+                pool=MemoryPool.AUTHOR,
             )
         except Exception as exc:
             warnings.append(f"记忆写入失败: {exc}")
             return ""
 
         return summary
+
+    def _write_memory_anchor(
+        self,
+        memory: MemorySystem | None,
+        draft: ChapterDraft,
+        warnings: list[str],
+    ) -> str:
+        if memory is None:
+            return ""
+
+        key_pivot = self._summarize_key_event(draft)
+        next_debt = self._extract_next_hook(draft)
+        try:
+            anchor = memory.write_anchor(
+                chapter=draft.chapter,
+                key_pivot=key_pivot,
+                burning_question=next_debt,
+                protagonist_emotion="承压",
+                next_chapter_debt=next_debt,
+                hook_type="cliffhanger" if next_debt else "",
+            )
+        except Exception as exc:
+            warnings.append(f"记忆锚点写入失败: {exc}")
+            return ""
+
+        return (
+            f"[锚点-章{draft.chapter}] {anchor['key_pivot']} | 悬念:{anchor['burning_question']}"
+        )[:150]
+
+    def _create_world_changeset(
+        self,
+        inp: MaintenanceInput,
+        warnings: list[str],
+    ) -> str | None:
+        if not inp.chapter_draft.draft_text.strip():
+            return None
+
+        try:
+            from narrative_os.core.evolution import (
+                ChangeSource,
+                ChangeTag,
+                SessionCommitMode,
+                WorldChange,
+                get_canon_commit,
+            )
+
+            cc = get_canon_commit(inp.project_id)
+            description = self._summarize_key_event(inp.chapter_draft)
+            cs = cc.create_changeset(
+                project_id=inp.project_id,
+                source=ChangeSource.PIPELINE,
+                changes=[
+                    WorldChange(
+                        source=ChangeSource.PIPELINE,
+                        chapter=inp.chapter_draft.chapter,
+                        tag=ChangeTag.CANON_PENDING,
+                        change_type="timeline_event",
+                        description=description,
+                        after_value={
+                            "chapter": inp.chapter_draft.chapter,
+                            "event": description,
+                        },
+                    )
+                ],
+                commit_mode=SessionCommitMode.DRAFT_CHAPTER,
+            )
+            return cs.changeset_id
+        except Exception as exc:
+            warnings.append(f"WorldChangeSet 创建失败: {exc}")
+            return None
+
+    def _persist_hook(
+        self,
+        state_manager: StateManager,
+        chapter: int,
+        hook_text: str,
+        warnings: list[str],
+    ) -> bool:
+        if not hook_text:
+            return False
+        try:
+            state_manager.save_last_hook(chapter, hook_text)
+            return True
+        except Exception as exc:
+            warnings.append(f"Hook 持久化失败: {exc}")
+            return False
 
     # ---------------------------------------------------------------- #
     # 钩子提取                                                            #
@@ -295,3 +505,7 @@ class MaintenanceAgent:
         if not text:
             return ""
         return text[-60:] if len(text) > 60 else text
+
+    def _summarize_key_event(self, draft: ChapterDraft) -> str:
+        text = " ".join(draft.draft_text.split())
+        return text[:120] if text else f"第{draft.chapter}章推进"

@@ -1,6 +1,6 @@
 {
-  "chapter_1_hook": "完成致命一击的林川并未等来接应，反而被远超情报所述的武装力量层层包围，灯光将他孤立的身影彻底暴露，一句冰冷的机械音从四面八方传来：“‘夜鸦’，你被捕了。”",
-  "chapter_2_hook": "下一步悬念",
+  "chapter_1_hook": "场景文本",
+  "chapter_2_hook": "场景文本",
   "one_sentence": "",
   "one_paragraph": "",
   "genre_tags": [],
@@ -1016,5 +1016,104 @@
     }
   },
   "plot_nodes": [],
-  "characters": []
+  "characters": [
+    {
+      "name": "林枫",
+      "traits": [],
+      "goal": "",
+      "backstory": "",
+      "emotion": "平静",
+      "health": 1.0,
+      "relationships": {},
+      "arc_stage": "裂缝",
+      "memory": [],
+      "behavior_constraints": [],
+      "voice_fingerprint": {
+        "under_pressure": "",
+        "when_lying": "",
+        "deflection": "",
+        "emotional_peak": "",
+        "default_length": "medium"
+      },
+      "snapshot_history": [],
+      "faction": "",
+      "is_alive": true,
+      "chapter_introduced": 1,
+      "description": "",
+      "personality": "",
+      "alias": [],
+      "speech_style": "",
+      "catchphrases": [],
+      "dialogue_examples": [],
+      "motivations": [],
+      "scenario_context": "",
+      "system_instructions": "",
+      "worldview": "",
+      "character_tags": [],
+      "drive": null,
+      "social_matrix": {},
+      "runtime": {
+        "current_location": "",
+        "current_companions": [],
+        "current_agenda": "",
+        "current_pressure": 0.0,
+        "emotion_trigger_source": "",
+        "recent_key_events": [
+          "第3章文本，主角击败了反派，完成了核心任务。情节推进顺利。下一章将面临更大危机。"
+        ],
+        "can_advance_plot": true,
+        "stance_mode": "normal"
+      }
+    },
+    {
+      "name": "陈伟",
+      "traits": [],
+      "goal": "",
+      "backstory": "",
+      "emotion": "平静",
+      "health": 1.0,
+      "relationships": {},
+      "arc_stage": "裂缝",
+      "memory": [],
+      "behavior_constraints": [],
+      "voice_fingerprint": {
+        "under_pressure": "",
+        "when_lying": "",
+        "deflection": "",
+        "emotional_peak": "",
+        "default_length": "medium"
+      },
+      "snapshot_history": [],
+      "faction": "",
+      "is_alive": true,
+      "chapter_introduced": 1,
+      "description": "",
+      "personality": "",
+      "alias": [],
+      "speech_style": "",
+      "catchphrases": [],
+      "dialogue_examples": [],
+      "motivations": [],
+      "scenario_context": "",
+      "system_instructions": "",
+      "worldview": "",
+      "character_tags": [],
+      "drive": null,
+      "social_matrix": {},
+      "runtime": {
+        "current_location": "",
+        "current_companions": [],
+        "current_agenda": "",
+        "current_pressure": 0.0,
+        "emotion_trigger_source": "",
+        "recent_key_events": [
+          "第3章文本，主角击败了反派，完成了核心任务。情节推进顺利。下一章将面临更大危机。"
+        ],
+        "can_advance_plot": true,
+        "stance_mode": "normal"
+      }
+    }
+  ],
+  "chapter_3_hook": "场景文本",
+  "last_hook": "场景文本"
 }

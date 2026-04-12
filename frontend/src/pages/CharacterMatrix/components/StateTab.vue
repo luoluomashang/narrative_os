@@ -29,6 +29,8 @@ let radarChart: echarts.ECharts | null = null
 let timelineChart: echarts.ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
+type SnapshotPoint = { chapter: number; arc_stage: string; emotion: string; health: number }
+
 const hasTimeline = computed(() => (props.model.snapshot_history?.length ?? 0) >= 2)
 
 const ARC_STAGES = ['防御', '裂缝', '代偿', '承认', '改变']
@@ -80,9 +82,9 @@ function renderRadar() {
 function renderTimeline() {
   if (!timelineEl.value || !hasTimeline.value) return
   if (!timelineChart) timelineChart = echarts.init(timelineEl.value, 'dark')
-  const history = props.model.snapshot_history ?? []
-  const xData = history.map(s => `第${s.chapter}章`)
-  const yData = history.map(s => {
+  const history = (props.model.snapshot_history ?? []) as SnapshotPoint[]
+  const xData = history.map((s: SnapshotPoint) => `第${s.chapter}章`)
+  const yData = history.map((s: SnapshotPoint) => {
     const idx = ARC_STAGES.indexOf(s.arc_stage)
     return idx >= 0 ? idx : 0
   })

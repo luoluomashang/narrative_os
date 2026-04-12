@@ -16,6 +16,7 @@
 | [04_phase34_agent_telemetry_ui.md](04_phase34_agent_telemetry_ui.md) | Phase 3-4：智能体车间 / 深度追踪 / 资源遥测 | `orchestrator/` + `infra/` |
 | [05_phase5_metrics_style_plugin_ui.md](05_phase5_metrics_style_plugin_ui.md) | Phase 5：叙事波形 / 风格控制台 / 插件集市 | `skills/` + `plugins/` |
 | [06_trpg_ui.md](06_trpg_ui.md) | TRPG 互动专属 UI：PING_PONG 面板 / 帮回按钮 | `agents/interactive.py` |
+| [08_phase56_workbench_trace_ui.md](08_phase56_workbench_trace_ui.md) | Phase 5-6：WritingWorkbench / 项目状态机 / Trace 回放 | `interface/routers/chapters.py` + `interface/routers/projects.py` + `interface/routers/traces.py` |
 
 ---
 

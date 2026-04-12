@@ -8,10 +8,14 @@ import pytest
 
 from narrative_os.agents.critic import CriticReport
 from narrative_os.agents.editor import EditedChapter
+from narrative_os.agents.maintenance import MaintenanceOutput
 from narrative_os.agents.planner import PlannedNode, PlannerOutput
 from narrative_os.agents.writer import ChapterDraft
+from narrative_os.core.character import CharacterDrive, CharacterState
+from narrative_os.core.memory import RetrievalResult
 from narrative_os.core.plot import PlotGraph
 from narrative_os.execution.context_builder import ChapterTarget, WriteContext
+from narrative_os.execution.narrative_compiler import AuthoringRuntimePackage
 from narrative_os.orchestrator.graph import (
     MAX_RETRIES,
     AgentGraphState,
@@ -21,6 +25,7 @@ from narrative_os.orchestrator.graph import (
     writer_node,
     critic_node,
     editor_node,
+    maintenance_node,
     memory_update_node,
     retry_increment_node,
 )
@@ -53,6 +58,7 @@ def _base_state(**overrides) -> AgentGraphState:
         "chapter_draft": None,
         "critic_report": None,
         "edited_chapter": None,
+        "maintenance_output": None,
         "retry_count": 0,
         "error_message": "",
     }
@@ -193,6 +199,19 @@ class TestMemoryUpdateNode:
 
 
 # ------------------------------------------------------------------ #
+# maintenance_node                                                      #
+# ------------------------------------------------------------------ #
+
+class TestMaintenanceNode:
+    async def test_returns_maintenance_output(self):
+        draft = _make_draft(chapter=3)
+        state = _base_state(chapter_draft=draft, critic_report=_passing_critic(), planner_output=_make_plan())
+        result = await maintenance_node(state)
+        assert isinstance(result["maintenance_output"], MaintenanceOutput)
+        assert result["maintenance_output"].chapter == 3
+
+
+# ------------------------------------------------------------------ #
 # build_graph                                                           #
 # ------------------------------------------------------------------ #
 
@@ -201,7 +220,7 @@ class TestBuildGraph:
         g = build_graph()
         # LangGraph 1.x: 节点存储在 _nodes 属性中
         nodes = set(g.nodes.keys()) if hasattr(g, "nodes") else set()
-        expected = {"planner", "writer", "critic", "retry_increment", "editor", "memory_update"}
+        expected = {"planner", "writer", "critic", "retry_increment", "editor", "maintenance", "memory_update"}
         for name in expected:
             assert name in nodes, f"Missing node: {name}"
 
@@ -256,6 +275,7 @@ class TestRunChapterEndToEnd:
 
         assert result["edited_chapter"] is not None
         assert result["edited_chapter"].text == "最终稿"
+        assert isinstance(result["run_id"], str)
 
     async def test_retry_logic(self, monkeypatch):
         """Critic 失败 → Writer 重试 → Critic 再次通过时最终完成。"""
@@ -289,3 +309,82 @@ class TestRunChapterEndToEnd:
 
         assert result["edited_chapter"] is not None
         assert critic_calls[0] == 2  # 确认调用了 2 次
+
+    async def test_writer_receives_authoring_package_with_hook_and_anchors(self, monkeypatch, tmp_path):
+        from narrative_os.core.state import StateManager
+        from narrative_os.orchestrator.graph import run_chapter
+
+        monkeypatch.chdir(tmp_path)
+        project_id = "stage5-graph"
+
+        state_mgr = StateManager(project_id=project_id, base_dir=".narrative_state")
+        state_mgr.initialize(project_name=project_id)
+        state_mgr.save_last_hook(1, "上章遗留钩子")
+
+        plot_graph = PlotGraph()
+        plot_graph.create_event("ch2_01", summary="卷一目标节点", tension=0.8)
+
+        kb = state_mgr.load_kb()
+        kb["plot_graph"] = plot_graph.to_dict()
+        kb["runtime_world"] = {
+            "factions": {
+                "sect": {"id": "sect", "name": "玄剑宗"}
+            },
+            "rules_of_world": ["灵气不可逆流"],
+        }
+        kb["characters"] = [
+            CharacterState(
+                name="林枫",
+                drive=CharacterDrive(core_desire="变强", core_fear="失去同伴"),
+            ).model_dump()
+        ]
+        state_mgr.save_kb(kb)
+
+        anchors = [
+            RetrievalResult(
+                record_id="anchor-1",
+                content="[锚点-章1] 主角突破失败 | 悬念:幕后黑手是谁",
+                similarity=1.0,
+                metadata={"chapter": 1},
+            )
+        ]
+
+        plan = _make_plan()
+        edited = EditedChapter(chapter=2, volume=1, text="最终稿", word_count=3)
+
+        async def writer_assertion(self, plan, context_package, **kwargs):
+            assert isinstance(context_package, AuthoringRuntimePackage)
+            assert context_package.previous_hook == "上章遗留钩子"
+            assert context_package.current_volume_goal == "卷一目标节点"
+            assert any("锚点-章1" in anchor for anchor in context_package.author_memory_anchors)
+            return _make_draft(chapter=2)
+
+        monkeypatch.setattr(
+            "narrative_os.orchestrator.graph.PlannerAgent.plan",
+            AsyncMock(return_value=plan),
+        )
+        monkeypatch.setattr(
+            "narrative_os.orchestrator.graph.WriterAgent.write",
+            writer_assertion,
+        )
+        monkeypatch.setattr(
+            "narrative_os.orchestrator.graph.CriticAgent.review",
+            AsyncMock(return_value=_passing_critic()),
+        )
+        monkeypatch.setattr(
+            "narrative_os.orchestrator.graph.EditorAgent.edit",
+            AsyncMock(return_value=edited),
+        )
+        monkeypatch.setattr(
+            "narrative_os.orchestrator.graph._resolve_author_memory_anchors",
+            lambda memory: [item.content for item in anchors],
+        )
+
+        result = await run_chapter(
+            chapter=2,
+            target_summary="阶段五编译包测试",
+            project_id=project_id,
+            thread_id="stage5-graph-run",
+        )
+
+        assert result["edited_chapter"] is not None

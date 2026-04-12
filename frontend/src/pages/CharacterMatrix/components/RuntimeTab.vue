@@ -60,7 +60,16 @@ import type { CharacterDetail, CharacterRuntime } from '@/types/api'
 
 const props = defineProps<{ model: CharacterDetail }>()
 
-const rt = computed<CharacterRuntime>(() => props.model.runtime ?? {})
+const rt = computed<CharacterRuntime>(() => props.model.runtime ?? ({
+  current_location: '',
+  current_companions: [],
+  current_agenda: '',
+  current_pressure: 0,
+  emotion_trigger_source: '',
+  recent_key_events: [],
+  can_advance_plot: true,
+  stance_mode: 'normal',
+} as CharacterRuntime))
 
 const pressureColor = computed(() => {
   const p = rt.value.current_pressure ?? 0

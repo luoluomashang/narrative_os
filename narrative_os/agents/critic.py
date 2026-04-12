@@ -23,6 +23,9 @@ agents/critic.py — Phase 3: Critic Agent
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from narrative_os.agents.writer import ChapterDraft
@@ -31,6 +34,7 @@ from narrative_os.core.plot import PlotGraph
 from narrative_os.core.world import WorldState
 from narrative_os.execution.context_builder import WriteContext
 from narrative_os.infra.logging import logger
+from narrative_os.schemas.traces import Artifact, ArtifactType
 from narrative_os.skills.consistency import ConsistencyChecker, ConsistencyReport
 
 
@@ -81,6 +85,7 @@ class CriticAgent:
         characters: list[CharacterState] | None = None,
         world: WorldState | None = None,
         plot_graph: PlotGraph | None = None,
+        run_context: Any | None = None,
     ) -> CriticReport:
         # 1. 一致性检查
         consistency_report = await self._run_consistency(
@@ -122,7 +127,7 @@ class CriticAgent:
             hook=round(hook_score, 3),
         )
 
-        return CriticReport(
+        result = CriticReport(
             passed=passed,
             quality_score=round(quality_score, 3),
             hook_score=round(hook_score, 3),
@@ -130,6 +135,27 @@ class CriticAgent:
             rewrite_instructions=rewrite_instructions,
             review_summary=review_summary,
         )
+        if run_context is not None:
+            consistency_score = consistency_report.score if consistency_report else 1.0
+            await run_context.emit_artifact(
+                Artifact(
+                    artifact_type=ArtifactType.CRITIQUE,
+                    agent_name="critic",
+                    input_summary=draft.draft_text[:200],
+                    output_content=json.dumps(result.model_dump(mode="json"), ensure_ascii=False),
+                    quality_scores={
+                        "quality_score": result.quality_score,
+                        "hook_score": result.hook_score,
+                        "consistency_score": consistency_score,
+                    },
+                    token_in=run_context.last_token_in,
+                    token_out=run_context.last_token_out,
+                    latency_ms=run_context.last_latency_ms,
+                    retry_count=0,
+                    retry_reason="；".join(result.rewrite_instructions[:3]) if result.rewrite_instructions else None,
+                )
+            )
+        return result
 
     # ---------------------------------------------------------------- #
     # Helpers                                                           #

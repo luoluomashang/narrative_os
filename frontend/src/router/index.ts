@@ -30,7 +30,7 @@ const routes = [
   // 项目级页面（需要项目上下文）
   {
     path: '/project/:id',
-    component: () => import('@/pages/ProjectHome/index.vue'),
+    component: () => import('@/pages/Project/index.vue'),
     meta: { title: '项目主页', requiresProject: true },
   },
   {
@@ -55,7 +55,7 @@ const routes = [
   },
   {
     path: '/project/:id/write',
-    component: () => import('@/pages/SceneIDE/index.vue'),
+    component: () => import('@/pages/Writing/index.vue'),
     meta: { title: '章节撰写', requiresProject: true },
   },
   {

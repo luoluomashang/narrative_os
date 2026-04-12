@@ -292,6 +292,25 @@ class MemorySystem:
         )
         return all_results[:top_k]
 
+    def retrieve(
+        self,
+        query: str,
+        *,
+        layer: str | None = None,
+        top_k: int = 5,
+    ) -> list[RetrievalResult]:
+        """兼容旧接口：将 short_term/mid_term/long_term 映射到新分层检索。"""
+        layer_map = {
+            "short_term": "short",
+            "mid_term": "mid",
+            "long_term": "long",
+            "short": "short",
+            "mid": "mid",
+            "long": "long",
+        }
+        mapped_layer = layer_map.get(layer, None) if layer is not None else None
+        return self.retrieve_memory(query, layer=mapped_layer, top_k=top_k)
+
     # ---------------------------------------------------------------- #
     # Compression                                                        #
     # ---------------------------------------------------------------- #
@@ -385,11 +404,18 @@ class MemorySystem:
         )
         return anchor
 
-    def get_recent_anchors(self, last_n: int = 3) -> list["RetrievalResult"]:
+    def get_recent_anchors(
+        self,
+        last_n: int = 3,
+        *,
+        n: int | None = None,
+    ) -> list["RetrievalResult"]:
         """
         返回最近 N 章的记忆锚点 RetrievalResult 列表（供 Context Builder 注入 prompt 前缀）。
         按章节降序排列（最新章在前）。
         """
+        if n is not None:
+            last_n = n
         # 从内存缓存按章节降序取出最后 N 个
         recent = sorted(self._anchors, key=lambda a: a["chapter"], reverse=True)[:last_n]
         results = []

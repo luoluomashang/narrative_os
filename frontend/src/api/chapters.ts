@@ -13,6 +13,8 @@ import type {
 export const chapters = {
   run: (req: RunChapterRequest) =>
     client.post<RunChapterResponse>('/chapters/run', req),
+  writingContext: (projectId: string, chapter: number) =>
+    client.get(`/projects/${projectId}/writing-context`, { params: { chapter } }),
   plan: (req: PlanChapterRequest) =>
     client.post<PlanChapterResponse>('/chapters/plan', req),
   metrics: (req: MetricsRequest) =>

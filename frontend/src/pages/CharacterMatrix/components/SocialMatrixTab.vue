@@ -134,12 +134,18 @@ function deleteRelation(target: string) { delete local[target] }
 function addTag(target: string) {
   const v = (tagInputs[target] ?? '').trim()
   if (!v) return
-  if (!local[target].cognitive_tags.includes(v)) local[target].cognitive_tags.push(v)
+  const relation = local[target]
+  if (!relation) return
+  relation.cognitive_tags = relation.cognitive_tags ?? []
+  if (!relation.cognitive_tags.includes(v)) relation.cognitive_tags.push(v)
   tagInputs[target] = ''
 }
 
 function removeTag(target: string, i: number) {
-  local[target].cognitive_tags.splice(i, 1)
+  const relation = local[target]
+  if (!relation) return
+  relation.cognitive_tags = relation.cognitive_tags ?? []
+  relation.cognitive_tags.splice(i, 1)
 }
 
 function save() {

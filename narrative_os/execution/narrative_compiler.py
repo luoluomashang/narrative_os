@@ -74,15 +74,34 @@ class ControlLayerInjection(BaseModel):
         return "\n".join(lines) + "\n"
 
 
+class AuthoringInputError(ValueError):
+    """写作模式编译前置条件不满足。"""
+
+
 class AuthoringRuntimePackage(BaseModel):
     """写作模式编译输出包。"""
     project_id: str
     chapter: int
     write_context: WriteContext
+    previous_hook: str = ""
+    current_volume_goal: str = ""
+    author_memory_anchors: list[str] = Field(default_factory=list)
     lore_injection: LoreInjection = Field(default_factory=LoreInjection)
     # 预算裁剪摘要
     gates_trimmed: list[str] = Field(default_factory=list)
     total_token_estimate: int = 0
+
+    @property
+    def chapter_target(self) -> ChapterTarget:
+        return self.write_context.chapter_target
+
+    @property
+    def long_term_anchors(self) -> list[str]:
+        return self.write_context.long_term_anchors
+
+    @property
+    def short_term_memory(self) -> list[str]:
+        return self.write_context.short_term_memory
 
     def to_system_prompt(self) -> str:
         """合并 WriteContext + Lore 注入，输出完整 system prompt。"""
@@ -175,6 +194,10 @@ class NarrativeCompiler:
         world: "WorldState | None" = None,
         memory: "MemorySystem | None" = None,
         lorebook: "Lorebook | None" = None,
+        previous_hook: str | None = None,
+        current_volume_goal: str | None = None,
+        author_memory_anchors: list[str] | None = None,
+        require_complete_inputs: bool = False,
         token_budget: int = 8000,
     ) -> AuthoringRuntimePackage:
         """
@@ -182,6 +205,20 @@ class NarrativeCompiler:
 
         Gate 10 使用 lorebook.get_for_scene() 按当前章节场景召回世界知识。
         """
+        strict_authoring = require_complete_inputs or any(
+            value is not None
+            for value in (previous_hook, current_volume_goal, author_memory_anchors)
+        )
+        if strict_authoring:
+            self._validate_authoring_inputs(
+                world=world,
+                characters=characters,
+                previous_hook=previous_hook,
+                current_volume_goal=current_volume_goal,
+                author_memory_anchors=author_memory_anchors,
+                require_complete_inputs=require_complete_inputs,
+            )
+
         ctx = self._cb.build(
             chapter_target=chapter_target,
             plot_graph=plot_graph,
@@ -190,6 +227,19 @@ class NarrativeCompiler:
             memory=memory,
             project_id=project_id,
         )
+
+        explicit_anchors = list(author_memory_anchors or [])
+        if explicit_anchors:
+            ctx.long_term_anchors = [*explicit_anchors, *ctx.long_term_anchors]
+        if previous_hook:
+            ctx.short_term_memory = [f"上一章 Hook：{previous_hook}", *ctx.short_term_memory]
+        if current_volume_goal:
+            goal_prefix = f"当前卷目标：{current_volume_goal}"
+            ctx.plot_summary = (
+                f"{goal_prefix}\n{ctx.plot_summary}".strip()
+                if ctx.plot_summary
+                else goal_prefix
+            )
 
         # Gate 10: Lore 注入
         lore_inj = LoreInjection()
@@ -218,10 +268,49 @@ class NarrativeCompiler:
             project_id=project_id,
             chapter=chapter_target.chapter,
             write_context=ctx,
+            previous_hook=previous_hook or "",
+            current_volume_goal=current_volume_goal or "",
+            author_memory_anchors=explicit_anchors,
             lore_injection=lore_inj,
             gates_trimmed=gates_trimmed,
             total_token_estimate=_estimate_tokens(ctx, lore_inj, None),
         )
+
+    def _validate_authoring_inputs(
+        self,
+        *,
+        world: "WorldState | None",
+        characters: "list[CharacterState] | None",
+        previous_hook: str | None,
+        current_volume_goal: str | None,
+        author_memory_anchors: list[str] | None,
+        require_complete_inputs: bool,
+    ) -> None:
+        if world is None or _is_empty_world_state(world):
+            raise AuthoringInputError("WorldState 尚未发布，无法构建写作编译包。")
+
+        if characters is None:
+            raise AuthoringInputError("缺少 CharacterSnapshot 输入，无法构建写作编译包。")
+
+        if require_complete_inputs and not characters:
+            raise AuthoringInputError("当前项目尚无角色卡，无法开始写作。")
+
+        missing_drive = [character.name for character in characters if character.drive is None]
+        if require_complete_inputs and missing_drive:
+            names = "、".join(missing_drive[:5])
+            raise AuthoringInputError(f"以下角色缺少 Drive 层：{names}")
+
+        if previous_hook is None:
+            raise AuthoringInputError("上一章 hook 未显式提供。")
+
+        if author_memory_anchors is None:
+            raise AuthoringInputError("最近三章记忆锚点未显式提供。")
+
+        if current_volume_goal is None:
+            raise AuthoringInputError("当前卷目标未显式提供。")
+
+        if require_complete_inputs and not current_volume_goal.strip():
+            raise AuthoringInputError("PlotGraph 缺少当前卷目标，无法开始写作。")
 
     # ---------------------------------------------------------------- #
     # 互动模式编译                                                       #
@@ -361,3 +450,14 @@ def _apply_token_budget(
         trimmed.append("gate5_short_memory_partial")
 
     return trimmed
+
+
+def _is_empty_world_state(world: "WorldState") -> bool:
+    return not any([
+        getattr(world, "factions", {}),
+        getattr(world, "geography", {}),
+        getattr(world, "timeline", []),
+        getattr(world, "rules_of_world", []),
+        getattr(getattr(world, "power_system", None), "name", ""),
+        getattr(getattr(world, "power_system", None), "rules", []),
+    ])

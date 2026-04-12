@@ -1,8 +1,0 @@
-2026-04-07 12:25:21  [Backend]  INFO:     Will watch for changes in these directories: ['E:\\opencodeProject\\novel-control-world\\narrative_os']
-2026-04-07 12:25:21  [Backend]  INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
-2026-04-07 12:25:21  [Backend]  INFO:     Started reloader process [4804] using WatchFiles
-2026-04-07 12:25:23  [Backend]  INFO:     Started server process [15584]
-2026-04-07 12:25:23  [Backend]  INFO:     Waiting for application startup.
-2026-04-07 12:25:23  [Backend]  INFO:     Application startup complete.
-2026-04-07 12:25:23  [Backend]  INFO:     127.0.0.1:61364 - "GET /health HTTP/1.1" 200 OK
-2026-04-07 12:25:46  [Backend]  INFO:     127.0.0.1:61526 - "GET /health HTTP/1.1" 200 OK

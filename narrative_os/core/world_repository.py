@@ -52,6 +52,23 @@ class WorldRepository:
             return kb_world
         return WorldState()
 
+    def get_published_world_state(self, project_id: str) -> WorldState | None:
+        """仅返回已发布的 RuntimeWorldState。"""
+        kb = self._load_kb(project_id)
+        if kb is None:
+            return None
+        world_dict = kb.get("runtime_world")
+        if not world_dict:
+            return None
+        try:
+            return WorldState.model_validate(world_dict)
+        except Exception:
+            return None
+
+    def has_published_world(self, project_id: str) -> bool:
+        """是否已发布 RuntimeWorldState。"""
+        return self.get_published_world_state(project_id) is not None
+
     def get_sandbox_data(self, project_id: str) -> WorldSandboxData:
         """返回最新沙盘数据（从 KB 存储中读取）。"""
         sandbox = self._load_kb_sandbox(project_id)
@@ -240,12 +257,13 @@ class WorldRepository:
                     row = WorldSandboxModel(
                         id=_uuid.uuid4().hex,
                         project_id=project_id,
+                        user_id="local",
                         sandbox_json="{}",
+                        runtime_world_json=rw_json,
                     )
                     db.add(row)
-                # 动态设置属性（兼容字段尚未在 ORM 中定义的情况）
-                if hasattr(row, "runtime_world_json"):
-                    row.runtime_world_json = rw_json  # type: ignore[attr-defined]
+                else:
+                    row.runtime_world_json = rw_json
                 await db.commit()
         except Exception:
             pass  # DB 写失败不阻塞主流程

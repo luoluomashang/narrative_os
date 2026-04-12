@@ -42,7 +42,7 @@
             :model-value="score as number"
             :min="-1" :max="1" :step="0.1"
             style="flex: 1; margin: 0 10px"
-            @update:model-value="(v: number) => updateRelationScore(fid, v)"
+            @update:model-value="(v) => updateRelationScore(fid, Array.isArray(v) ? v[0] ?? 0 : v)"
           />
           <span class="relation-score-badge" :class="scoreClass(score as number)">
             {{ (score as number) >= 0 ? '+' : '' }}{{ (score as number).toFixed(1) }}

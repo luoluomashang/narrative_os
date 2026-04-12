@@ -73,7 +73,7 @@
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { projects } from '@/api/projects'
-import type { CharacterDetail, DialogueExample, VoiceFingerprint } from '@/types/api'
+import type { CharacterDetail, DialogueExample } from '@/types/api'
 
 const props = defineProps<{
   model: CharacterDetail
@@ -85,7 +85,21 @@ const emit = defineEmits<{
   (e: 'save', data: Partial<CharacterDetail>): void
 }>()
 
-const localVF = ref<VoiceFingerprint>({})
+type LocalVoiceFingerprint = {
+  under_pressure: string
+  when_lying: string
+  deflection: string
+  emotional_peak: string
+  default_length: string
+}
+
+const localVF = ref<LocalVoiceFingerprint>({
+  under_pressure: '',
+  when_lying: '',
+  deflection: '',
+  emotional_peak: '',
+  default_length: 'medium',
+})
 const localSpeechStyle = ref('')
 const catchphrasesText = ref('')
 const localExamples = ref<DialogueExample[]>([])
@@ -94,12 +108,38 @@ const testScenario = ref('')
 const testLoading = ref(false)
 const testDialogue = ref('')
 
+function normalizeVoiceFingerprint(value?: {
+  under_pressure?: string
+  when_lying?: string
+  deflection?: string
+  emotional_peak?: string
+  default_length?: string
+}): {
+  under_pressure: string
+  when_lying: string
+  deflection: string
+  emotional_peak: string
+  default_length: string
+} {
+  const defaultLength = value?.default_length
+  const normalizedDefaultLength = defaultLength === 'short' || defaultLength === 'medium' || defaultLength === 'long'
+    ? defaultLength
+    : 'medium'
+  return {
+    under_pressure: value?.under_pressure ?? '',
+    when_lying: value?.when_lying ?? '',
+    deflection: value?.deflection ?? '',
+    emotional_peak: value?.emotional_peak ?? '',
+    default_length: normalizedDefaultLength,
+  }
+}
+
 watch(() => props.model, (m) => {
   if (m) {
-    localVF.value = { ...(m.voice_fingerprint ?? {}) }
+    localVF.value = normalizeVoiceFingerprint(m.voice_fingerprint)
     localSpeechStyle.value = m.speech_style ?? ''
     catchphrasesText.value = (m.catchphrases ?? []).join('\n')
-    localExamples.value = (m.dialogue_examples ?? []).map(e => ({ ...e }))
+    localExamples.value = (m.dialogue_examples ?? []).map((e: DialogueExample) => ({ ...e }))
   }
 }, { immediate: true })
 
@@ -139,10 +179,10 @@ function saveAsExample() {
 function handleSave() {
   const catchphrases = catchphrasesText.value.split('\n').map(s => s.trim()).filter(Boolean)
   emit('save', {
-    voice_fingerprint: { ...localVF.value },
+    voice_fingerprint: normalizeVoiceFingerprint(localVF.value),
     speech_style: localSpeechStyle.value,
     catchphrases,
-    dialogue_examples: localExamples.value.filter(e => e.dialogue.trim()),
+    dialogue_examples: localExamples.value.filter((e) => e.dialogue.trim()),
   })
 }
 </script>

@@ -3,13 +3,18 @@
     <header class="trace-header">
       <div>
         <h2 class="trace-title">执行链路检视器</h2>
-        <p class="trace-subtitle">查看章节级 Agent 执行节点与输入输出详情</p>
+        <p class="trace-subtitle">查看项目内 Run 的五步 Agent 回放、评分、耗时与审批状态</p>
       </div>
       <div class="trace-actions">
-        <el-select v-model="selectedChapter" style="width: 140px" :disabled="loadingChapter" @change="loadTrace">
-          <el-option v-for="n in chapterOptions" :key="n" :label="`第 ${n} 章`" :value="n" />
+        <el-select v-model="selectedRunId" style="width: 260px" :disabled="loadingRuns" @change="loadRunTrace">
+          <el-option
+            v-for="run in runs"
+            :key="run.run_id"
+            :label="formatRunLabel(run)"
+            :value="run.run_id"
+          />
         </el-select>
-        <el-button :loading="loadingTrace" @click="loadTrace">刷新</el-button>
+        <el-button :loading="loadingTrace" @click="refreshAll">刷新</el-button>
       </div>
     </header>
 
@@ -23,7 +28,12 @@
     />
 
     <section class="trace-panel">
-      <TraceInspector :data="traceData" />
+      <TraceInspector
+        :data="traceData"
+        @approve="submitApproval('approve')"
+        @reject="submitApproval('reject')"
+        @retry="submitApproval('retry')"
+      />
     </section>
   </div>
 </template>
@@ -33,38 +43,48 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import TraceInspector from '@/components/TraceInspector.vue'
-import { projects } from '@/api/projects'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.id as string) || 'default')
 
-const chapterOptions = ref<number[]>([1])
-const selectedChapter = ref(1)
+interface RunListItem {
+  run_id: string
+  status: string
+  chapter_num?: number | null
+  started_at: string
+}
+
+const runs = ref<RunListItem[]>([])
+const selectedRunId = ref('')
 const traceData = ref<Record<string, unknown> | null>(null)
-const loadingChapter = ref(false)
+const loadingRuns = ref(false)
 const loadingTrace = ref(false)
 const error = ref('')
 
-async function loadChapterOptions() {
-  loadingChapter.value = true
+async function loadRuns() {
+  loadingRuns.value = true
   try {
-    const res = await projects.chapterList(projectId.value)
-    const nums = (res.data ?? []).map(c => c.chapter).filter(n => Number.isFinite(n))
-    chapterOptions.value = nums.length > 0 ? nums : [1]
-    selectedChapter.value = chapterOptions.value[0]
+    const res = await axios.get(`/api/projects/${projectId.value}/runs`)
+    runs.value = res.data.items ?? []
+    selectedRunId.value = runs.value[0]?.run_id ?? ''
   } catch {
-    chapterOptions.value = [1]
-    selectedChapter.value = 1
+    runs.value = []
+    selectedRunId.value = ''
   } finally {
-    loadingChapter.value = false
+    loadingRuns.value = false
   }
 }
 
-async function loadTrace() {
+async function loadRunTrace() {
   loadingTrace.value = true
   error.value = ''
   try {
-    const res = await axios.get(`/api/traces/${selectedChapter.value}`)
+    if (!selectedRunId.value) {
+      traceData.value = null
+      error.value = '当前项目暂无可回放的 Run。'
+      return
+    }
+    const res = await axios.get(`/api/runs/${selectedRunId.value}/steps`)
     traceData.value = res.data
   } catch {
     traceData.value = null
@@ -74,9 +94,38 @@ async function loadTrace() {
   }
 }
 
+async function refreshAll() {
+  await loadRuns()
+  await loadRunTrace()
+}
+
+async function submitApproval(decision: 'approve' | 'reject' | 'retry') {
+  if (!selectedRunId.value) return
+  loadingTrace.value = true
+  error.value = ''
+  try {
+    await axios.post(`/api/runs/${selectedRunId.value}/approve`, { decision })
+    await refreshAll()
+  } catch {
+    error.value = '审批提交失败，请稍后重试。'
+  } finally {
+    loadingTrace.value = false
+  }
+}
+
+function formatRunLabel(run: RunListItem) {
+  const chapter = run.chapter_num ? `第 ${run.chapter_num} 章` : '非章节运行'
+  const status = {
+    running: '运行中',
+    completed: '已完成',
+    failed: '失败',
+    paused: '已暂停',
+  }[run.status] ?? run.status
+  return `${chapter} · ${status}`
+}
+
 onMounted(async () => {
-  await loadChapterOptions()
-  await loadTrace()
+  await refreshAll()
 })
 </script>
 

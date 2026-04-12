@@ -244,8 +244,8 @@ class TestSessionCommitModes:
         for c in cs.changes:
             assert c.tag == ChangeTag.RUNTIME_ONLY
 
-    def test_draft_chapter_promotes_to_draft(self):
-        """draft_chapter 生成草稿，不自动采纳（DRAFT 还需审批才能进正史）。"""
+    def test_draft_chapter_promotes_to_pending(self):
+        """阶段五后，draft_chapter 也先进入 CANON_PENDING，等待审批后回流正史。"""
         cc = CanonCommit()
         changes = [WorldChange(tag=ChangeTag.RUNTIME_ONLY, description="互动产生的变更")]
         cs = cc.commit_session(
@@ -257,9 +257,9 @@ class TestSessionCommitModes:
         )
         assert cs.commit_mode == SessionCommitMode.DRAFT_CHAPTER
         assert cs.draft_content == "这是 DM 生成的章节草稿内容……"
-        # 变更提升为 DRAFT，但未自动进入正史
+        # 变更提升为 CANON_PENDING，但未自动进入正史
         for c in cs.changes:
-            assert c.tag == ChangeTag.DRAFT
+            assert c.tag == ChangeTag.CANON_PENDING
 
     def test_canon_chapter_requires_confirm_flag(self):
         """canon_chapter 未经二次确认时，变更为 CANON_PENDING 但不自动确认。"""

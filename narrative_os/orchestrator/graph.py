@@ -33,6 +33,7 @@ from langgraph.types import interrupt
 from narrative_os.agents.critic import CriticAgent, CriticReport
 from narrative_os.agents.editor import EditedChapter, EditorAgent
 from narrative_os.agents.interactive import InteractiveAgent, InteractiveSession, SessionConfig, SessionPhase
+from narrative_os.agents.maintenance import MaintenanceAgent, MaintenanceInput, MaintenanceOutput
 from narrative_os.agents.planner import PlannerAgent, PlannerInput, PlannerOutput
 from narrative_os.agents.rule_resolver import RuleResolver
 from narrative_os.agents.sandbox_simulator import SandboxSimulator
@@ -44,8 +45,12 @@ from narrative_os.core.save_load import DeadlockBreaker, get_save_store
 from narrative_os.core.world import WorldState
 from narrative_os.execution.context_builder import (
     ChapterTarget,
-    ContextBuilder,
     WriteContext,
+)
+from narrative_os.execution.narrative_compiler import (
+    AuthoringInputError,
+    AuthoringRuntimePackage,
+    NarrativeCompiler,
 )
 from narrative_os.execution.llm_router import (
     LLMRouter,
@@ -54,6 +59,14 @@ from narrative_os.execution.llm_router import (
     router as default_router,
 )
 from narrative_os.infra.logging import logger
+from narrative_os.core.governance import (
+    CostLimitExceeded,
+    GovernanceHook,
+    RunContext,
+    create_run_context,
+    get_governance_plane,
+)
+from narrative_os.schemas.traces import RunStatus, RunType
 
 # ------------------------------------------------------------------ #
 # 交互模式会话注册表（session_id → InteractiveSession）               #
@@ -63,6 +76,7 @@ _session_registry: dict[str, InteractiveSession] = {}
 _session_registry_lock = threading.Lock()
 MAX_SESSIONS = 100  # 最大并发会话数，防止内存无限增长
 _interactive_agent_singleton = InteractiveAgent()
+_run_context_registry: dict[str, RunContext] = {}
 
 MAX_RETRIES = 3   # critic 最多让 writer 重试次数
 
@@ -422,6 +436,7 @@ class AgentGraphState(TypedDict, total=False):
 
     # Phase 6 Stage 1: 项目 ID，供 WorldRepository 懒加载世界状态
     project_id: str | None
+    run_id: str | None
 
     # 依赖资源（运行时注入，不序列化）
     plot_graph: PlotGraph | None
@@ -431,12 +446,15 @@ class AgentGraphState(TypedDict, total=False):
 
     # 中间结果
     planner_output: PlannerOutput | None
+    authoring_package: AuthoringRuntimePackage | None
     write_context: WriteContext | None
     chapter_draft: ChapterDraft | None
     critic_report: CriticReport | None
     edited_chapter: EditedChapter | None
+    maintenance_output: MaintenanceOutput | None
 
     # 控制
+    force_generate: bool
     retry_count: int
     error_message: str
 
@@ -456,6 +474,9 @@ def _get_strategy(state: AgentGraphState) -> RoutingStrategy:
 
 async def planner_node(state: AgentGraphState) -> dict[str, Any]:
     """节点 1：生成章节剧情骨架。"""
+    run_context = _get_run_context(state)
+    if run_context is not None:
+        await run_context.begin_step("planner", 1)
     agent = PlannerAgent()
     inp = PlannerInput(
         chapter=state["chapter"],
@@ -468,49 +489,119 @@ async def planner_node(state: AgentGraphState) -> dict[str, Any]:
         world_rules=state.get("world_rules", []),
         constraints=state.get("constraints", []),
     )
-    plan = await agent.plan(inp, strategy=_get_strategy(state))
+    try:
+        plan = await agent.plan(inp, strategy=_get_strategy(state), run_context=run_context)
+    except Exception:
+        if run_context is not None:
+            await run_context.complete_step("planner", RunStatus.FAILED)
+        raise
 
     # 将规划写入 PlotGraph
     graph = state.get("plot_graph")
     if graph is not None:
         plan.apply_to_graph(graph)
 
-    # 同时组装写前上下文
+    # 同时组装写前上下文与编译包
     ctx = await _build_write_context(state, plan)
+    package = state.get("authoring_package")
+    if package is None:
+        package = AuthoringRuntimePackage(
+            project_id=state.get("project_id") or "default",
+            chapter=state["chapter"],
+            write_context=ctx,
+            previous_hook=state.get("previous_hook", ""),
+            current_volume_goal=plan.chapter_outline,
+            author_memory_anchors=list(ctx.long_term_anchors),
+        )
 
-    return {"planner_output": plan, "write_context": ctx}
+    if run_context is not None:
+        await run_context.complete_step("planner", RunStatus.COMPLETED)
+
+    return {
+        "planner_output": plan,
+        "authoring_package": package,
+        "write_context": package.write_context,
+    }
 
 
 async def writer_node(state: AgentGraphState) -> dict[str, Any]:
     """节点 2：逐场景生成章节草稿。"""
+    run_context = _get_run_context(state)
+    if run_context is not None:
+        await run_context.begin_step("writer", 2)
     agent = WriterAgent()
     plan: PlannerOutput = state["planner_output"]          # type: ignore[assignment]
+    package = state.get("authoring_package")
     ctx: WriteContext = state["write_context"]              # type: ignore[assignment]
-    draft = await agent.write(plan, ctx, strategy=_get_strategy(state))
+    critic_report: CriticReport | None = state.get("critic_report")
+    retry_reason = None
+    if critic_report is not None and critic_report.rewrite_instructions:
+        retry_reason = "；".join(critic_report.rewrite_instructions[:3])
+    try:
+        draft = await agent.write(
+            plan,
+            package or ctx,
+            strategy=_get_strategy(state),
+            run_context=run_context,
+            retry_count=state.get("retry_count", 0),
+            retry_reason=retry_reason,
+        )
+    except Exception:
+        if run_context is not None:
+            await run_context.complete_step("writer", RunStatus.FAILED)
+        raise
+    if run_context is not None:
+        await run_context.complete_step("writer", RunStatus.COMPLETED)
     return {"chapter_draft": draft}
 
 
 async def critic_node(state: AgentGraphState) -> dict[str, Any]:
     """节点 3：审查草稿质量与一致性。"""
+    run_context = _get_run_context(state)
+    if run_context is not None:
+        await run_context.begin_step("critic", 3)
     agent = CriticAgent()
     draft: ChapterDraft = state["chapter_draft"]           # type: ignore[assignment]
     ctx: WriteContext = state["write_context"]             # type: ignore[assignment]
-    report = await agent.review(
-        draft=draft,
-        context=ctx,
-        characters=state.get("characters", []),
-        world=state.get("world"),
-        plot_graph=state.get("plot_graph"),
-    )
+    try:
+        report = await agent.review(
+            draft=draft,
+            context=ctx,
+            characters=state.get("characters", []),
+            world=state.get("world"),
+            plot_graph=state.get("plot_graph"),
+            run_context=run_context,
+        )
+    except Exception:
+        if run_context is not None:
+            await run_context.complete_step("critic", RunStatus.FAILED)
+        raise
+    if run_context is not None:
+        await run_context.complete_step("critic", RunStatus.COMPLETED)
     return {"critic_report": report}
 
 
 async def editor_node(state: AgentGraphState) -> dict[str, Any]:
     """节点 4：润色去 AI 痕迹。"""
+    run_context = _get_run_context(state)
+    if run_context is not None:
+        await run_context.begin_step("editor", 4)
     agent = EditorAgent()
     draft: ChapterDraft = state["chapter_draft"]           # type: ignore[assignment]
     report: CriticReport = state["critic_report"]          # type: ignore[assignment]
-    edited = await agent.edit(draft, report, strategy=_get_strategy(state))
+    try:
+        edited = await agent.edit(
+            draft,
+            report,
+            strategy=_get_strategy(state),
+            run_context=run_context,
+        )
+    except Exception:
+        if run_context is not None:
+            await run_context.complete_step("editor", RunStatus.FAILED)
+        raise
+    if run_context is not None:
+        await run_context.complete_step("editor", RunStatus.COMPLETED)
     return {"edited_chapter": edited}
 
 
@@ -530,6 +621,44 @@ async def memory_update_node(state: AgentGraphState) -> dict[str, Any]:
         except Exception as exc:  # pylint: disable=broad-except
             logger.warn("memory_update_failed", error=str(exc))
     return {}   # 无状态变更，仅副作用
+
+
+async def maintenance_node(state: AgentGraphState) -> dict[str, Any]:
+    """节点 5：运行 MaintenanceAgent，并兼容旧的长期记忆写入。"""
+    run_context = _get_run_context(state)
+    if run_context is not None:
+        await run_context.begin_step("maintenance", 5)
+
+    await memory_update_node(state)
+
+    draft: ChapterDraft | None = state.get("chapter_draft")
+    if draft is None:
+        if run_context is not None:
+            await run_context.complete_step("maintenance", RunStatus.FAILED)
+        return {"maintenance_output": None}
+
+    agent = MaintenanceAgent()
+    try:
+        output = agent.maintain(
+            MaintenanceInput(
+                project_id=state.get("project_id") or "default",
+                chapter_draft=draft,
+                critic_report=state.get("critic_report"),
+                planner_output=state.get("planner_output"),
+                characters=state.get("characters", []),
+            ),
+            plot_graph=state.get("plot_graph"),
+            memory=state.get("memory"),
+            run_context=run_context,
+        )
+    except Exception:
+        if run_context is not None:
+            await run_context.complete_step("maintenance", RunStatus.FAILED)
+        raise
+
+    if run_context is not None:
+        await run_context.complete_step("maintenance", RunStatus.COMPLETED)
+    return {"maintenance_output": output}
 
 
 # ------------------------------------------------------------------ #
@@ -570,6 +699,7 @@ def build_graph() -> StateGraph:
     graph.add_node("critic", critic_node)
     graph.add_node("retry_increment", retry_increment_node)
     graph.add_node("editor", editor_node)
+    graph.add_node("maintenance", maintenance_node)
     graph.add_node("memory_update", memory_update_node)
 
     graph.set_entry_point("planner")
@@ -584,8 +714,8 @@ def build_graph() -> StateGraph:
         },
     )
     graph.add_edge("retry_increment", "writer")
-    graph.add_edge("editor", "memory_update")
-    graph.add_edge("memory_update", END)
+    graph.add_edge("editor", "maintenance")
+    graph.add_edge("maintenance", END)
 
     return graph
 
@@ -610,9 +740,11 @@ async def run_chapter(
     strategy: str = get_default_routing_strategy().name,
     previous_hook: str = "",
     existing_arc_summary: str = "",
+    project_id: str = "default",
     character_names: list[str] | None = None,
     world_rules: list[str] | None = None,
     constraints: list[str] | None = None,
+    force_generate: bool = False,
     # 运行时资源
     plot_graph: PlotGraph | None = None,
     characters: list[CharacterState] | None = None,
@@ -668,7 +800,34 @@ async def run_chapter(
     # ── pipeline 模式（保持原有行为不变） ──────────────────────────────
     app = compile_graph(checkpointer)
 
+    # ── GovernancePlane：PRE_RUN 钩子 ──────────────────────────────
+    run_ctx = create_run_context(
+        project_id=project_id,
+        chapter=chapter,
+        run_type=RunType.CHAPTER_GENERATION,
+        session_id=session_id,
+    )
+    await run_ctx.initialize_run()
+    try:
+        _pre_run_result = await run_ctx.trigger(GovernanceHook.PRE_RUN)
+        if not _pre_run_result.passed:
+            raise RuntimeError(
+                f"GovernancePlane PRE_RUN 阻止执行：{_pre_run_result.blocked_reason}"
+            )
+    except (RuntimeError, CostLimitExceeded):
+        await run_ctx.complete_run(RunStatus.FAILED)
+        raise
+    except Exception as exc:
+        logger.warn(
+            "governance_pre_run_failed_non_blocking",
+            project_id=project_id,
+            chapter=chapter,
+            error=str(exc),
+        )
+
     pipeline_state: AgentGraphState = {
+        "project_id": project_id,
+        "run_id": run_ctx.run_id,
         "chapter": chapter,
         "volume": volume,
         "target_summary": target_summary,
@@ -684,16 +843,70 @@ async def run_chapter(
         "world": world,
         "memory": memory,
         "planner_output": None,
+        "authoring_package": None,
         "write_context": None,
         "chapter_draft": None,
         "critic_report": None,
         "edited_chapter": None,
+        "maintenance_output": None,
+        "force_generate": force_generate,
         "retry_count": 0,
         "error_message": "",
     }
+    _run_context_registry[run_ctx.run_id] = run_ctx
 
     config = {"configurable": {"thread_id": thread_id}}
-    final = await app.ainvoke(pipeline_state, config=config)
+    try:
+        final = await app.ainvoke(pipeline_state, config=config)
+    except Exception:
+        await run_ctx.complete_run(RunStatus.FAILED)
+        _run_context_registry.pop(run_ctx.run_id, None)
+        raise
+
+    # ── GovernancePlane：POST_RUN 钩子 ──────────────────────────────
+    try:
+        critic_report = final.get("critic_report")
+        if critic_report is not None and hasattr(critic_report, "quality_score"):
+            run_ctx.quality_score = critic_report.quality_score
+        _post_run_result = await run_ctx.trigger(GovernanceHook.POST_RUN)
+        if not _post_run_result.passed and _post_run_result.hitl_required:
+            logger.warn(
+                "governance_hitl_required",
+                chapter=chapter,
+                quality=run_ctx.quality_score,
+                reason=_post_run_result.blocked_reason,
+            )
+            edited = final.get("edited_chapter")
+            context_text = ""
+            if edited is not None and hasattr(edited, "text"):
+                context_text = edited.text[:500]
+            elif critic_report is not None and hasattr(critic_report, "review_summary"):
+                context_text = critic_report.review_summary
+            await run_ctx.pause_for_hitl(_post_run_result.blocked_reason or "HITL required", context_text)
+            # HITL 触发：记录到 final 状态，不阻断返回（由调用方决定是否暂停）
+            if isinstance(final, dict):
+                final["hitl_required"] = True
+                final["hitl_reason"] = _post_run_result.blocked_reason
+                final["run_status"] = RunStatus.PAUSED.value
+        else:
+            await run_ctx.complete_run(RunStatus.COMPLETED)
+    except Exception:
+        await run_ctx.complete_run(RunStatus.FAILED)
+        raise
+
+    # ── GovernancePlane：POST_COMMIT 钩子 ──────────────────────────
+    try:
+        if final.get("hitl_required") is not True:
+            await run_ctx.trigger(GovernanceHook.POST_COMMIT)
+    except Exception:
+        pass  # POST_COMMIT 失败不阻断主流程
+
+    if isinstance(final, dict):
+        final["run_id"] = run_ctx.run_id
+        final.setdefault("run_status", RunStatus.PAUSED.value if final.get("hitl_required") else RunStatus.COMPLETED.value)
+
+    _run_context_registry.pop(run_ctx.run_id, None)
+
     return final  # type: ignore[return-value]
 
 
@@ -701,12 +914,11 @@ async def run_chapter(
 # Helpers (private)                                                     #
 # ------------------------------------------------------------------ #
 
-async def _build_write_context(
+async def _build_authoring_package(
     state: AgentGraphState,
     plan: PlannerOutput,
-) -> WriteContext:
-    """根据 state 中的资源组装 WriteContext。"""
-    builder = ContextBuilder()
+) -> AuthoringRuntimePackage:
+    """根据 state 中的资源组装 AuthoringRuntimePackage。"""
     target = ChapterTarget(
         chapter=state["chapter"],
         volume=state.get("volume", 1),
@@ -715,14 +927,105 @@ async def _build_write_context(
         tension_target=float(plan.tension_curve[-1][1]) if plan.tension_curve else 0.6,
         hook_type=plan.hook_type,
     )
-    # Phase 6 Stage 1: 通过 WorldRepository 统一入口获取世界状态（project_id 懒加载）
-    project_id: str | None = state.get("project_id")  # type: ignore[assignment]
-    ctx = builder.build(
-        chapter_target=target,
-        plot_graph=state.get("plot_graph"),
-        characters=state.get("characters", []),
-        world=state.get("world"),
-        memory=state.get("memory"),
+    project_id = state.get("project_id") or "default"
+    plot_graph = _resolve_plot_graph(project_id, state.get("plot_graph"))
+    characters = _resolve_characters(project_id, state.get("characters", []))
+
+    from narrative_os.core.world_repository import get_world_repository
+
+    world_repository = get_world_repository()
+    world = state.get("world") or world_repository.get_published_world_state(project_id)
+
+    from narrative_os.core.memory import MemorySystem
+
+    memory = state.get("memory")
+    if memory is None:
+        try:
+            memory = MemorySystem(project_id=project_id)
+        except Exception:
+            memory = None
+
+    state_manager = _load_state_manager(project_id)
+    previous_hook = state_manager.get_last_hook(state.get("chapter", 1) - 1)
+    author_memory_anchors = _resolve_author_memory_anchors(memory)
+    current_volume_goal = plot_graph.get_current_volume_goal(project_id) if plot_graph is not None else ""
+
+    compiler = NarrativeCompiler()
+    return compiler.compile_authoring(
         project_id=project_id,
+        chapter_target=target,
+        plot_graph=plot_graph,
+        characters=characters,
+        world=world,
+        memory=memory,
+        previous_hook=previous_hook,
+        current_volume_goal=current_volume_goal,
+        author_memory_anchors=author_memory_anchors,
+        require_complete_inputs=not state.get("force_generate", False),
     )
-    return ctx
+
+
+async def _build_write_context(
+    state: AgentGraphState,
+    plan: PlannerOutput,
+) -> WriteContext:
+    package = await _build_authoring_package(state, plan)
+    state["authoring_package"] = package
+    return package.write_context
+
+
+def _load_state_manager(project_id: str):
+    from narrative_os.core.state import StateManager
+
+    mgr = StateManager(project_id=project_id, base_dir=".narrative_state")
+    try:
+        mgr.load_state()
+    except FileNotFoundError:
+        mgr.initialize(project_name=project_id)
+    return mgr
+
+
+def _resolve_plot_graph(project_id: str, plot_graph: PlotGraph | None) -> PlotGraph | None:
+    if plot_graph is not None:
+        return plot_graph
+
+    try:
+        kb = _load_state_manager(project_id).load_kb()
+        plot_data = kb.get("plot_graph") if isinstance(kb, dict) else None
+        if plot_data:
+            return PlotGraph.from_dict(plot_data)
+    except Exception:
+        return None
+    return None
+
+
+def _resolve_characters(
+    project_id: str,
+    characters: list[CharacterState],
+) -> list[CharacterState]:
+    if characters:
+        return characters
+
+    try:
+        from narrative_os.core.character_repository import get_character_repository
+
+        return get_character_repository().list_characters(project_id)
+    except Exception:
+        return []
+
+
+def _resolve_author_memory_anchors(memory: MemorySystem | None) -> list[str]:
+    if memory is None:
+        return []
+
+    try:
+        return [item.content for item in memory.get_recent_anchors(last_n=3)]
+    except Exception:
+        return []
+
+
+def _get_run_context(state: AgentGraphState) -> RunContext | None:
+    run_id = state.get("run_id")
+    if not run_id:
+        return None
+    return _run_context_registry.get(run_id)

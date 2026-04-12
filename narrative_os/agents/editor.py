@@ -14,6 +14,8 @@ agents/editor.py — Phase 3: Editor Agent
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 from narrative_os.agents.critic import CriticReport
@@ -25,6 +27,7 @@ from narrative_os.execution.llm_router import (
     router as default_router,
 )
 from narrative_os.infra.logging import logger
+from narrative_os.schemas.traces import Artifact, ArtifactType
 from narrative_os.skills.humanize import Humanizer
 
 
@@ -70,6 +73,7 @@ class EditorAgent:
         critic_report: CriticReport,  # noqa: ARG002 — 保留接口，未来可传入风格指令
         strategy: RoutingStrategy = get_default_routing_strategy(),
         style_focus: list[str] | None = None,
+        run_context: Any | None = None,
     ) -> EditedChapter:
         """对草稿进行人性化润色。"""
         humanize_output = await self._humanizer.humanize(
@@ -94,7 +98,7 @@ class EditorAgent:
             change_ratio=humanize_output.change_ratio,
         )
 
-        return EditedChapter(
+        result = EditedChapter(
             chapter=draft.chapter,
             volume=draft.volume,
             text=final_text,
@@ -103,3 +107,20 @@ class EditorAgent:
             applied_rules=humanize_output.applied_rules,
             model_used=humanize_output.model_used,
         )
+        if run_context is not None:
+            await run_context.emit_artifact(
+                Artifact(
+                    artifact_type=ArtifactType.FINAL_TEXT,
+                    agent_name="editor",
+                    input_summary=draft.draft_text[:200],
+                    output_content=result.text,
+                    quality_scores={
+                        "change_ratio": result.change_ratio,
+                        "quality_score": critic_report.quality_score,
+                    },
+                    token_in=run_context.last_token_in,
+                    token_out=run_context.last_token_out,
+                    latency_ms=run_context.last_latency_ms,
+                )
+            )
+        return result

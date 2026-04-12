@@ -1,6 +1,6 @@
 # Narrative OS
 
-> 项目版本基线：v2.0.0
+> 项目版本基线：v2.1.0
 > 更新日期：2026-04-11
 
 面向长篇小说创作的多智能体叙事操作系统。
@@ -12,27 +12,32 @@
 - TRPG 互动写作（终端与网页）
 - 世界构建沙盘（可视化节点与关系编辑）
 
-## v2.0.0 本次优化新增
+## v2.1.0 本次优化新增
 
-- 新增独立页面：`/project/:id/memory-search`（记忆检索）与 `/project/:id/trace`（执行链路）
-- Metrics 仪表盘移除固定示例曲线，空项目显示真实空态与 0 统计
-- Agent 工坊移除 mock 运行卡片，改为真实 Trace 数据驱动与空态展示
-- 角色矩阵 Drive/Social 页移除运行时模板组件，消除 Vue runtime 编译告警
-- 侧边栏信息架构补齐入口，记忆检索和执行链路支持真实用户点击可达
+- 新增 `Writing Workbench`：写作前置检查、WorldState 摘要、角色 Runtime、章节生成表单与 5 步 AgentRun 状态条集中在一个页面
+- 新增项目首页状态机视图：`Concept → World → Characters → Plot → Chapter → Maintenance → Canon`
+- 新增写作工作台上下文与 Trace API：`GET /projects/{project_id}/writing-context`、`GET /projects/{project_id}/runs`、`GET /runs/{run_id}/steps`
+- Canon 变更流改为 `CANON_PENDING → approve/reject`，项目主页显示待提交变更数量
+- Run / Step / Artifact 追踪链路补齐 5 Agent 树，支持重试原因、审批状态与回放
+- 世界构建页补充显式“发布运行态”按钮，发布后项目首页与 Writing Workbench 会立即反映 `WorldState` 状态
+- 项目首页 `Concept` 状态改为读取持久化概念数据，避免已保存概念仍显示“待补全概念”
+- Writing Workbench 的 `地区 Top 5` 改为显示地区名称，不再暴露运行态 UUID
 
-## v2.0.0 废弃与清理
+## v2.1.0 废弃与清理
 
-- 废弃 Metrics 与 Agent 页面中的占位演示数据回退逻辑
-- 清理 Trace 视图中的技术占位文案（`tracing not yet available`）对用户的直接暴露
+- 废弃写作页与项目页中割裂的旧式入口，统一并入项目状态机与工作台
+- 清理 Trace 列表在运行时 DB 切换场景下的落库漂移问题，避免 Run 列表与步骤树读取不同数据库
+- 清理 `world_type` 枚举序列化漂移、非致命章节持久化 warning 与弃用的 422 常量，全量回归收敛为无 warning 通过
 
 ## 当前功能总览
 
 ### 1. 创作主链路
 - 章节规划：自动生成章节骨架、节点和钩子建议
-- 章节生成：完整执行 Planner -> Writer -> Critic -> Editor
+- 章节生成：完整执行 Planner -> Writer -> Critic -> Editor -> Maintenance
 - 草稿快写：跳过规划快速出稿
 - 质量评估：章节指标评分与一致性检查
 - 去 AI 痕迹：Humanizer 后处理
+- Governance 管线：PRE_RUN / POST_RUN / POST_COMMIT 钩子、HITL 暂停、RunTrace 持久化
 
 ### 2. 项目与数据管理
 - 项目管理：创建、编辑、归档、软删除
@@ -55,6 +60,7 @@
 - 逻辑校验面板 + AI 深度分析
 - 力量体系保存时可选“同步到全局继承节点”
 - Finalize：将世界设定写入知识库
+- Publish：将当前沙盘编译并发布为 RuntimeWorldState，解除写作 / TRPG 前置阻塞
 
 ### 世界书能力说明（当前版本）
 - 当前版本不单独提供“世界书”页面。
@@ -93,14 +99,16 @@
 ### 7. CanonCommit（正史提交管线）
 - 三种提交模式：
   - `SESSION_ONLY` — 仅保留TRPG会话记录，不影响主线
-  - `DRAFT_CHAPTER` — 生成草稿，等待人工确认
+	- `DRAFT_CHAPTER` — 生成草稿，进入待确认变更流
   - `CANON_CHAPTER` — 二次确认后直接提交正史
 - 变更集 API：`GET /projects/{project_id}/changesets`、approve/reject 端点
 - `CanonCommit.create_changeset()` → `WorldChangeSet`
+- Maintenance 会自动生成 `CANON_PENDING` 变更集，审批通过后才写入知识库 / RuntimeWorldState
 
 ### 8. 可视化与运营面板
 - 情节画布、角色矩阵、记忆系统、质量仪表盘、风格控制台
 - Agent 工坊、消耗统计、插件市场、全局与项目设置
+- 项目状态机首页、Writing Workbench、TraceInspector 回放
 
 ## 快速开始
 
@@ -165,9 +173,11 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 1. 在故事概念页完成一句话/一段话设定（`/project/:id/concept`）。
 2. 在世界构建页完善地区、势力、关系与时间线（`/project/:id/worldbuilder`）。
 3. 点击世界构建中的“完成世界设定”，将结构化数据写入知识库。
-4. 进入角色矩阵补齐角色口吻、约束与动机（`/project/:id/characters`）。
-5. 在章节撰写页进行章节生成与改写（`/project/:id/write`）。
-6. 用一致性检查与人味化进行质检（`/project/:id/check`、`/project/:id/humanize`）。
+4. 点击世界构建中的“发布运行态”，生成并持久化 `RuntimeWorldState`。
+5. 进入角色矩阵补齐角色口吻、约束与动机（`/project/:id/characters`）。
+6. 在章节撰写页使用 `Writing Workbench` 完成前置检查、生成与 Trace 追踪（`/project/:id/write`）。
+7. 在项目首页或执行链路页审查待提交变更与 Run 树（`/project/:id`、`/project/:id/trace`）。
+8. 批准 `CANON_PENDING` 变更后，再进入一致性检查与人味化质检（`/project/:id/check`、`/project/:id/humanize`）。
 
 ## CLI 命令
 
@@ -217,6 +227,7 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 - `GET /health`
 - `POST /chapters/run`
 - `POST /chapters/plan`
+- `GET /projects/{project_id}/writing-context`
 - `GET /projects/{project_id}/status`
 - `GET /cost`
 - `POST /metrics`
@@ -236,6 +247,14 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 - `GET /projects/{project_id}/characters/{name}`
 - `GET /projects/{project_id}/memory`
 - `GET /projects/{project_id}/memory/search`
+- `GET /projects/{project_id}/runs`
+- `GET /runs/{run_id}`
+- `GET /runs/{run_id}/steps`
+- `POST /runs/{run_id}/approve`
+- `GET /projects/{project_id}/changesets`
+- `GET /projects/{project_id}/changesets/{changeset_id}`
+- `POST /projects/{project_id}/changesets/{changeset_id}/approve`
+- `POST /projects/{project_id}/changesets/{changeset_id}/reject`
 - `GET /traces/{chapter_id}`
 - `GET /plugins`
 - `POST /plugins/{plugin_id}/toggle`

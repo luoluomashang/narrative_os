@@ -30,6 +30,9 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from narrative_os.schemas.characters import CharacterRuntimeUpdateRequest
+from narrative_os.schemas.trpg import SaveRequest
+
 app = typer.Typer(
     name="narrative",
     help="Narrative OS — 可编程叙事操作系统 CLI",
@@ -94,6 +97,7 @@ def run_chapter(
                 word_count_target=words,
                 strategy=strategy,
                 previous_hook=hook,
+                project_id=project,
                 thread_id=f"{project}-ch{chapter:04d}",
             ))
             progress.update(task, description="生成完成 ✓")
@@ -686,6 +690,399 @@ def _show_chapter_summary(chapter, volume, word_count, change_ratio, critic) -> 
         title="生成摘要",
         border_style=status_color,
     ))
+
+
+# ================================================================== #
+# narrative world — 世界管理命令组                                      #
+# ================================================================== #
+
+world_app = typer.Typer(name="world", help="世界状态管理（校验/编译/发布）", no_args_is_help=True)
+app.add_typer(world_app, name="world")
+
+
+@world_app.command("publish")
+def world_publish(
+    project: str = typer.Argument(..., help="项目 ID"),
+) -> None:
+    """校验 + 编译 + 发布运行态世界。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
+                  transient=True) as progress:
+        t = progress.add_task("正在发布世界...", total=None)
+        try:
+            resp = httpx.post(f"{api_base}/projects/{project}/world/publish", timeout=30)
+            progress.update(t, description="完成 ✓")
+        except httpx.ConnectError:
+            _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+            raise typer.Exit(code=1)
+
+    if resp.status_code == 200:
+        data = resp.json()
+        _print_success(f"世界发布成功（项目：{project}）")
+        console.print(f"[dim]{data}[/dim]")
+    else:
+        _print_error(f"发布失败（{resp.status_code}）：{resp.text[:200]}")
+        raise typer.Exit(code=1)
+
+
+@world_app.command("validate")
+def world_validate(
+    project: str = typer.Argument(..., help="项目 ID"),
+) -> None:
+    """仅校验世界数据，输出 errors/warnings。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.get(f"{api_base}/projects/{project}/world/validate", timeout=30)
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    data = resp.json()
+    errors = data.get("errors", [])
+    warnings = data.get("warnings", [])
+    if errors:
+        for e in errors:
+            console.print(f"[bold red]ERROR[/bold red] {e}")
+        _print_error(f"校验失败，{len(errors)} 个错误。")
+        raise typer.Exit(code=1)
+    if warnings:
+        for w in warnings:
+            console.print(f"[bold yellow]WARN[/bold yellow] {w}")
+    _print_success(f"世界校验通过（{len(warnings)} 个警告）。")
+
+
+@world_app.command("status")
+def world_status(
+    project: str = typer.Argument(..., help="项目 ID"),
+) -> None:
+    """查看当前世界发布版本和状态。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.get(f"{api_base}/projects/{project}/world/status", timeout=30)
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    data = resp.json()
+    table = Table("字段", "值", title=f"世界状态（{project}）")
+    for k, v in data.items():
+        table.add_row(str(k), str(v)[:80])
+    console.print(table)
+
+
+# ================================================================== #
+# narrative character — 角色管理命令组                                  #
+# ================================================================== #
+
+character_app = typer.Typer(name="character", help="角色管理（列出/查看/更新运行态）", no_args_is_help=True)
+app.add_typer(character_app, name="character")
+
+
+@character_app.command("list")
+def character_list(
+    project: str = typer.Argument(..., help="项目 ID"),
+) -> None:
+    """列出项目所有角色。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.get(f"{api_base}/projects/{project}/characters", timeout=30)
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    data = resp.json()
+    characters = data if isinstance(data, list) else data.get("characters", [])
+    table = Table("名称", "角色类型", "当前位置", title=f"角色列表（{project}）")
+    for c in characters:
+        name = c.get("name", "?")
+        role = c.get("role", "?")
+        loc = ""
+        if isinstance(c.get("runtime"), dict):
+            loc = c["runtime"].get("current_location", "")
+        table.add_row(name, role, loc)
+    console.print(table)
+
+
+@character_app.command("show")
+def character_show(
+    project: str = typer.Argument(..., help="项目 ID"),
+    name: str = typer.Argument(..., help="角色名称"),
+) -> None:
+    """查看指定角色详细信息（四层模型）。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.get(f"{api_base}/projects/{project}/characters/{name}", timeout=30)
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    if resp.status_code == 404:
+        _print_error(f"角色 '{name}' 不存在。")
+        raise typer.Exit(code=1)
+
+    data = resp.json()
+    import json as _json
+    console.print(Panel(_json.dumps(data, ensure_ascii=False, indent=2),
+                        title=f"角色详情：{name}", border_style="cyan"))
+
+
+@character_app.command("update-runtime")
+def character_update_runtime(
+    project: str = typer.Argument(..., help="项目 ID"),
+    name: str = typer.Argument(..., help="角色名称"),
+    agenda: str = typer.Option("", "--agenda", help="更新 agenda"),
+    location: str = typer.Option("", "--location", help="更新当前位置"),
+) -> None:
+    """更新角色运行态（agenda / location）。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    payload = CharacterRuntimeUpdateRequest(
+        agenda=agenda or None,
+        location=location or None,
+    )
+
+    if not payload.model_dump(exclude_none=True):
+        _print_error("请至少提供 --agenda 或 --location 参数。")
+        raise typer.Exit(code=1)
+
+    try:
+        resp = httpx.patch(
+            f"{api_base}/projects/{project}/characters/{name}/runtime",
+            json=payload.model_dump(exclude_none=True),
+            timeout=30,
+        )
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    if resp.status_code in (200, 204):
+        _print_success(f"角色 '{name}' 运行态已更新。")
+    else:
+        _print_error(f"更新失败（{resp.status_code}）：{resp.text[:200]}")
+        raise typer.Exit(code=1)
+
+
+# ================================================================== #
+# narrative sl — 存档管理命令组                                         #
+# ================================================================== #
+
+sl_app = typer.Typer(name="sl", help="TRPG 存档管理（列出/存档/读档）", no_args_is_help=True)
+app.add_typer(sl_app, name="sl")
+
+
+@sl_app.command("list")
+def sl_list(
+    project: str = typer.Argument(..., help="项目 ID"),
+    session_id: str = typer.Argument(..., help="会话 ID"),
+) -> None:
+    """列出指定会话的所有存档。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.get(
+            f"{api_base}/projects/{project}/sessions/{session_id}/saves",
+            timeout=30,
+        )
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    saves = resp.json() if isinstance(resp.json(), list) else []
+    table = Table("存档 ID", "触发方式", "轮数", "时间", title=f"存档列表（{session_id}）")
+    for s in saves:
+        table.add_row(
+            s.get("save_id", "?"), s.get("trigger", "?"),
+            str(s.get("turn", 0)), str(s.get("timestamp", "?"))[:19]
+        )
+    console.print(table)
+
+
+@sl_app.command("save")
+def sl_save(
+    project: str = typer.Argument(..., help="项目 ID"),
+    session_id: str = typer.Argument(..., help="会话 ID"),
+) -> None:
+    """手动存档当前会话。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    payload = SaveRequest(trigger="manual")
+    try:
+        resp = httpx.post(
+            f"{api_base}/projects/{project}/sessions/{session_id}/save",
+            json=payload.model_dump(),
+            timeout=30,
+        )
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    if resp.status_code in (200, 201):
+        data = resp.json()
+        _print_success(f"存档成功，save_id：{data.get('save_id', '?')}")
+    else:
+        _print_error(f"存档失败（{resp.status_code}）：{resp.text[:200]}")
+        raise typer.Exit(code=1)
+
+
+@sl_app.command("load")
+def sl_load(
+    project: str = typer.Argument(..., help="项目 ID"),
+    session_id: str = typer.Argument(..., help="会话 ID"),
+    save_id: str = typer.Argument(..., help="存档 ID"),
+) -> None:
+    """从指定存档恢复会话（软回退）。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.post(
+            f"{api_base}/projects/{project}/sessions/{session_id}/load/{save_id}",
+            timeout=30,
+        )
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    if resp.status_code == 200:
+        data = resp.json()
+        _print_success(f"读档成功，已恢复到第 {data.get('restored_turn', '?')} 轮。")
+    else:
+        _print_error(f"读档失败（{resp.status_code}）：{resp.text[:200]}")
+        raise typer.Exit(code=1)
+
+
+# ================================================================== #
+# narrative canon — 变更集审批命令组                                    #
+# ================================================================== #
+
+canon_app = typer.Typer(name="canon", help="Canon 变更集审批（列出/查看/批准/驳回）", no_args_is_help=True)
+app.add_typer(canon_app, name="canon")
+
+
+@canon_app.command("list")
+def canon_list(
+    project: str = typer.Argument(..., help="项目 ID"),
+) -> None:
+    """列出项目所有待审变更集。"""
+    import httpx
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.get(f"{api_base}/projects/{project}/changesets", timeout=30)
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    changesets = resp.json() if isinstance(resp.json(), list) else []
+    table = Table("变更集 ID", "来源", "提交方式", "待审数", "已确认数", "创建时间",
+                  title=f"变更集列表（{project}）")
+    for cs in changesets:
+        table.add_row(
+            cs.get("changeset_id", "?")[:18] + "...",
+            cs.get("source", "?"),
+            cs.get("commit_mode", "?"),
+            str(cs.get("pending_count", 0)),
+            str(cs.get("confirmed_count", 0)),
+            str(cs.get("created_at", "?"))[:19],
+        )
+    console.print(table)
+
+
+@canon_app.command("review")
+def canon_review(
+    project: str = typer.Argument(..., help="项目 ID"),
+    cs_id: str = typer.Argument(..., help="变更集 ID"),
+) -> None:
+    """查看变更集详情（含每条变更的 before/after）。"""
+    import httpx
+    import json as _json
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.get(f"{api_base}/projects/{project}/changesets/{cs_id}", timeout=30)
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    if resp.status_code == 404:
+        _print_error(f"变更集 '{cs_id}' 不存在。")
+        raise typer.Exit(code=1)
+
+    data = resp.json()
+    console.print(Panel(
+        _json.dumps(data, ensure_ascii=False, indent=2),
+        title=f"变更集详情：{cs_id[:18]}...",
+        border_style="cyan",
+    ))
+
+
+@canon_app.command("approve")
+def canon_approve(
+    project: str = typer.Argument(..., help="项目 ID"),
+    cs_id: str = typer.Argument(..., help="变更集 ID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
+) -> None:
+    """批准变更集并提交正史。"""
+    import httpx
+    if not yes:
+        confirmed = typer.confirm(f"确认批准变更集 '{cs_id[:18]}...' 并提交正史？")
+        if not confirmed:
+            console.print("[yellow]已取消。[/yellow]")
+            raise typer.Exit()
+
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.post(
+            f"{api_base}/projects/{project}/changesets/{cs_id}/approve",
+            timeout=30,
+        )
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    if resp.status_code == 200:
+        data = resp.json()
+        _print_success(
+            f"批准成功：{data.get('approved_count', 0)} 条已审批，"
+            f"{data.get('committed_count', 0)} 条已提交正史。"
+        )
+    else:
+        _print_error(f"批准失败（{resp.status_code}）：{resp.text[:200]}")
+        raise typer.Exit(code=1)
+
+
+@canon_app.command("reject")
+def canon_reject(
+    project: str = typer.Argument(..., help="项目 ID"),
+    cs_id: str = typer.Argument(..., help="变更集 ID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
+) -> None:
+    """驳回整个变更集。"""
+    import httpx
+    if not yes:
+        confirmed = typer.confirm(f"确认驳回变更集 '{cs_id[:18]}...'？")
+        if not confirmed:
+            console.print("[yellow]已取消。[/yellow]")
+            raise typer.Exit()
+
+    api_base = "http://127.0.0.1:8000"
+    try:
+        resp = httpx.post(
+            f"{api_base}/projects/{project}/changesets/{cs_id}/reject",
+            timeout=30,
+        )
+    except httpx.ConnectError:
+        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        raise typer.Exit(code=1)
+
+    if resp.status_code == 200:
+        data = resp.json()
+        _print_success(f"驳回成功：{data.get('rejected_count', 0)} 条已驳回。")
+    else:
+        _print_error(f"驳回失败（{resp.status_code}）：{resp.text[:200]}")
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

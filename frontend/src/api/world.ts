@@ -59,9 +59,9 @@ export interface Faction {
   alignment: string
   relation_map: Record<string, number>
   power_system_id: string | null
-  color: string | null
-  x: number
-  y: number
+  color?: string | null
+  x?: number
+  y?: number
   notes: string
 }
 
@@ -107,7 +107,7 @@ export interface WorldSandboxData {
   factions: Faction[]
   power_systems: PowerSystem[]
   relations: WorldRelation[]
-  timeline_events: TimelineSandboxEvent[]
+  timeline_events?: TimelineSandboxEvent[]
   world_rules: string[]
 }
 
@@ -116,6 +116,22 @@ export interface PowerTemplateSummary {
   name: string
   preview_levels: string[]
   level_count: number
+}
+
+export interface WorldPublishResponse {
+  status: 'published' | 'validation_failed'
+  world_version?: string
+  warnings: string[]
+  suggestions: string[]
+  errors?: string[]
+  publish_report?: {
+    factions_compiled: number
+    regions_compiled: number
+    power_systems_compiled: number
+    rules_compiled: number
+    timeline_events_compiled: number
+    relations_compiled: number
+  } | null
 }
 
 // --- 故事概念 ---
@@ -180,6 +196,8 @@ export const world = {
     client.get<PowerTemplateSummary[]>(`/projects/${projectId}/world/power-templates`),
   finalize: (projectId: string) =>
     client.post<{ success: boolean; summary: Record<string, number> }>(`/projects/${projectId}/world/finalize`),
+  publish: (projectId: string) =>
+    client.post<WorldPublishResponse>(`/projects/${projectId}/world/publish`),
 
   // AI 增强
   suggestRelations: (projectId: string, factionIds: string[]) =>

@@ -71,7 +71,7 @@ const testResult = ref<string[] | null>(null)
 
 watch(() => props.model, (m) => {
   if (m) {
-    localConstraints.value = (m.behavior_constraints ?? []).map(c => {
+    localConstraints.value = (m.behavior_constraints ?? []).map((c: BehaviorConstraintDetail | string) => {
       if (typeof c === 'string') return { rule: c, severity: 'soft' as const, context: '' }
       return { ...c }
     })
@@ -83,7 +83,7 @@ function addConstraint() {
   localConstraints.value.push({
     rule: newRule.value.trim(),
     severity: newSeverity.value,
-    context: newContext.value.trim() || undefined,
+    context: newContext.value.trim(),
   })
   newRule.value = ''
   newContext.value = ''
@@ -100,7 +100,7 @@ function localCheckConstraint(action: string, constraints: BehaviorConstraintDet
     const stripped = c.rule.replace(/不能|必须|不得|不可|禁止|严禁|不要|不/g, '').trim()
     if (!stripped) continue
     // 按标点/空格拆分
-    const tokens = stripped.split(/[、，,\s]+/).filter(k => k.length >= 2)
+    const tokens = stripped.split(/[、，,\s]+/).filter((k: string) => k.length >= 2)
     // 对每个 token 额外生成 2 字子串（适配中文语义匹配）
     const keywords: string[] = []
     for (const t of tokens.length ? tokens : [stripped]) {

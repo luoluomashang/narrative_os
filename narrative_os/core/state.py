@@ -423,6 +423,34 @@ class StateManager:
             json.dumps(kb, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
+    def get_last_hook(self, chapter: int | None = None) -> str:
+        """返回指定章节或最近一章的 hook。"""
+        kb = self.load_kb()
+        target_chapter = chapter
+        if target_chapter is None:
+            if self.state is None:
+                try:
+                    self.load_state()
+                except FileNotFoundError:
+                    return str(kb.get("last_hook", "") or "")
+            target_chapter = self.state.current_chapter if self.state is not None else 0
+
+        if target_chapter <= 0:
+            return str(kb.get("last_hook", "") or "")
+
+        return str(
+            kb.get(f"chapter_{target_chapter}_hook")
+            or kb.get("last_hook")
+            or ""
+        )
+
+    def save_last_hook(self, chapter: int, hook_text: str) -> None:
+        """持久化章节 hook，供下一章 Writer 消费。"""
+        kb = self.load_kb()
+        kb[f"chapter_{chapter}_hook"] = hook_text
+        kb["last_hook"] = hook_text
+        self.save_kb(kb)
+
     # ---------------------------------------------------------------- #
     # Paths                                                              #
     # ---------------------------------------------------------------- #

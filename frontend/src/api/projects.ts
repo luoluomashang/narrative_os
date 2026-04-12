@@ -30,6 +30,8 @@ export const projects = {
     client.post(`/projects/${id}/archive`),
   status: (id: string) =>
     client.get(`/projects/${id}/status`),
+  changesets: (id: string) =>
+    client.get(`/projects/${id}/changesets`),
   plot: (id: string) =>
     client.get<PlotGraphData>(`/projects/${id}/plot`),
   characters: (id: string) =>

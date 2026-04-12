@@ -245,6 +245,112 @@ class TestProjectStatusEndpoint:
             resp = await c.get("/projects/bad_project/status")
         assert resp.status_code == 500
 
+    async def test_project_status_reads_persisted_concept(self, monkeypatch):
+        state = MagicMock(
+            project_name="demo",
+            current_chapter=0,
+            current_volume=1,
+            total_word_count=0,
+            one_sentence="",
+            chapters=[],
+        )
+        mgr = MagicMock()
+        mgr.load_state.return_value = state
+        mgr.state = state
+        mgr.load_kb.return_value = {}
+        mgr.list_versions.return_value = []
+
+        world_repo = MagicMock()
+        world_repo.has_published_world.return_value = False
+
+        character_repo = MagicMock()
+        character_repo.list_characters.return_value = []
+
+        canon_commit = MagicMock()
+        canon_commit.list_changesets.return_value = []
+
+        class _FakeSession:
+            async def __aenter__(self):
+                return object()
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        concept = MagicMock(one_sentence="一句话概念", one_paragraph="", genre_tags=[])
+
+        monkeypatch.setattr("narrative_os.interface.api.StateManager", MagicMock(return_value=mgr))
+        monkeypatch.setattr("narrative_os.core.state.StateManager", MagicMock(return_value=mgr))
+        monkeypatch.setattr("narrative_os.core.world_repository.get_world_repository", lambda: world_repo)
+        monkeypatch.setattr("narrative_os.core.character_repository.get_character_repository", lambda: character_repo)
+        monkeypatch.setattr("narrative_os.core.evolution.get_canon_commit", lambda _project_id: canon_commit)
+        monkeypatch.setattr("narrative_os.infra.database.AsyncSessionLocal", lambda: _FakeSession())
+        monkeypatch.setattr(
+            "narrative_os.interface.services.world_service.WorldService.get_concept",
+            AsyncMock(return_value=concept),
+        )
+
+        async with await _client() as c:
+            resp = await c.get("/projects/demo/status")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        concept_node = next(node for node in data["workflow_nodes"] if node["step_id"] == "concept")
+        assert concept_node["status"] == "completed"
+        assert concept_node["statistic"] == "概念已初始化"
+
+
+class TestWritingContextEndpoint:
+    async def test_writing_context_returns_region_names(self, monkeypatch):
+        from narrative_os.core.world import FactionState, WorldState
+
+        world_repo = MagicMock()
+        world_repo.get_published_world_state.return_value = WorldState(
+            factions={
+                "faction_001": FactionState(id="faction_001", name="雾灯会"),
+            },
+            geography={
+                "region_001": {"id": "region_001", "name": "残忆外环"},
+                "region_002": {"id": "region_002", "name": "灰塔内城"},
+            },
+            rules_of_world=["记忆有价"],
+        )
+
+        runtime = MagicMock(
+            current_location="外环集市",
+            current_agenda="调查禁城入口",
+            current_pressure=0.2,
+            recent_key_events=["找到残缺地图"],
+        )
+        character = MagicMock(name="沈烬")
+        character.name = "沈烬"
+        character.drive = MagicMock()
+        character.runtime = runtime
+
+        character_repo = MagicMock()
+        character_repo.list_characters.return_value = [character]
+
+        state_mgr = MagicMock()
+        state_mgr.load_state.return_value = MagicMock()
+        state_mgr.load_kb.return_value = {}
+        state_mgr.get_last_hook.return_value = ""
+
+        canon_commit = MagicMock()
+        canon_commit.list_changesets.return_value = []
+
+        monkeypatch.setattr("narrative_os.core.state.StateManager", MagicMock(return_value=state_mgr))
+        monkeypatch.setattr("narrative_os.core.character_repository.get_character_repository", lambda: character_repo)
+        monkeypatch.setattr("narrative_os.core.world_repository.get_world_repository", lambda: world_repo)
+        monkeypatch.setattr("narrative_os.core.evolution.get_canon_commit", lambda _project_id: canon_commit)
+
+        async with await _client() as c:
+            resp = await c.get("/projects/demo/writing-context?chapter=1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["world"]["factions"] == ["雾灯会"]
+        assert data["world"]["regions"] == ["残忆外环", "灰塔内城"]
+        assert data["world"]["rules"] == ["记忆有价"]
+
 
 # ------------------------------------------------------------------ #
 # TRPG session error paths                                              #

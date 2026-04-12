@@ -111,10 +111,12 @@ async function loadPlot() {
   error.value = null
   try {
     const res = await projects.plot(projectId.value as string)
-    nodes.value = res.data.nodes.map(mapNode)
-    edges.value = res.data.edges.map(mapEdge)
+    const plotNodes = res.data.nodes ?? []
+    const plotEdges = res.data.edges ?? []
+    nodes.value = plotNodes.map(mapNode)
+    edges.value = plotEdges.map(mapEdge)
     await nextTick()
-    renderChart(res.data.nodes.map((n) => n.tension))
+    renderChart(plotNodes.map((n) => n.tension))
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : '请求失败'
   } finally {

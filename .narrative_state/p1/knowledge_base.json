@@ -1,0 +1,38 @@
+{
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [
+      "守护苍生，不可害民"
+    ],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [
+      "守护苍生，不可害民"
+    ],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

@@ -2,7 +2,7 @@
   "project_id": "default",
   "project_name": "default",
   "created_at": "2026-04-06T10:08:57.585006+00:00",
-  "updated_at": "2026-04-11T07:36:18.643355+00:00",
+  "updated_at": "2026-04-11T18:00:38.124330+00:00",
   "current_step": "genesis",
   "current_chapter": 3,
   "current_volume": 1,
@@ -30,7 +30,7 @@
       "quality_score": 0.8,
       "hook_score": 0.7,
       "word_count": 6,
-      "timestamp": "2026-04-11T07:36:18.640200+00:00"
+      "timestamp": "2026-04-11T18:00:38.123456+00:00"
     }
   ],
   "one_sentence": "",

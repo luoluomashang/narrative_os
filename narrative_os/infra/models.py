@@ -241,7 +241,11 @@ class WorldSandbox(Base):
         String(100), ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False, unique=True, index=True,
     )
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
     sandbox_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    runtime_world_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_now, onupdate=_now
     )
@@ -259,7 +263,110 @@ class StoryConcept(Base):
         String(100), ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False, unique=True, index=True,
     )
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
     concept_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_now, onupdate=_now
     )
+
+
+# ------------------------------------------------------------------ #
+# RunRecord                                                           #
+# ------------------------------------------------------------------ #
+class RunRecord(Base):
+    __tablename__ = "runs"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    run_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="running", server_default="running")
+    chapter_num: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    total_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    steps: Mapped[list["RunStepRecord"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+    approvals: Mapped[list["ApprovalCheckpointRecord"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+
+
+# ------------------------------------------------------------------ #
+# RunStepRecord                                                       #
+# ------------------------------------------------------------------ #
+class RunStepRecord(Base):
+    __tablename__ = "run_steps"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    run_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("runs.id", ondelete="CASCADE"), index=True
+    )
+    step_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    agent_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    status: Mapped[str] = mapped_column(String(30), default="running", server_default="running")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    run: Mapped["RunRecord"] = relationship(back_populates="steps")
+    artifacts: Mapped[list["ArtifactRecord"]] = relationship(
+        back_populates="step", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (Index("ix_run_steps_run_step", "run_id", "step_index"),)
+
+
+# ------------------------------------------------------------------ #
+# ArtifactRecord                                                      #
+# ------------------------------------------------------------------ #
+class ArtifactRecord(Base):
+    __tablename__ = "artifacts"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    run_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("runs.id", ondelete="CASCADE"), index=True
+    )
+    step_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("run_steps.id", ondelete="CASCADE"), index=True
+    )
+    artifact_type: Mapped[str] = mapped_column(String(50), default="draft", server_default="draft")
+    agent_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    input_summary: Mapped[str] = mapped_column(Text, default="", server_default="")
+    output_content: Mapped[str] = mapped_column(Text, default="", server_default="")
+    quality_scores: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    token_in: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    token_out: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    retry_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    step: Mapped["RunStepRecord"] = relationship(back_populates="artifacts")
+
+
+# ------------------------------------------------------------------ #
+# ApprovalCheckpointRecord                                            #
+# ------------------------------------------------------------------ #
+class ApprovalCheckpointRecord(Base):
+    __tablename__ = "approval_checkpoints"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    run_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("runs.id", ondelete="CASCADE"), index=True
+    )
+    reason: Mapped[str] = mapped_column(Text, default="", server_default="")
+    context: Mapped[str] = mapped_column(Text, default="", server_default="")
+    decision: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    run: Mapped["RunRecord"] = relationship(back_populates="approvals")

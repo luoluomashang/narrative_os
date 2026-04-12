@@ -7,6 +7,28 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
 export default defineConfig({
+  optimizeDeps: {
+    entries: ['index.html', 'src/**/*.{ts,vue}'],
+    include: [
+      'vue',
+      'vue-router',
+      'pinia',
+      'axios',
+      'element-plus',
+      '@element-plus/icons-vue',
+      '@vue-flow/core',
+      '@vue-flow/background',
+      '@vue-flow/controls',
+      '@vue-flow/minimap',
+      '@vueuse/core',
+      'echarts',
+      'd3',
+      'd3-force',
+      'xterm',
+      '@xterm/addon-fit',
+      '@xterm/addon-web-links',
+    ],
+  },
   plugins: [
     vue(),
     AutoImport({
@@ -15,7 +37,6 @@ export default defineConfig({
       dts: 'src/auto-imports.d.ts',
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
       dts: 'src/components.d.ts',
     }),
   ],

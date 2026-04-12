@@ -82,7 +82,7 @@ async function runSearch() {
   }
 }
 
-function formatScore(v?: number): string {
+function formatScore(v?: number | null): string {
   if (typeof v !== 'number') return '0.00'
   return v.toFixed(2)
 }

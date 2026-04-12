@@ -101,19 +101,19 @@ async function doSearch() {
   searching.value = true
   try {
     const res = await projects.memorySearch(projectId.value, searchQ.value.slice(0, 200))
-    searchResults.value = res.data.results
+    searchResults.value = res.data.results ?? []
   } catch { searchResults.value = [] }
   finally { searching.value = false }
 }
 
-function anchorColorClass(sim?: number): string {
+function anchorColorClass(sim?: number | null): string {
   const s = sim ?? 0
   if (s >= 0.8) return 'anchor-blue'
   if (s >= 0.6) return 'anchor-cyan'
   return 'anchor-gray'
 }
 
-function anchorTime(meta: Record<string, unknown>): string {
+function anchorTime(meta?: Record<string, unknown>): string {
   const t = meta?.timestamp as string | undefined
   return t ? new Date(t).toLocaleTimeString() : ''
 }

@@ -45,6 +45,7 @@ from narrative_os.execution.llm_router import (
     router as default_router,
 )
 from narrative_os.infra.logging import logger
+from narrative_os.schemas.traces import Artifact, ArtifactType
 
 
 # ------------------------------------------------------------------ #
@@ -154,6 +155,7 @@ class PlannerAgent:
         self,
         inp: PlannerInput,
         strategy: RoutingStrategy = get_default_routing_strategy(),
+        run_context: Any | None = None,
     ) -> PlannerOutput:
         user_msg = self._build_user_message(inp)
         req = LLMRequest(
@@ -168,9 +170,30 @@ class PlannerAgent:
             agent_name="planner",
         )
         resp = await self._router.call(req)
+        if run_context is not None:
+            run_context.last_latency_ms = getattr(resp, "latency_ms", 0)
+            run_context.last_token_in = getattr(resp, "tokens_in", 0)
+            run_context.last_token_out = getattr(resp, "tokens_out", 0)
         logger.info("planner_agent_complete",
                     chapter=inp.chapter, latency_ms=resp.latency_ms)
-        return self._parse_output(resp.content, inp.chapter)
+        output = self._parse_output(resp.content, inp.chapter)
+        if run_context is not None:
+            await run_context.emit_artifact(
+                Artifact(
+                    artifact_type=ArtifactType.OUTLINE,
+                    agent_name="planner",
+                    input_summary=user_msg[:200],
+                    output_content=output.raw_llm_output or output.chapter_outline,
+                    quality_scores={
+                        "node_count": float(len(output.planned_nodes)),
+                        "dialogue_goals": float(len(output.dialogue_goals)),
+                    },
+                    token_in=run_context.last_token_in,
+                    token_out=run_context.last_token_out,
+                    latency_ms=run_context.last_latency_ms,
+                )
+            )
+        return output
 
     # ---------------------------------------------------------------- #
     # Helpers                                                           #

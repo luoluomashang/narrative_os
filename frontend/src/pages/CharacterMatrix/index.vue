@@ -166,20 +166,6 @@ async function handleProfileSave(partial: Partial<CharacterDetail>) {
   }
 }
 
-async function handleSave() {
-  if (!detail.value) return
-  saving.value = true
-  try {
-    const res = await projects.updateCharacter(projectId.value, detail.value.name, detail.value)
-    detail.value = res.data
-    ElMessage.success('保存成功')
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail?.detail ?? '保存失败')
-  } finally {
-    saving.value = false
-  }
-}
-
 async function handleDelete() {
   if (!detail.value) return
   saving.value = true

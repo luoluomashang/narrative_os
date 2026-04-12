@@ -14,6 +14,7 @@ import pytest
 from narrative_os.core.lorebook import LoreEntry, LoreEntryType, Lorebook
 from narrative_os.execution.context_builder import ChapterTarget, ContextBuilder
 from narrative_os.execution.narrative_compiler import (
+    AuthoringInputError,
     AuthoringRuntimePackage,
     ControlLayerInjection,
     InteractiveRuntimePackage,
@@ -167,6 +168,20 @@ class TestNarrativeCompilerAuthoring:
         assert "T1" in block
         assert "T2" in block
         assert "Lorebook" in block or "世界知识" in block
+
+    def test_compile_authoring_requires_published_world(self):
+        compiler = NarrativeCompiler()
+        with pytest.raises(AuthoringInputError, match="WorldState 尚未发布"):
+            compiler.compile_authoring(
+                project_id="test_proj",
+                chapter_target=_make_chapter_target(),
+                characters=[],
+                world=None,
+                previous_hook="",
+                current_volume_goal="卷一目标",
+                author_memory_anchors=[],
+                require_complete_inputs=True,
+            )
 
 
 class TestNarrativeCompilerInteractive:

@@ -7,8 +7,9 @@
       </div>
       <div class="header-actions">
         <el-button :loading="loading" @click="loadWorld">刷新</el-button>
-        <el-button type="success" :loading="finalizing" @click="finalizeWorld">完成世界设定</el-button>
         <el-button type="primary" :loading="savingMeta" @click="saveMeta">保存世界信息</el-button>
+        <el-button type="success" :loading="finalizing" @click="finalizeWorld">完成世界设定</el-button>
+        <el-button type="warning" :loading="publishing" @click="publishWorld">发布运行态</el-button>
       </div>
     </header>
 
@@ -19,6 +20,15 @@
       :closable="true"
       class="finalize-alert"
       :title="`已写入知识库：地区 ${finalizeSummary.regions} / 势力 ${finalizeSummary.factions} / 体系 ${finalizeSummary.power_systems} / 关系 ${finalizeSummary.relations}`"
+    />
+
+    <el-alert
+      v-if="publishSummary"
+      type="success"
+      show-icon
+      :closable="true"
+      class="finalize-alert"
+      :title="`RuntimeWorldState 已发布 ${publishSummary.world_version}：地区 ${publishSummary.regions} / 势力 ${publishSummary.factions} / 体系 ${publishSummary.power_systems} / 关系 ${publishSummary.relations}`"
     />
 
     <div class="sandbox-layout">
@@ -110,7 +120,7 @@
           :nodes="flowNodes"
           :edges="flowEdges"
           :node-types="nodeTypes"
-          connection-mode="loose"
+          :connection-mode="ConnectionMode.Loose"
           fit-view-on-init
           @node-click="onNodeClick"
           @edge-click="onEdgeClick"
@@ -286,6 +296,7 @@ import { computed, markRaw, nextTick, onMounted, reactive, ref, watch } from 'vu
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  ConnectionMode,
   VueFlow,
   useVueFlow,
   type Connection,
@@ -320,7 +331,6 @@ import ConsistencyPanel from './components/ConsistencyPanel.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import type { WbTheme } from './components/ThemeSwitcher.vue'
 import { useViewMode } from './composables/useViewMode'
-import type { ViewMode } from './composables/useViewMode'
 
 const route = useRoute()
 const projectId = computed(() => String(route.params.id || ''))
@@ -329,8 +339,10 @@ const loading = ref(false)
 const savingMeta = ref(false)
 const savingDetail = ref(false)
 const finalizing = ref(false)
+const publishing = ref(false)
 const error = ref('')
 const finalizeSummary = ref<{ regions: number; factions: number; power_systems: number; relations: number } | null>(null)
+const publishSummary = ref<{ world_version: string; regions: number; factions: number; power_systems: number; relations: number } | null>(null)
 
 const worldData = reactive<WorldSandboxData>({
   world_name: '',
@@ -340,6 +352,7 @@ const worldData = reactive<WorldSandboxData>({
   factions: [],
   power_systems: [],
   relations: [],
+  timeline_events: [],
   world_rules: [],
 })
 
@@ -379,7 +392,7 @@ const nodeTypes: Record<string, NodeComponent> = {
 }
 
 // View mode system
-const { activeView, saveViewState, getViewState } = useViewMode()
+const { activeView } = useViewMode()
 
 // Focus mode
 const focusNodeId = ref<string | null>(null)
@@ -729,22 +742,13 @@ function autoLayout() {
     memberRegions.forEach((r, idx) => {
       const col = idx % cols
       const row = Math.floor(idx / cols)
-      r.x = f.x + 30 + col * 120
-      r.y = f.y + 60 + row * 100
+      r.x = (f.x ?? 0) + 30 + col * 120
+      r.y = (f.y ?? 0) + 60 + row * 100
     })
   })
 
   // 布局完成后自动 FitView，确保所有节点可见（需双 tick 等待 DOM 完全更新）
   nextTick(() => nextTick(() => fitView({ padding: 0.15 })))
-}
-
-// View mode camera state save/restore
-function onViewMoveEnd(event: { flowTransform: { x: number; y: number; zoom: number } }) {
-  saveViewState(activeView.value, {
-    zoom: event.flowTransform.zoom,
-    x: event.flowTransform.x,
-    y: event.flowTransform.y,
-  })
 }
 
 // Handle node click from non-graph views
@@ -1218,6 +1222,50 @@ async function finalizeWorld() {
     finalizing.value = false
   }
 }
+
+async function publishWorld() {
+  if (!projectId.value) return
+
+  publishing.value = true
+  try {
+    const res = await world.publish(projectId.value)
+    if (res.data.status !== 'published' || !res.data.publish_report) {
+      const escapeHtml = (value: string) => value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      const errors = res.data.errors ?? []
+      const warnings = res.data.warnings ?? []
+      const lines = [
+        ...errors.map((item) => `错误：${item}`),
+        ...warnings.map((item) => `提示：${item}`),
+      ]
+      await ElMessageBox.alert(
+        lines.length > 0
+          ? lines.map((item) => escapeHtml(item)).join('<br>')
+          : '发布前校验未通过，请先完善世界设定。',
+        '运行态发布失败',
+        {
+          confirmButtonText: '知道了',
+          type: 'warning',
+          dangerouslyUseHTMLString: true,
+        },
+      )
+      return
+    }
+
+    publishSummary.value = {
+      world_version: res.data.world_version || 'unknown',
+      regions: Number(res.data.publish_report.regions_compiled || 0),
+      factions: Number(res.data.publish_report.factions_compiled || 0),
+      power_systems: Number(res.data.publish_report.power_systems_compiled || 0),
+      relations: Number(res.data.publish_report.relations_compiled || 0),
+    }
+    ElMessage.success('RuntimeWorldState 已发布')
+  } finally {
+    publishing.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -1234,6 +1282,8 @@ async function finalizeWorld() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .sandbox-title {
@@ -1249,6 +1299,8 @@ async function finalizeWorld() {
 .header-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .finalize-alert {

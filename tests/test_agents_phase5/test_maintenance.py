@@ -15,8 +15,10 @@ from narrative_os.agents.maintenance import (
 )
 from narrative_os.agents.planner import PlannerOutput
 from narrative_os.agents.writer import ChapterDraft
-from narrative_os.core.character import ArcStage, CharacterState
+from narrative_os.core.character import ArcStage, CharacterDrive, CharacterState
+from narrative_os.core.evolution import ChangeTag, get_canon_commit
 from narrative_os.core.plot import NodeType, PlotGraph
+from narrative_os.core.state import StateManager
 from narrative_os.skills.consistency import ConsistencyIssue, ConsistencyReport
 
 
@@ -203,3 +205,52 @@ class TestCompressMemory:
         out = agent.maintain(inp, memory=memory)
         assert any("记忆" in w for w in out.warnings)
         assert out.memory_summary == ""
+
+
+class TestStage5Writeback:
+    def test_creates_pending_changeset_and_persists_hook(self, agent, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        memory = MagicMock()
+        memory.write_memory.return_value = MagicMock()
+        memory.write_anchor.return_value = {
+            "chapter": 3,
+            "key_pivot": "主角完成关键突破",
+            "burning_question": "敌人下一步会如何反击",
+            "next_chapter_debt": "追查幕后真相",
+        }
+
+        character = CharacterState(
+            name="林枫",
+            drive=CharacterDrive(core_desire="变强", core_fear="失去同伴"),
+        )
+        graph = PlotGraph()
+        graph.create_event("ch3_01", type=NodeType.CONFLICT, summary="突破困局")
+        graph.create_event("ch4_01", type=NodeType.SETUP, summary="追查幕后")
+        graph.link_events("ch3_01", "ch4_01")
+
+        inp = MaintenanceInput(
+            project_id="stage5_proj",
+            chapter_draft=_make_draft(chapter=3),
+            planner_output=PlannerOutput(
+                chapter_outline="主角完成突破",
+                planned_nodes=[],
+                edge_pairs=[],
+                hook_suggestion="追查幕后",
+            ),
+            characters=[character],
+        )
+
+        out = agent.maintain(inp, plot_graph=graph, memory=memory)
+
+        assert out.changeset_id is not None
+        assert out.memory_anchor != ""
+        assert out.next_hook != ""
+        assert "ch4_01" in out.activated_nodes
+
+        state_mgr = StateManager(project_id="stage5_proj", base_dir=".narrative_state")
+        state_mgr.load_state()
+        assert state_mgr.get_last_hook(3) == out.next_hook
+
+        changesets = get_canon_commit("stage5_proj").list_changesets("stage5_proj")
+        assert changesets[-1].changes[0].tag == ChangeTag.CANON_PENDING

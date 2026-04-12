@@ -75,7 +75,7 @@ const localSystemInstructions = ref('')
 
 watch(() => props.model, (m) => {
   if (m) {
-    localMotivations.value = (m.motivations ?? []).map(mot => ({ ...mot }))
+    localMotivations.value = (m.motivations ?? []).map((mot: Motivation) => ({ ...mot }))
     localScenarioContext.value = m.scenario_context ?? ''
     localSystemInstructions.value = m.system_instructions ?? ''
   }
@@ -83,7 +83,7 @@ watch(() => props.model, (m) => {
 
 const avgTension = computed(() => {
   if (!localMotivations.value.length) return 0
-  return localMotivations.value.reduce((sum, m) => sum + m.tension, 0) / localMotivations.value.length
+  return localMotivations.value.reduce((sum, m) => sum + (m.tension ?? 0), 0) / localMotivations.value.length
 })
 
 const tensionBarColor = computed(() => tensionColor(avgTension.value))
@@ -104,7 +104,7 @@ function removeMotivation(idx: number) {
 
 function handleSave() {
   emit('save', {
-    motivations: localMotivations.value.filter(m => m.desire.trim()),
+    motivations: localMotivations.value.filter((m) => m.desire.trim()),
     scenario_context: localScenarioContext.value,
     system_instructions: localSystemInstructions.value,
   })

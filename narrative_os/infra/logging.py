@@ -56,6 +56,7 @@ class StructuredLogger:
         return self._log_dir / f"narrative_{date_str}.jsonl"
 
     def _write(self, entry: dict[str, Any]) -> None:
+        self._log_dir.mkdir(parents=True, exist_ok=True)
         with self._log_file().open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 

@@ -229,6 +229,9 @@ class CanonCommit:
                 if sandbox is not None:
                     _apply_to_sandbox(c, sandbox)
 
+        if committed:
+            self._persist_committed_changes(cs.project_id, committed)
+
         return committed
 
     def commit_session(
@@ -260,10 +263,10 @@ class CanonCommit:
             # 仅归档，不提升变更 tag
             pass
         elif mode == SessionCommitMode.DRAFT_CHAPTER:
-            # 推进到 DRAFT，人工审批后才能进正史
+            # 阶段五：章节草稿也统一进入 CANON_PENDING，等待审批后回流主线
             for c in cs.changes:
-                if c.tag == ChangeTag.RUNTIME_ONLY:
-                    c.tag = ChangeTag.DRAFT
+                if c.tag in (ChangeTag.RUNTIME_ONLY, ChangeTag.DRAFT):
+                    c.tag = ChangeTag.CANON_PENDING
         elif mode == SessionCommitMode.CANON_CHAPTER:
             # 推进到 CANON_PENDING，但需要二次确认才执行 commit
             for c in cs.changes:
@@ -272,6 +275,22 @@ class CanonCommit:
                 cs.canon_confirmed = True
 
         return cs
+
+    def _persist_committed_changes(
+        self,
+        project_id: str,
+        changes: list[WorldChange],
+    ) -> None:
+        try:
+            from narrative_os.core.world_repository import get_world_repository
+
+            repo = get_world_repository()
+            world = repo.get_world_state(project_id)
+            for change in changes:
+                _apply_to_world_state(change, world)
+            repo.save_runtime_world_state(project_id, world)
+        except Exception:
+            return
 
 
 # ------------------------------------------------------------------ #
@@ -298,6 +317,32 @@ def _apply_to_sandbox(change: WorldChange, sandbox: "WorldSandboxData") -> None:
             sandbox.timeline_events.append(ev)
         except Exception:
             pass
+
+
+def _apply_to_world_state(change: WorldChange, world: Any) -> None:
+    """将单条 WorldChange 应用到 WorldState。"""
+    ct = change.change_type
+
+    if ct == "rule_addition":
+        rule_text = change.after_value.get("rule", change.description)
+        if rule_text:
+            world.add_world_rule(rule_text)
+        return
+
+    if ct == "timeline_event":
+        description = change.after_value.get("event", change.description)
+        world.advance_timeline(change.chapter or 0, event=description)
+        return
+
+    if ct == "faction_relation":
+        source_id = change.after_value.get("source_faction")
+        target_id = change.after_value.get("target_faction")
+        value = change.after_value.get("relation")
+        if source_id in getattr(world, "factions", {}) and target_id:
+            try:
+                world.factions[source_id].update_hostility(target_id, float(value))
+            except Exception:
+                pass
 
 
 # ------------------------------------------------------------------ #

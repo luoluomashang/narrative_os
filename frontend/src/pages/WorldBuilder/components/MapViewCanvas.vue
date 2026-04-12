@@ -82,7 +82,7 @@ interface RegionData {
 interface FactionData {
   id: string
   name: string
-  color: string | null
+  color?: string | null
   territory_region_ids: string[]
 }
 

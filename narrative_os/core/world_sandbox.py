@@ -11,7 +11,7 @@ import uuid
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
@@ -176,6 +176,8 @@ class TimelineSandboxEvent(BaseModel):
 
 class WorldSandboxData(BaseModel):
     """世界观沙盘完整数据（存储于 world_sandboxes 表的 sandbox_json 字段）"""
+    model_config = ConfigDict(validate_assignment=True)
+
     world_name: str = ""
     world_type: WorldType = WorldType.CONTINENTAL
     world_description: str = ""
@@ -190,6 +192,8 @@ class WorldSandboxData(BaseModel):
 
 class ConceptData(BaseModel):
     """故事概念数据（存储于 story_concepts 表的 concept_json 字段）"""
+    model_config = ConfigDict(validate_assignment=True)
+
     one_sentence: str = ""
     one_paragraph: str = ""
     genre_tags: list[str] = Field(default_factory=list)

@@ -266,6 +266,49 @@ class PlotGraph:
         """返回所有 pending 状态的节点（待执行）。"""
         return [n for n in self._nodes.values() if n.status == NodeStatus.PENDING]
 
+    def get_current_volume_goal(self, project_id: str | None = None) -> str:
+        """返回当前卷的主目标摘要。"""
+        del project_id  # 保留阶段五约定签名
+
+        active_nodes = [
+            node for node in self._nodes.values() if node.status == NodeStatus.ACTIVE
+        ]
+        if active_nodes:
+            return "；".join(node.summary for node in active_nodes[:3] if node.summary)
+
+        pending_nodes = self.get_pending_events()
+        pending_nodes.sort(
+            key=lambda node: (
+                node.chapter_ref if node.chapter_ref is not None else 10**9,
+                -node.tension,
+            )
+        )
+        if pending_nodes:
+            return pending_nodes[0].summary
+
+        curve = self.get_tension_curve()
+        if curve:
+            peak_node_id = max(curve, key=lambda item: item[1])[0]
+            peak_node = self._nodes.get(peak_node_id)
+            if peak_node is not None:
+                return peak_node.summary
+
+        return ""
+
+    def activate_next_nodes(self, completed_node_ids: list[str]) -> list[str]:
+        """将已完成节点的直接后继激活。"""
+        activated: list[str] = []
+        for node_id in completed_node_ids:
+            if node_id not in self._graph:
+                continue
+            for next_id in self._graph.successors(node_id):
+                next_node = self._nodes.get(next_id)
+                if next_node is None or next_node.status != NodeStatus.PENDING:
+                    continue
+                self.update_event_status(next_id, NodeStatus.ACTIVE)
+                activated.append(next_id)
+        return activated
+
     def get_tension_curve(self) -> list[tuple[str, float]]:
         """
         返回所有节点按拓扑排序的 (node_id, tension) 序列。

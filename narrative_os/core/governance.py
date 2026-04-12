@@ -494,7 +494,7 @@ class RunContext:
                     quality_scores=json.dumps(artifact.quality_scores, ensure_ascii=False),
                     token_in=artifact.token_in,
                     token_out=artifact.token_out,
-                    latency_ms=artifact.latency_ms,
+                    latency_ms=int(round(artifact.latency_ms)),
                     retry_count=artifact.retry_count,
                     retry_reason=artifact.retry_reason,
                 )

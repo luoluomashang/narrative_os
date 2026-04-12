@@ -119,8 +119,10 @@
               <span>强制生成（忽略 warning 类前置检查）</span>
             </label>
             <div class="action-row">
-              <button class="ghost-btn" :disabled="generating" @click="planOnly">仅规划</button>
-              <button class="primary-btn" :disabled="generating" @click="generate">
+              <button class="ghost-btn" :disabled="busy" @click="planOnly">
+                {{ planning ? '规划中…' : '仅规划' }}
+              </button>
+              <button class="primary-btn" :disabled="busy" @click="generate">
                 {{ generating ? '生成中…' : '开始生成' }}
               </button>
             </div>
@@ -219,6 +221,7 @@ const wordCountTarget = ref(2000)
 const targetSummary = ref('')
 const forceGenerate = ref(false)
 const generating = ref(false)
+const planning = ref(false)
 const generatedText = ref('')
 const errorMessage = ref('')
 const currentRunId = ref('')
@@ -245,7 +248,10 @@ const writingContext = ref<WritingContextPayload>({
 
 let pollTimer: number | null = null
 
+const busy = computed(() => generating.value || planning.value)
+
 const runStatusLabel = computed(() => {
+  if (runStatus.value === 'planning') return '规划中'
   if (runStatus.value === 'running') return '运行中'
   if (runStatus.value === 'completed') return '已完成'
   if (runStatus.value === 'failed') return '失败'
@@ -395,6 +401,9 @@ async function generate() {
 
 async function planOnly() {
   errorMessage.value = ''
+  generatedText.value = '规划中…'
+  planning.value = true
+  runStatus.value = 'planning'
   try {
     const response = await chapters.plan({
       chapter: currentChapter.value,
@@ -405,9 +414,14 @@ async function planOnly() {
       project_id: projectId.value,
     })
     generatedText.value = JSON.stringify(response.data, null, 2)
+    runStatus.value = 'completed'
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string } }; message?: string }
     errorMessage.value = err.response?.data?.detail ?? err.message ?? '章节规划失败'
+    generatedText.value = ''
+    runStatus.value = 'failed'
+  } finally {
+    planning.value = false
   }
 }
 

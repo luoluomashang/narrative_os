@@ -34,6 +34,10 @@ export const projects = {
     client.get(`/projects/${id}/changesets`),
   plot: (id: string) =>
     client.get<PlotGraphData>(`/projects/${id}/plot`),
+  updatePlotVolumeGoal: (id: string, currentVolumeGoal: string) =>
+    client.put<PlotGraphData>(`/projects/${id}/plot/volume-goal`, {
+      current_volume_goal: currentVolumeGoal,
+    }),
   characters: (id: string) =>
     client.get<CharacterSummary[]>(`/projects/${id}/characters`),
   character: (id: string, name: string) =>

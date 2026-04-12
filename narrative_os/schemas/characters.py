@@ -45,6 +45,11 @@ class PlotEdge(BaseModel):
 class PlotGraphData(BaseModel):
     nodes: list[PlotNode] = Field(default_factory=list)
     edges: list[PlotEdge] = Field(default_factory=list)
+    current_volume_goal: str = ""
+
+
+class PlotVolumeGoalUpdateRequest(BaseModel):
+    current_volume_goal: str = Field(min_length=1)
 
 
 class CharacterCreateRequest(BaseModel):

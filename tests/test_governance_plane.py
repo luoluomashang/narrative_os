@@ -21,6 +21,7 @@ from narrative_os.core.governance import (
     create_run_context,
     get_governance_plane,
 )
+from narrative_os.schemas.traces import Artifact, ArtifactType
 
 
 # ------------------------------------------------------------------ #
@@ -275,6 +276,26 @@ class TestRunContext:
         artifacts = ctx.get_artifacts()
         assert len(artifacts) == 1
         assert artifacts[0]["type"] == "draft"
+
+    def test_emit_artifact_accepts_fractional_latency(self):
+        """Artifact 应接受浮点毫秒延迟，避免真实运行时因校验失败中断。"""
+        ctx = create_run_context("proj-artifact-latency")
+
+        _run(
+            ctx.emit_artifact(
+                Artifact(
+                    artifact_type=ArtifactType.DRAFT,
+                    agent_name="writer",
+                    input_summary="测试输入",
+                    output_content="测试输出",
+                    latency_ms=24541.8436,
+                )
+            )
+        )
+
+        artifacts = ctx.get_artifacts()
+        assert len(artifacts) == 1
+        assert artifacts[0]["latency_ms"] == pytest.approx(24541.8436)
 
     def test_trigger_hook(self):
         """ctx.trigger() 委托到 plane.run_hooks()。"""

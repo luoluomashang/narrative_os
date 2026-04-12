@@ -40,6 +40,10 @@
     </section>
 
     <!-- 结果区 -->
+    <section v-if="error" class="cc-section">
+      <div class="result-banner banner-fail">{{ error }}</div>
+    </section>
+
     <section v-if="result" class="cc-section">
       <!-- 通过/失败横幅 -->
       <div class="result-banner" :class="result.passed ? 'banner-pass' : 'banner-fail'">
@@ -81,6 +85,7 @@ const chapter = ref(0)
 const text = ref('')
 const checking = ref(false)
 const result = ref<CheckChapterResponse | null>(null)
+const error = ref('')
 
 function severityLabel(s: string): string {
   return { hard: '🔴 严重', soft: '🟡 警告', info: '🔵 提示' }[s] ?? s
@@ -99,11 +104,13 @@ async function runCheck() {
   if (!text.value.trim()) return
   checking.value = true
   result.value = null
+  error.value = ''
   try {
     const res = await chapters.check(text.value, projectId.value, chapter.value)
     result.value = res.data
   } catch {
-    result.value = { issues: [], passed: true }
+    result.value = null
+    error.value = '一致性检查失败，请检查服务状态后重试。'
   } finally {
     checking.value = false
   }
@@ -112,6 +119,7 @@ async function runCheck() {
 function clearAll() {
   text.value = ''
   result.value = null
+  error.value = ''
 }
 </script>
 

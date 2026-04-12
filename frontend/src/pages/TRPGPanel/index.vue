@@ -371,14 +371,40 @@ function pushToast(type: ToastItem['type'], message: string, duration = 4000) {
 let ws: WebSocket | null = null
 let wsRetries = 0
 const maxWsRetries = 3
+let wsReconnectTimer: number | null = null
+let wsOpenedAt = 0
+let shouldReconnectWs = false
+
+function resolveBackendWsUrl(sessionId: string) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  if (import.meta.env.DEV) {
+    const apiPort = String(import.meta.env.VITE_API_PORT || '8000')
+    return `${proto}://${location.hostname}:${apiPort}/ws/sessions/${sessionId}`
+  }
+  return `${proto}://${location.host}/ws/sessions/${sessionId}`
+}
+
+function disconnectWs(manual = true) {
+  if (manual) shouldReconnectWs = false
+  if (wsReconnectTimer !== null) {
+    window.clearTimeout(wsReconnectTimer)
+    wsReconnectTimer = null
+  }
+  if (ws) {
+    const activeWs = ws
+    ws = null
+    activeWs.close()
+  }
+}
 
 function connectWs() {
   if (!store.sessionId) return
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const url = `${proto}://${location.host}/ws/sessions/${store.sessionId}`
+  disconnectWs(false)
+  shouldReconnectWs = true
+  const url = resolveBackendWsUrl(store.sessionId)
   ws = new WebSocket(url)
 
-  ws.onopen = () => { wsRetries = 0 }
+  ws.onopen = () => { wsOpenedAt = Date.now() }
 
   ws.onmessage = (ev) => {
     try {
@@ -425,22 +451,34 @@ function connectWs() {
       } else if (msg.type === 'session_end') {
         store.summary = (msg.summary as typeof store.summary) ?? null
         store.phase = 'ENDED'
-        ws?.close()
+        disconnectWs()
       }
     } catch { /* ignore malformed */ }
   }
 
   ws.onclose = () => {
-    if (store.phase === 'ENDED') return
-    if (wsRetries < maxWsRetries) {
-      const delay = Math.min(1000 * 2 ** wsRetries, 8000)
-      wsRetries++
-      setTimeout(connectWs, delay)
+    ws = null
+    if (!shouldReconnectWs || store.phase === 'ENDED') return
+    const connectionLifetime = wsOpenedAt ? Date.now() - wsOpenedAt : 0
+    if (connectionLifetime > 1500) {
+      wsRetries = 0
     }
+    if (wsRetries >= maxWsRetries) {
+      shouldReconnectWs = false
+      pushToast('warning', 'TRPG 实时流连接已断开，已切换为非流式交互。')
+      return
+    }
+    const delay = Math.min(1000 * 2 ** wsRetries, 8000)
+    wsRetries++
+    wsReconnectTimer = window.setTimeout(() => {
+      wsReconnectTimer = null
+      connectWs()
+    }, delay)
   }
 }
 
 async function startSession() {
+  disconnectWs()
   await store.createSession({ project_id: projectId.value })
   if (store.sessionId) {
     narrativeText.value = ''
@@ -450,33 +488,36 @@ async function startSession() {
   }
 }
 
-async function sendAction() {
-  const text = inputText.value.trim()
+async function submitAction(rawText: string) {
+  const text = rawText.trim()
   if (!text || store.loading) return
   inputText.value = ''
   await store.sendStep(text)
   scrollHistory()
 }
 
-function selectOption(opt: string) {
-  inputText.value = opt
-  sendAction()
+async function sendAction() {
+  await submitAction(inputText.value)
 }
 
-function handleOptionClick(opt: string, idx: number) {
+async function selectOption(opt: string) {
+  await submitAction(opt)
+}
+
+async function handleOptionClick(opt: string, idx: number) {
   const risk = latestRiskLevels.value[idx] ?? 'safe'
   if (risk === 'dangerous') {
     dangerConfirm.value = { opt, idx }
   } else {
-    selectOption(opt)
+    await selectOption(opt)
   }
 }
 
-function confirmDangerous() {
+async function confirmDangerous() {
   if (dangerConfirm.value) {
     const opt = dangerConfirm.value.opt
     dangerConfirm.value = null
-    selectOption(opt)
+    await selectOption(opt)
   }
 }
 
@@ -620,12 +661,40 @@ const tempClass = computed(() => {
   return 'temp-neutral'
 })
 
+function extractDecisionOptions(content: string) {
+  const normalized = content.replace(/\r/g, ' ').replace(/\n+/g, ' ')
+  const options: string[] = []
+  const optionPattern = /(?:\*\*)?\[选项\s*[A-Z]\](?:\*\*)?\s*[：:]\s*([\s\S]*?)(?=(?:\*\*)?\[选项\s*[A-Z]\](?:\*\*)?\s*[：:]|$)/g
+
+  let match: RegExpExecArray | null = null
+  while ((match = optionPattern.exec(normalized)) !== null) {
+    const optionText = match[1]
+      .replace(/\*\*/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[。；;，,\s]+$/g, '')
+      .trim()
+    if (optionText) {
+      options.push(optionText)
+    }
+  }
+
+  return options
+}
+
 // Latest DM options
 const latestOptions = computed(() => {
   for (let i = store.history.length - 1; i >= 0; i--) {
     const r = store.history[i] as Record<string, unknown>
-    if (!r.rolled_back && r.has_decision && (r.decision_options as unknown[])?.length) {
+    if (r.rolled_back) continue
+    if (r.has_decision && (r.decision_options as unknown[])?.length) {
       return r.decision_options as string[]
+    }
+    if (typeof r.content === 'string') {
+      const parsedOptions = extractDecisionOptions(r.content)
+      if (parsedOptions.length) {
+        return parsedOptions
+      }
     }
   }
   return []
@@ -665,10 +734,7 @@ const banguiButtons = [
 ]
 
 onUnmounted(() => {
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  disconnectWs()
 })
 </script>
 

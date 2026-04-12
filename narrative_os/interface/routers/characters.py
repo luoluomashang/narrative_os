@@ -15,6 +15,7 @@ from narrative_os.schemas.characters import (
     CharacterSummary,
     DeleteCharacterResponse,
     PlotGraphData,
+    PlotVolumeGoalUpdateRequest,
     RelationshipProfile,
     TestVoiceRequest,
     TestVoiceResponse,
@@ -26,6 +27,23 @@ router = APIRouter(tags=["characters"])
 
 def _svc() -> ProjectService:
     return get_project_service()
+
+
+def _plot_graph_response(plot_graph: Any, project_id: str) -> PlotGraphData:
+    payload = plot_graph.to_dict()
+    edges = [
+        {
+            **edge,
+            "source": edge.get("source") or edge.get("from_id"),
+            "target": edge.get("target") or edge.get("to_id"),
+        }
+        for edge in payload.get("edges", [])
+    ]
+    return PlotGraphData(
+        nodes=payload.get("nodes", []),
+        edges=edges,
+        current_volume_goal=plot_graph.get_current_volume_goal(project_id),
+    )
 
 
 # ------------------------------------------------------------------ #
@@ -47,10 +65,59 @@ async def get_project_plot(
         plot_data = kb.get("plot_graph")
         if plot_data and isinstance(plot_data, dict):
             try:
-                return PlotGraph.from_dict(plot_data).to_dict()
+                plot_graph = PlotGraph.from_dict(plot_data)
+                return _plot_graph_response(plot_graph, project_id)
             except Exception:
                 pass
-    return PlotGraph().to_dict()
+    return PlotGraphData(**PlotGraph().to_dict(), current_volume_goal="")
+
+
+@router.put("/projects/{project_id}/plot/volume-goal", response_model=PlotGraphData, summary="更新当前卷目标")
+async def update_project_plot_volume_goal(
+    project_id: str,
+    req: PlotVolumeGoalUpdateRequest,
+    svc: ProjectService = Depends(_svc),
+) -> PlotGraphData:
+    import sys
+    from narrative_os.core.plot import NodeStatus, NodeType, PlotGraph
+
+    _api = sys.modules.get("narrative_os.interface.api")
+    _try = getattr(_api, "_try_load_project", None) if _api else None
+    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
+    if mgr is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"detail": f"项目 '{project_id}' 不存在。", "code": "NOT_FOUND"},
+        )
+
+    kb = mgr.load_kb() or {}
+    plot_data = kb.get("plot_graph") if isinstance(kb, dict) else None
+    plot_graph = PlotGraph.from_dict(plot_data) if isinstance(plot_data, dict) and plot_data else PlotGraph()
+    plot_payload = plot_graph.to_dict()
+    nodes = plot_payload.setdefault("nodes", [])
+    current_goal = req.current_volume_goal.strip()
+
+    if nodes:
+        target_node = next((node for node in nodes if node.get("status") == NodeStatus.ACTIVE.value), nodes[0])
+        target_node["summary"] = current_goal
+        target_node["status"] = NodeStatus.ACTIVE.value
+        target_node.setdefault("type", NodeType.SETUP.value)
+        target_node.setdefault("tension", 0.5)
+        target_node.setdefault("chapter_ref", 1)
+    else:
+        nodes.append({
+            "id": "volume-goal-1",
+            "type": NodeType.SETUP.value,
+            "summary": current_goal,
+            "tension": 0.5,
+            "status": NodeStatus.ACTIVE.value,
+            "chapter_ref": 1,
+        })
+
+    updated_graph = PlotGraph.from_dict(plot_payload)
+    kb["plot_graph"] = updated_graph.to_dict()
+    mgr.save_kb(kb)
+    return _plot_graph_response(updated_graph, project_id)
 
 
 @router.get("/projects/{project_id}/characters", response_model=list[CharacterSummary], summary="角色列表摘要")

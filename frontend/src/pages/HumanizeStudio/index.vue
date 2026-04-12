@@ -21,6 +21,8 @@
       </div>
     </div>
 
+    <div v-if="error" class="hs-error">{{ error }}</div>
+
     <!-- 双栏文本区 -->
     <div class="hs-columns">
       <div class="hs-col">
@@ -76,6 +78,7 @@ const intensity = ref(0.5)
 const processing = ref(false)
 const result = ref<HumanizeResponse | null>(null)
 const elapsed = ref(0)
+const error = ref('')
 
 const intensityHint = computed(() => {
   if (intensity.value < 0.3) return '轻度润色'
@@ -92,6 +95,7 @@ async function runHumanize() {
   processing.value = true
   result.value = null
   elapsed.value = 0
+  error.value = ''
   const t0 = Date.now()
   try {
     const res = await chapters.humanize(originalText.value, intensity.value)
@@ -99,6 +103,7 @@ async function runHumanize() {
     elapsed.value = Date.now() - t0
   } catch {
     result.value = null
+    error.value = '润色失败，请稍后重试。'
   } finally {
     processing.value = false
   }
@@ -108,6 +113,7 @@ function clearAll() {
   originalText.value = ''
   result.value = null
   elapsed.value = 0
+  error.value = ''
 }
 </script>
 
@@ -128,6 +134,14 @@ function clearAll() {
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
+}
+.hs-error {
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: rgba(245, 108, 108, 0.15);
+  color: #f56c6c;
+  border: 1px solid rgba(245, 108, 108, 0.3);
+  font-size: 14px;
 }
 .intensity-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--color-text-secondary); }
 .intensity-val { color: var(--color-accent); font-weight: 600; }

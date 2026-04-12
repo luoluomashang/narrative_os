@@ -41,7 +41,7 @@ class Artifact(BaseModel):
     quality_scores: dict[str, float] = Field(default_factory=dict)
     token_in: int = 0
     token_out: int = 0
-    latency_ms: int = 0
+    latency_ms: float = 0.0
     retry_count: int = 0
     retry_reason: str | None = None
 

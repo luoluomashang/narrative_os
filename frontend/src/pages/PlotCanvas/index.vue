@@ -30,6 +30,21 @@
 
       <aside class="right-panel">
         <NCard>
+          <h3>当前卷目标</h3>
+          <textarea
+            v-model="volumeGoalDraft"
+            class="goal-input"
+            placeholder="输入当前卷的核心推进目标，保存后首页和章节撰写前检会同步更新。"
+            rows="5"
+          />
+          <div class="goal-actions">
+            <NButton :disabled="savingGoal || !volumeGoalDraft.trim()" @click="saveVolumeGoal">
+              {{ savingGoal ? '保存中…' : '保存卷目标' }}
+            </NButton>
+          </div>
+          <p class="goal-help">没有完整 PlotGraph 时，会自动创建一个激活节点作为当前卷目标。</p>
+        </NCard>
+        <NCard>
           <h3>全局张力曲线</h3>
           <div ref="chartEl" class="tension-chart"></div>
         </NCard>
@@ -67,16 +82,18 @@ import NSlider from '@/components/common/NSlider.vue'
 import NBreathingLight from '@/components/common/NBreathingLight.vue'
 import NarrativeNode from './NarrativeNode.vue'
 import { projects } from '@/api/projects'
-import type { PlotNode, PlotEdge } from '@/types/api'
+import type { PlotNode, PlotEdge, PlotGraphData } from '@/types/api'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.id as string) || 'default')
 const loading = ref(false)
+const savingGoal = ref(false)
 const error = ref<string | null>(null)
 const nodes = ref<Node[]>([])
 const edges = ref<Edge[]>([])
 const selectedNode = ref<Node | null>(null)
 const localTension = ref(5)
+const volumeGoalDraft = ref('')
 const chartEl = ref<HTMLElement | null>(null)
 let chart: echarts.ECharts | null = null
 
@@ -94,7 +111,7 @@ function mapNode(n: PlotNode, idx: number): Node {
     type: 'narrative',
     position: { x: (idx % 4) * 280, y: Math.floor(idx / 4) * 180 },
     data: {
-      label: (n as Record<string, unknown>).title ?? n.id,
+      label: (n as Record<string, unknown>).title ?? (n as Record<string, unknown>).summary ?? n.id,
       status: n.status,
       tension: n.tension,
       borderColor: STATUS_COLORS[n.status] ?? '#2d2f3a',
@@ -103,7 +120,9 @@ function mapNode(n: PlotNode, idx: number): Node {
 }
 
 function mapEdge(e: PlotEdge, idx: number): Edge {
-  return { id: `e-${idx}`, source: e.source, target: e.target, style: { stroke: '#555' } }
+  const source = (e as PlotEdge & { from_id?: string }).source ?? (e as PlotEdge & { from_id?: string }).from_id
+  const target = (e as PlotEdge & { to_id?: string }).target ?? (e as PlotEdge & { to_id?: string }).to_id
+  return { id: `e-${idx}`, source, target, style: { stroke: '#555' } }
 }
 
 async function loadPlot() {
@@ -115,8 +134,10 @@ async function loadPlot() {
     const plotEdges = res.data.edges ?? []
     nodes.value = plotNodes.map(mapNode)
     edges.value = plotEdges.map(mapEdge)
+    volumeGoalDraft.value = (res.data as PlotGraphData & { current_volume_goal?: string }).current_volume_goal ?? ''
     await nextTick()
     renderChart(plotNodes.map((n) => n.tension))
+    labelFlowControls()
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : '请求失败'
   } finally {
@@ -124,8 +145,42 @@ async function loadPlot() {
   }
 }
 
+async function saveVolumeGoal() {
+  const nextGoal = volumeGoalDraft.value.trim()
+  if (!nextGoal) return
+  savingGoal.value = true
+  error.value = null
+  try {
+    const res = await projects.updatePlotVolumeGoal(projectId.value as string, nextGoal)
+    const plotNodes = res.data.nodes ?? []
+    const plotEdges = res.data.edges ?? []
+    nodes.value = plotNodes.map(mapNode)
+    edges.value = plotEdges.map(mapEdge)
+    volumeGoalDraft.value = (res.data as PlotGraphData & { current_volume_goal?: string }).current_volume_goal ?? nextGoal
+    await nextTick()
+    renderChart(plotNodes.map((n) => n.tension))
+    labelFlowControls()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : '保存卷目标失败'
+  } finally {
+    savingGoal.value = false
+  }
+}
+
+function labelFlowControls() {
+  window.requestAnimationFrame(() => {
+    const labels = ['放大', '缩小', '适应视图', '切换交互']
+    document.querySelectorAll<HTMLButtonElement>('.vue-flow__controls button').forEach((button, index) => {
+      const label = labels[index] ?? '画布控制'
+      button.setAttribute('title', label)
+      button.setAttribute('aria-label', label)
+    })
+  })
+}
+
 function renderChart(tensions: number[]) {
   if (!chartEl.value) return
+  chart?.dispose()
   chart = echarts.init(chartEl.value, 'dark')
   chart.setOption({
     backgroundColor: 'transparent',
@@ -155,6 +210,19 @@ onMounted(loadPlot)
 }
 .right-panel { width: 260px; flex-shrink: 0; overflow-y: auto; }
 .tension-chart { height: 120px; width: 100%; }
+.goal-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 108px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-btn);
+  border: 1px solid var(--color-surface-l2);
+  background: var(--color-base);
+  color: var(--color-text-primary);
+}
+.goal-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
+.goal-help { margin-top: 10px; font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
 .loading-overlay, .empty-state {
   position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; gap: 8px; color: var(--color-text-secondary);

@@ -70,6 +70,7 @@ def test_get_plot_returns_nodes_and_edges(client):
     body = resp.json()
     assert "nodes" in body
     assert "edges" in body
+    assert body["current_volume_goal"] == ""
 
 
 def test_get_plot_empty_on_missing_project(client):
@@ -80,6 +81,46 @@ def test_get_plot_empty_on_missing_project(client):
     body = resp.json()
     assert "nodes" in body
     assert "edges" in body
+    assert body["current_volume_goal"] == ""
+
+
+def test_update_plot_volume_goal_creates_active_node(client):
+    """PUT /projects/{id}/plot/volume-goal 在空图时创建一个激活节点并回写 KB。"""
+    mgr = _mock_mgr(kb={})
+    with patch("narrative_os.interface.api.StateManager", return_value=mgr):
+        resp = client.put("/projects/p1/plot/volume-goal", json={"current_volume_goal": "卷一：找到黑石镇的入口"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["current_volume_goal"] == "卷一：找到黑石镇的入口"
+    assert body["nodes"][0]["summary"] == "卷一：找到黑石镇的入口"
+    saved_kb = mgr.save_kb.call_args.args[0]
+    assert saved_kb["plot_graph"]["nodes"][0]["status"] == "active"
+
+
+def test_update_plot_volume_goal_updates_existing_active_node(client):
+    """已有 PlotGraph 时优先更新当前 active 节点摘要。"""
+    kb = {
+        "plot_graph": {
+            "nodes": [
+                {
+                    "id": "goal-1",
+                    "type": "setup",
+                    "summary": "旧目标",
+                    "tension": 0.5,
+                    "status": "active",
+                    "chapter_ref": 1,
+                }
+            ],
+            "edges": [],
+        }
+    }
+    mgr = _mock_mgr(kb=kb)
+    with patch("narrative_os.interface.api.StateManager", return_value=mgr):
+        resp = client.put("/projects/p1/plot/volume-goal", json={"current_volume_goal": "卷一：穿过荒原进入黑石镇"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["current_volume_goal"] == "卷一：穿过荒原进入黑石镇"
+    assert body["nodes"][0]["summary"] == "卷一：穿过荒原进入黑石镇"
 
 
 # ------------------------------------------------------------------ #

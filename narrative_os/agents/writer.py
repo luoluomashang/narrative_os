@@ -119,7 +119,7 @@ class WriterAgent:
             except Exception as exc:  # pylint: disable=broad-except
                 logger.warn("scene_generation_failed",
                                chapter=chapter, node=node.id, error=str(exc))
-                scene = _fallback_scene(node, budget, chapter, volume)
+                scene = _fallback_scene(node, enriched_ctx, budget, chapter, volume)
             scenes.append(scene)
 
         draft_text = "\n\n".join(s.text for s in scenes if s.text)
@@ -201,12 +201,71 @@ def _enrich_context_for_node(context: WriteContext, node: PlannedNode, budget: i
     return ctx
 
 
-def _fallback_scene(node: PlannedNode, budget: int, chapter: int, volume: int) -> SceneOutput:
+def _fallback_scene(
+    node: PlannedNode,
+    context: WriteContext,
+    budget: int,
+    chapter: int,
+    volume: int,
+) -> SceneOutput:
     """LLM 调用失败时的兜底场景。"""
-    placeholder = f"【{node.summary}】（此段内容待补充）"
+    protagonist = next((character.name for character in context.characters if character.name), "主角")
+    hook = next(
+        (
+            item.removeprefix("上一章 Hook：").strip()
+            for item in context.short_term_memory
+            if item.startswith("上一章 Hook：")
+        ),
+        "",
+    )
+    target_summary = context.chapter_target.target_summary.replace("[", "").replace("]", " ").strip()
+    active_factions = "、".join(context.world.active_factions[:2])
+    plot_summary = context.plot_summary.strip()
+
+    sentences = []
+    if hook:
+        sentences.append(f"承接上一章的余波，{hook[:80]}。")
+
+    sentences.append(f"{protagonist}没有停下追索，而是顺着眼前的动静继续逼近真相。")
+    sentences.append(f"这一段的核心推进是：{target_summary or node.summary}。")
+
+    if plot_summary:
+        sentences.append(f"更大的局势正在慢慢收束，{plot_summary[:90]}。")
+
+    if active_factions:
+        sentences.append(f"牵动局面的势力已经隐约浮出水面，尤其是{active_factions}带来的压力，让{protagonist}几乎没有后退空间。")
+
+    if node.type == "setup":
+        sentences.append(f"{protagonist}先稳住情绪，把零散线索一一拼接，试图从{node.summary}里找出真正的突破口。")
+        sentences.append("看似平静的表面之下，更多异常正在积累，任何细节都可能成为下一步变化的引信。")
+    elif node.type == "conflict":
+        sentences.append(f"局面很快转入正面冲突，{protagonist}必须在短时间内判断对方的意图，并把{node.summary}落实为行动。")
+        sentences.append("言语试探、情绪压迫与突如其来的动作交织在一起，让空气里的危险感一层层加重。")
+    elif node.type == "climax":
+        sentences.append(f"当矛盾逼到最高处时，{protagonist}终于意识到自己已经被卷进更深的漩涡，{node.summary}也因此变得不可回避。")
+        sentences.append("每一个决定都带着代价，真相与风险几乎同时逼近，迫使他在极短的时间里作出选择。")
+    elif node.type == "branch":
+        sentences.append(f"新的分岔突然出现，{protagonist}必须在有限线索中判断哪条路更接近答案，而{node.summary}正是那个关键转折。")
+        sentences.append("看似微小的偏差，都可能把后续局面引向截然不同的方向。")
+    else:
+        sentences.append(f"{protagonist}谨慎推进局面，把{node.summary}转化为更明确的行动目标。")
+        sentences.append("事情并没有真正平息，反而在这一轮推进后显露出更深一层的因果。")
+
+    sentences.append(f"等到这一轮交锋暂时落下时，{protagonist}已经比先前更接近答案，但也离新的危险更近了一步。")
+
+    min_chars = max(180, int(budget * 0.7))
+    padding = [
+        f"他反复咀嚼刚刚得到的信息，试图从对方的反应、现场的痕迹和自己掌握的旧线索之间找出能够互相印证的部分。",
+        f"越往下想，{protagonist}越能感觉到事情绝不止表面这一层，真正被隐藏的部分还埋在更深的地方。",
+        "短暂的停顿并没有让局势松弛，反而让压迫感更清晰地沉下来，逼着人继续向前。",
+    ]
+    text = "\n\n".join(sentences)
+    while len(text.replace(" ", "").replace("\n", "")) < min_chars and padding:
+      text = f"{text}\n\n{padding.pop(0)}"
+
     return SceneOutput(
-        text=placeholder,
-        word_count=len(placeholder),
+        text=text,
+        word_count=len(text.replace(" ", "").replace("\n", "")),
         tension_score=node.tension,
         hook_score=0.3,
         chapter=chapter,

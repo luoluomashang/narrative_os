@@ -22,6 +22,9 @@
 - 世界构建页补充显式“发布运行态”按钮，发布后项目首页与 Writing Workbench 会立即反映 `WorldState` 状态
 - 项目首页 `Concept` 状态改为读取持久化概念数据，避免已保存概念仍显示“待补全概念”
 - Writing Workbench 的 `地区 Top 5` 改为显示地区名称，不再暴露运行态 UUID
+- Plot 画布新增“当前卷目标”编辑入口，可直接回写 `PlotGraph` 并同步解除 Writing Workbench 的卷目标前置检查
+- TRPG 首回合会稳定渲染可点击选项按钮，选项点击改为直接提交 action，避免按钮失效或卡死
+- `Writing Workbench` 的“仅规划”补齐忙碌态与结果占位，规划期间不再表现为无响应
 
 ## v2.1.0 废弃与清理
 
@@ -86,6 +89,7 @@
 - 会话创建、行动推进、帮回、回滚、结束摘要
 - WebSocket 流式叙事
 - 密度模式：dense / normal / sparse
+- 首回合开场直接提供可点击决策按钮；若后端返回文本选项，前端会自动兜底解析并展示
 - **四档控制模式**：`user_driven / semi_agent / directed / director`，动态切换
 - **SL 系统（存/读档）**：`SaveStore.create()` 手动存档 + `SoftRollback.restore()` 软回退，保留 memory_summary 防止完全失忆
 - **防死锁**：`DeadlockBreaker.detect()` + `DeadlockBreaker.resolve()` 自动解套叙事
@@ -174,10 +178,11 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 2. 在世界构建页完善地区、势力、关系与时间线（`/project/:id/worldbuilder`）。
 3. 点击世界构建中的“完成世界设定”，将结构化数据写入知识库。
 4. 点击世界构建中的“发布运行态”，生成并持久化 `RuntimeWorldState`。
-5. 进入角色矩阵补齐角色口吻、约束与动机（`/project/:id/characters`）。
-6. 在章节撰写页使用 `Writing Workbench` 完成前置检查、生成与 Trace 追踪（`/project/:id/write`）。
-7. 在项目首页或执行链路页审查待提交变更与 Run 树（`/project/:id`、`/project/:id/trace`）。
-8. 批准 `CANON_PENDING` 变更后，再进入一致性检查与人味化质检（`/project/:id/check`、`/project/:id/humanize`）。
+5. 在剧情画布中填写“当前卷目标”，或在已有 PlotGraph 上直接更新当前激活节点摘要（`/project/:id/plot`）。
+6. 进入角色矩阵补齐角色口吻、约束与动机，至少为主角补齐 Drive 层（`/project/:id/characters`）。
+7. 在章节撰写页使用 `Writing Workbench` 完成前置检查、规划、生成与 Trace 追踪（`/project/:id/write`）。
+8. 在项目首页、Agent 工坊或执行链路页审查待提交变更与 Run 树；其中 Agent 工坊与执行链路页现已统一读取同一份 Run / Step 数据（`/project/:id`、`/project/:id/agents`、`/project/:id/trace`）。
+9. 批准 `CANON_PENDING` 变更后，再进入一致性检查与人味化质检（`/project/:id/check`、`/project/:id/humanize`）。
 
 ## CLI 命令
 

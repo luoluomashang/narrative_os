@@ -72,7 +72,6 @@ import { useRoute } from 'vue-router'
 import NBreathingLight from '@/components/common/NBreathingLight.vue'
 import TraceInspector from '@/components/TraceInspector.vue'
 import axios from 'axios'
-import { projects } from '@/api/projects'
 
 // ── Agent definitions ─────────────────────────────────────────────
 type AgentStatus = 'idle' | 'running' | 'done' | 'error'
@@ -95,10 +94,33 @@ interface AgentDef {
   tickets: JobTicket[]
 }
 
+interface RunListItem {
+  run_id: string
+  status: string
+  chapter_num?: number | null
+  started_at: string
+}
+
+interface RunArtifact {
+  input_summary?: string
+  output_content?: string
+  latency_ms?: number
+  retry_count?: number
+}
+
+interface RunStepData {
+  step_id: string
+  step_index: number
+  agent_name: string
+  status: string
+  artifact?: RunArtifact | null
+}
+
 const route = useRoute()
 const projectId = computed(() => (route.params.id as string) || 'default')
 const agents = ref<AgentDef[]>([])
-const chapterOptions = ref<number[]>([1])
+const chapterOptions = ref<number[]>([])
+const runs = ref<RunListItem[]>([])
 
 function statusLabel(s: AgentStatus) {
   return { idle: '等待中', running: '运行中', done: '已完成', error: '错误' }[s]
@@ -114,7 +136,7 @@ const traceData = ref<object | null>(null)
 function toAgentStatus(v: unknown): AgentStatus {
   const raw = String(v ?? '').toLowerCase()
   if (raw.includes('run')) return 'running'
-  if (raw.includes('done') || raw.includes('success') || raw.includes('finish')) return 'done'
+  if (raw.includes('done') || raw.includes('success') || raw.includes('finish') || raw.includes('complete')) return 'done'
   if (raw.includes('error') || raw.includes('fail')) return 'error'
   return 'idle'
 }
@@ -138,6 +160,24 @@ function iconFor(name: string): string {
 }
 
 function buildAgentsFromTrace(payload: Record<string, unknown>): AgentDef[] {
+  if (Array.isArray(payload.steps)) {
+    const steps = payload.steps as RunStepData[]
+    return steps.map((step) => ({
+      id: step.agent_name,
+      name: step.agent_name.charAt(0).toUpperCase() + step.agent_name.slice(1),
+      icon: iconFor(step.agent_name),
+      status: toAgentStatus(step.status),
+      lastLog: step.artifact?.input_summary || step.artifact?.output_content?.slice(0, 80) || '等待中',
+      tickets: [{
+        id: step.step_id,
+        status: toTicketStatus(step.status),
+        retries: step.artifact?.retry_count ?? 0,
+        elapsed: Math.round(step.artifact?.latency_ms ?? 0),
+        rejected: false,
+      }],
+    }))
+  }
+
   const nodes = Array.isArray(payload.nodes) ? payload.nodes as Array<Record<string, unknown>> : []
   if (nodes.length === 0) return []
 
@@ -181,8 +221,15 @@ function buildAgentsFromTrace(payload: Record<string, unknown>): AgentDef[] {
 }
 
 async function loadTrace() {
+  const candidate = runs.value.find((run) => run.chapter_num === selectedChapter.value)
+  if (!candidate) {
+    traceData.value = null
+    agents.value = []
+    return
+  }
+
   try {
-    const res = await axios.get(`/api/traces/${selectedChapter.value}`)
+    const res = await axios.get(`/api/runs/${candidate.run_id}/steps`)
     traceData.value = res.data
     agents.value = buildAgentsFromTrace(res.data as Record<string, unknown>)
   } catch {
@@ -193,12 +240,18 @@ async function loadTrace() {
 
 async function loadChapterOptions() {
   try {
-    const res = await projects.chapterList(projectId.value)
-    const nums = (res.data ?? []).map(c => c.chapter).filter(n => Number.isFinite(n))
-    chapterOptions.value = nums.length > 0 ? nums : [1]
-    selectedChapter.value = chapterOptions.value[0]
+    const res = await axios.get(`/api/projects/${projectId.value}/runs`)
+    runs.value = res.data.items ?? []
+    const nums = Array.from(new Set(
+      runs.value
+        .map((run) => run.chapter_num)
+        .filter((n): n is number => typeof n === 'number' && Number.isFinite(n)),
+    ))
+    chapterOptions.value = nums
+    selectedChapter.value = nums[0] ?? 1
   } catch {
-    chapterOptions.value = [1]
+    runs.value = []
+    chapterOptions.value = []
     selectedChapter.value = 1
   }
 }

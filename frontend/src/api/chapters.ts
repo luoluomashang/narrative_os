@@ -12,11 +12,11 @@ import type {
 
 export const chapters = {
   run: (req: RunChapterRequest) =>
-    client.post<RunChapterResponse>('/chapters/run', req),
+    client.post<RunChapterResponse>('/chapters/run', req, { timeout: 240_000 }),
   writingContext: (projectId: string, chapter: number) =>
     client.get(`/projects/${projectId}/writing-context`, { params: { chapter } }),
   plan: (req: PlanChapterRequest) =>
-    client.post<PlanChapterResponse>('/chapters/plan', req),
+    client.post<PlanChapterResponse>('/chapters/plan', req, { timeout: 120_000 }),
   metrics: (req: MetricsRequest) =>
     client.post<MetricsResponse>('/metrics', req),
   check: (text: string, projectId?: string, chapter?: number) =>

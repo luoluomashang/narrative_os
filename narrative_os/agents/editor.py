@@ -76,19 +76,30 @@ class EditorAgent:
         run_context: Any | None = None,
     ) -> EditedChapter:
         """对草稿进行人性化润色。"""
-        humanize_output = await self._humanizer.humanize(
-            text=draft.draft_text,
-            style_focus=style_focus,
-        )
+        if "此段内容待补充" in draft.draft_text:
+            logger.warn("editor_skip_placeholder_draft", chapter=draft.chapter)
+            humanize_output = None
+            final_text = draft.draft_text
+            change_ratio = 0.0
+            applied_rules: list[str] = []
+            model_used = "editor_bypassed"
+        else:
+            humanize_output = await self._humanizer.humanize(
+                text=draft.draft_text,
+                style_focus=style_focus,
+            )
+            final_text = humanize_output.humanized_text
+            change_ratio = humanize_output.change_ratio
+            applied_rules = humanize_output.applied_rules
+            model_used = humanize_output.model_used
 
-        if humanize_output.change_ratio < 0.05:
+        if humanize_output is not None and humanize_output.change_ratio < 0.05:
             logger.warn(
                 "editor_low_change_ratio",
                 chapter=draft.chapter,
                 change_ratio=humanize_output.change_ratio,
             )
 
-        final_text = humanize_output.humanized_text
         word_count = len(final_text)
 
         logger.info(
@@ -103,9 +114,9 @@ class EditorAgent:
             volume=draft.volume,
             text=final_text,
             word_count=word_count,
-            change_ratio=humanize_output.change_ratio,
-            applied_rules=humanize_output.applied_rules,
-            model_used=humanize_output.model_used,
+            change_ratio=change_ratio,
+            applied_rules=applied_rules,
+            model_used=model_used,
         )
         if run_context is not None:
             await run_context.emit_artifact(

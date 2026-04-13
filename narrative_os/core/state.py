@@ -37,8 +37,7 @@ def _validate_project_id(project_id: str) -> None:
     """校验 project_id 合法性，拒绝含路径分隔符或 '..' 的值。"""
     if not _VALID_PROJECT_ID_RE.match(project_id):
         raise ValueError(
-            f"无效的 project_id: {project_id!r}。"
-            "只允许字母、数字、下划线（_）和连字符（-），长度 1-100。"
+            f"无效的 project_id: {project_id!r}。只允许字母、数字、下划线（_）和连字符（-），长度 1-100。"
         )
 
 

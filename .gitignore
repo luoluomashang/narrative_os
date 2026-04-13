@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime state (generated at runtime, not source)
+.narrative_state/
+.narrative_os/
+.narrative_db/
+
+# Environment / secrets
+.env
+*.env
+!.narrative_os.env.example
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.cache/
+pnpm-debug.log*
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+
+# SQLite WAL files (local DB lock files, not needed in source)
+*.db-wal
+*.db-shm
+

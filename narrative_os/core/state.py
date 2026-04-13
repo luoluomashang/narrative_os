@@ -18,6 +18,7 @@ core/state.py — Phase 1: 版本控制与状态持久化
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -27,6 +28,18 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from narrative_os.infra.config import settings
+
+# 安全的 project_id 格式：只允许字母、数字、下划线和连字符，防止路径穿越攻击
+_VALID_PROJECT_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,100}$")
+
+
+def _validate_project_id(project_id: str) -> None:
+    """校验 project_id 合法性，拒绝含路径分隔符或 '..' 的值。"""
+    if not _VALID_PROJECT_ID_RE.match(project_id):
+        raise ValueError(
+            f"无效的 project_id: {project_id!r}。"
+            "只允许字母、数字、下划线（_）和连字符（-），长度 1-100。"
+        )
 
 
 # ------------------------------------------------------------------ #
@@ -47,8 +60,9 @@ async def _upsert_project_to_db(project_id: str, project_name: str) -> None:
                 if project_name and row.title != project_name:
                     row.title = project_name
             await db.commit()
-    except Exception:
-        pass  # DB 写失败不影响文件系统主路径
+    except Exception as exc:
+        from narrative_os.infra.logging import logger  # noqa: PLC0415
+        logger.warn("db_upsert_project_failed", project_id=project_id, error=str(exc))
 
 
 async def _persist_chapter_to_db(
@@ -104,8 +118,9 @@ async def _persist_chapter_to_db(
                 world_json=world_json,
             ))
             await db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        from narrative_os.infra.logging import logger  # noqa: PLC0415
+        logger.warn("db_persist_chapter_failed", project_id=project_id, chapter=chapter_num, error=str(exc))
 
 
 async def _rollback_chapters_in_db(project_id: str, rollback_to_chapter: int) -> None:
@@ -128,8 +143,9 @@ async def _rollback_chapters_in_db(project_id: str, rollback_to_chapter: int) ->
                 )
             )
             await db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        from narrative_os.infra.logging import logger  # noqa: PLC0415
+        logger.warn("db_rollback_chapters_failed", project_id=project_id, rollback_to=rollback_to_chapter, error=str(exc))
 
 
 # ------------------------------------------------------------------ #
@@ -218,6 +234,7 @@ class StateManager:
     """
 
     def __init__(self, project_id: str, base_dir: str | None = None) -> None:
+        _validate_project_id(project_id)
         self.project_id = project_id
         _base = Path(base_dir or settings.state_dir)
         self._dir = _base / project_id
@@ -258,8 +275,9 @@ class StateManager:
         try:
             from narrative_os.infra.database import fire_and_forget  # noqa: PLC0415
             fire_and_forget(_upsert_project_to_db(self.project_id, project_name or self.project_id))
-        except Exception:
-            pass
+        except Exception as exc:
+            from narrative_os.infra.logging import logger  # noqa: PLC0415
+            logger.warn("db_fire_and_forget_init_failed", project_id=self.project_id, error=str(exc))
         return self.state
 
     def load_state(self) -> NarrativeState:
@@ -347,8 +365,9 @@ class StateManager:
                 characters_json=json.dumps(characters_dict or {}, ensure_ascii=False),
                 world_json=json.dumps(world_dict or {}, ensure_ascii=False),
             ))
-        except Exception:
-            pass
+        except Exception as exc:
+            from narrative_os.infra.logging import logger  # noqa: PLC0415
+            logger.warn("db_fire_and_forget_chapter_failed", project_id=self.project_id, chapter=chapter, error=str(exc))
 
         return version_path
 
@@ -371,8 +390,9 @@ class StateManager:
         try:
             from narrative_os.infra.database import fire_and_forget  # noqa: PLC0415
             fire_and_forget(_rollback_chapters_in_db(self.project_id, chapter))
-        except Exception:
-            pass
+        except Exception as exc:
+            from narrative_os.infra.logging import logger  # noqa: PLC0415
+            logger.warn("db_fire_and_forget_rollback_failed", project_id=self.project_id, chapter=chapter, error=str(exc))
         return snapshot
 
     def list_versions(self) -> list[int]:

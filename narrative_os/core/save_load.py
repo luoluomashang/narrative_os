@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from narrative_os.execution.prompt_utils import plain_text_contract
+
 if TYPE_CHECKING:
     from narrative_os.agents.interactive import InteractiveSession
 
@@ -259,11 +261,18 @@ class DeadlockBreaker:
         try:
             from narrative_os.execution.llm_router import LLMRequest, LLMRouter, ModelTier
             router = LLMRouter()
-            prompt = (
-                f"TRPG 会话陷入死锁：{condition.value}。\n"
-                f"最近场景压力：{session.scene_pressure:.1f}/10\n"
-                f"最近 DM 叙述（最后150字）：{session.history[-1].content[-150:] if session.history else ''}\n"
-                f"请生成一段50字以内的解套叙事，打破僵局，符合世界观设定。直接输出叙事文本，不要前缀。"
+            prompt = "\n\n".join(
+                [
+                    (
+                        f"TRPG 会话陷入死锁：{condition.value}。\n"
+                        f"最近场景压力：{session.scene_pressure:.1f}/10\n"
+                        f"最近 DM 叙述（最后150字）：{session.history[-1].content[-150:] if session.history else ''}"
+                    ),
+                    plain_text_contract(
+                        "请生成一段50字以内的解套叙事，打破僵局，符合世界观设定。",
+                        "直接输出叙事文本，不要前缀。",
+                    ),
+                ]
             )
             req = LLMRequest(
                 task_type="deadlock_resolution",

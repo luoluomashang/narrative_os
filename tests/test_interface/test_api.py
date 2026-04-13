@@ -131,6 +131,48 @@ class TestRunEndpoint:
         assert data["text"] == "最终章节文本"
         assert data["passed"] is True
 
+    async def test_run_success_includes_benchmark_scores(self, monkeypatch):
+        from narrative_os.schemas.benchmark import BenchmarkScore
+
+        state = {
+            "edited_chapter": _edited_chapter_mock(chapter=4),
+            "critic_report": _critic_mock(),
+            "retry_count": 0,
+        }
+        monkeypatch.setattr(
+            "narrative_os.interface.api.run_chapter",
+            AsyncMock(return_value=state),
+        )
+        benchmark_service = MagicMock()
+        benchmark_service.score_text = AsyncMock(return_value=BenchmarkScore(
+            score_id="score-1",
+            project_id="default",
+            run_id=None,
+            chapter=4,
+            profile_id="profile-1",
+            humanness_score=0.71,
+            adherence_score=0.83,
+            dimension_scores={"scene_alignment": 0.83},
+            violations=["对白密度偏高"],
+            recommendations=[],
+            created_at="2025-01-01T00:00:00Z",
+        ))
+        monkeypatch.setattr(
+            "narrative_os.interface.services.benchmark_service.get_benchmark_service",
+            lambda: benchmark_service,
+        )
+
+        async with await _client() as c:
+            resp = await c.post("/chapters/run", json={
+                "chapter": 4, "target_summary": "带对标评分的章节",
+            })
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["benchmark_adherence_score"] == pytest.approx(0.83)
+        assert data["benchmark_humanness_score"] == pytest.approx(0.71)
+        assert data["benchmark_violations"] == ["对白密度偏高"]
+
     async def test_run_no_edited_chapter_returns_500(self, monkeypatch):
         monkeypatch.setattr(
             "narrative_os.interface.api.run_chapter",

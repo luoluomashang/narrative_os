@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "narrative-os"
-version = "0.1.0"
+dynamic = ["version"]
 description = "可编程叙事操作系统 (Narrative OS) — 面向长篇小说的叙事操作系统"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -59,6 +59,9 @@ narrative = "narrative_os.interface.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["narrative_os"]
+
+[tool.hatch.version]
+path = "narrative_os/__init__.py"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

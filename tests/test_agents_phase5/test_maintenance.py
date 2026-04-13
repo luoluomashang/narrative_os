@@ -67,6 +67,9 @@ class TestMaintenanceOutputModel:
         assert out.warnings == []
         assert out.memory_summary == ""
         assert out.next_hook == ""
+        assert out.world_state_delta == []
+        assert out.canon_pending_changes == []
+        assert out.plot_progress == {}
 
 
 # ------------------------------------------------------------------ #
@@ -245,8 +248,14 @@ class TestStage5Writeback:
 
         assert out.changeset_id is not None
         assert out.memory_anchor != ""
+        assert out.memory_anchors
         assert out.next_hook != ""
         assert "ch4_01" in out.activated_nodes
+        assert out.plot_progress["completed_count"] == 1
+        assert out.plot_progress["activated_count"] == 1
+        assert out.canon_pending_changes
+        assert any(delta["change_type"] == "character_arc" for delta in out.world_state_delta)
+        assert any(delta["change_type"] == "timeline_event" for delta in out.world_state_delta)
 
         state_mgr = StateManager(project_id="stage5_proj", base_dir=".narrative_state")
         state_mgr.load_state()

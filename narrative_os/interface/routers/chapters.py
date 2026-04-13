@@ -5,6 +5,9 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from narrative_os.core.plot_repository import get_plot_repository
+from narrative_os.core.project_repository import ProjectHandle
+from narrative_os.interface.services.chapter_service import ChapterService, get_chapter_service
 from narrative_os.schemas.chapters import (
     ChapterListItem,
     ChapterTextResponse,
@@ -21,6 +24,7 @@ from narrative_os.schemas.chapters import (
     MetricsResponse,
     CostResponse,
     WritingContextCharacter,
+    WritingBenchmarkSummary,
     WritingContextResponse,
     WritingPrecheckItem,
     WritingWorldSummary,
@@ -29,57 +33,24 @@ from narrative_os.schemas.chapters import (
 router = APIRouter(tags=["chapters"])
 
 
+def _svc() -> ChapterService:
+    return get_chapter_service()
+
+
 # ------------------------------------------------------------------ #
 # 章节生成                                                              #
 # ------------------------------------------------------------------ #
 
 
 @router.post("/chapters/run", response_model=RunChapterResponse, summary="完整生成一章")
-async def run_chapter_route(req: RunChapterRequest) -> RunChapterResponse:
-    import sys
-    import asyncio
-    from narrative_os.core.state import StateManager
+async def run_chapter_route(
+    req: RunChapterRequest,
+    svc: ChapterService = Depends(_svc),
+) -> RunChapterResponse:
     from narrative_os.execution.narrative_compiler import AuthoringInputError
-    _api = sys.modules.get("narrative_os.interface.api")
-    _run_chapter = getattr(_api, "run_chapter", None) if _api else None
-    if _run_chapter is None:
-        from narrative_os.orchestrator.graph import run_chapter as _run_chapter
-
-    if not req.previous_hook and req.chapter > 1:
-        try:
-            _hook_mgr = StateManager(project_id=req.project_id, base_dir=".narrative_state")
-            _hook_mgr.load_state()
-            _hook_kb = _hook_mgr.load_kb()
-            _auto_hook = _hook_kb.get(f"chapter_{req.chapter - 1}_hook", "")
-            if not _auto_hook:
-                _prev_meta = next(
-                    (m for m in reversed(_hook_mgr.state.chapters) if m.chapter == req.chapter - 1),
-                    None,
-                )
-                if _prev_meta:
-                    _auto_hook = _prev_meta.summary
-            if _auto_hook:
-                req = req.model_copy(update={"previous_hook": _auto_hook})
-        except Exception:
-            pass
 
     try:
-        async with asyncio.timeout(180):
-            result = await _run_chapter(
-                chapter=req.chapter,
-                volume=req.volume,
-                target_summary=req.target_summary,
-                word_count_target=req.word_count_target,
-                strategy=req.strategy,
-                previous_hook=req.previous_hook,
-                existing_arc_summary=req.existing_arc_summary,
-                project_id=req.project_id,
-                character_names=req.character_names,
-                world_rules=req.world_rules,
-                constraints=req.constraints,
-                force_generate=req.force_generate,
-                thread_id=f"{req.project_id}-ch{req.chapter:04d}",
-            )
+        _, result = await svc.run_chapter(req)
     except TimeoutError:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="章节生成超时，请重试")
     except AuthoringInputError as exc:
@@ -93,46 +64,6 @@ async def run_chapter_route(req: RunChapterRequest) -> RunChapterResponse:
 
     critic = result.get("critic_report")
 
-    try:
-        from narrative_os.core.state import ChapterMeta
-        from narrative_os.infra.logging import logger
-        state_mgr = StateManager(project_id=req.project_id, base_dir=".narrative_state")
-        try:
-            state_mgr.load_state()
-        except FileNotFoundError:
-            state_mgr.initialize(project_name=req.project_id)
-        state_mgr.save_chapter_text(edited.chapter, edited.text)
-        chapter_meta = ChapterMeta(
-            chapter=edited.chapter,
-            summary=req.target_summary[:200],
-            quality_score=critic.quality_score if critic else 0.0,
-            hook_score=critic.hook_score if critic else 0.0,
-            word_count=edited.word_count,
-        )
-        kb = state_mgr.load_kb()
-        state_mgr.commit_chapter(
-            edited.chapter,
-            plot_graph_dict=kb.get("plot_graph") if isinstance(kb, dict) else None,
-            characters_dict=kb.get("characters") if isinstance(kb, dict) else None,
-            world_dict=kb.get("world") if isinstance(kb, dict) else None,
-            chapter_meta=chapter_meta,
-        )
-        hook_text = ""
-        planner_out = result.get("planner_output")
-        if planner_out and hasattr(planner_out, "hook_suggestion"):
-            hook_text = planner_out.hook_suggestion
-        if not hook_text and critic and hasattr(critic, "review_summary"):
-            hook_text = critic.review_summary[:300]
-        if hook_text:
-            state_mgr.save_last_hook(edited.chapter, hook_text)
-    except Exception as _persist_exc:
-        logger.warn(
-            "chapter_persist_nonfatal_failed",
-            project_id=req.project_id,
-            chapter=edited.chapter,
-            error=str(_persist_exc),
-        )
-
     return RunChapterResponse(
         chapter=edited.chapter,
         volume=edited.volume,
@@ -144,45 +75,24 @@ async def run_chapter_route(req: RunChapterRequest) -> RunChapterResponse:
         passed=critic.passed if critic else True,
         retry_count=result.get("retry_count", 0),
         run_id=result.get("run_id", ""),
+        benchmark_adherence_score=(result.get("benchmark_score") or {}).get("adherence_score"),
+        benchmark_humanness_score=(result.get("benchmark_score") or {}).get("humanness_score"),
+        benchmark_violations=(result.get("benchmark_score") or {}).get("violations", []),
     )
 
 
 @router.get("/projects/{project_id}/writing-context", response_model=WritingContextResponse, summary="写作工作台上下文")
-async def get_writing_context(project_id: str, chapter: int = 1) -> WritingContextResponse:
-    from narrative_os.core.character_repository import get_character_repository
-    from narrative_os.core.evolution import ChangeTag, get_canon_commit
-    from narrative_os.core.plot import PlotGraph
-    from narrative_os.core.state import StateManager
-    from narrative_os.core.world_repository import get_world_repository
-
-    state_mgr = StateManager(project_id=project_id, base_dir=".narrative_state")
-    try:
-        state_mgr.load_state()
-    except FileNotFoundError:
-        state_mgr.initialize(project_name=project_id)
-
-    kb = state_mgr.load_kb()
-    plot_graph = None
-    plot_data = kb.get("plot_graph") if isinstance(kb, dict) else None
-    if plot_data:
-        try:
-            plot_graph = PlotGraph.from_dict(plot_data)
-        except Exception:
-            plot_graph = None
-
-    world_repo = get_world_repository()
-    published_world = world_repo.get_published_world_state(project_id)
-    characters = get_character_repository().list_characters(project_id)
-    volume_goal = plot_graph.get_current_volume_goal(project_id) if plot_graph is not None else ""
-    previous_hook = state_mgr.get_last_hook(chapter - 1)
-
-    changesets = get_canon_commit(project_id).list_changesets(project_id)
-    pending_changes_count = sum(
-        1
-        for changeset in changesets
-        for change in changeset.changes
-        if change.tag == ChangeTag.CANON_PENDING
-    )
+async def get_writing_context(
+    project_id: str,
+    chapter: int = 1,
+    svc: ChapterService = Depends(_svc),
+) -> WritingContextResponse:
+    context = await svc.get_writing_context(project_id, chapter)
+    published_world = context["published_world"]
+    characters = context["characters"]
+    volume_goal = context["current_volume_goal"]
+    previous_hook = context["previous_hook"]
+    pending_changes_count = context["pending_changes_count"]
 
     prechecks = [
         WritingPrecheckItem(
@@ -226,6 +136,16 @@ async def get_writing_context(project_id: str, chapter: int = 1) -> WritingConte
         previous_hook=previous_hook,
         current_volume_goal=volume_goal,
         pending_changes_count=pending_changes_count,
+        active_benchmark=(
+            WritingBenchmarkSummary.model_validate(context["active_benchmark"])
+            if context.get("active_benchmark")
+            else None
+        ),
+        active_author_skill=(
+            WritingBenchmarkSummary.model_validate(context["active_author_skill"])
+            if context.get("active_author_skill")
+            else None
+        ),
         world=WritingWorldSummary(
             published=published_world is not None,
             factions=factions,
@@ -247,20 +167,12 @@ async def get_writing_context(project_id: str, chapter: int = 1) -> WritingConte
 
 
 @router.post("/chapters/plan", response_model=PlanChapterResponse, summary="仅生成章节剧情骨架")
-async def plan_chapter_route(req: PlanChapterRequest) -> PlanChapterResponse:
-    from narrative_os.agents.planner import PlannerAgent, PlannerInput
-    inp = PlannerInput(
-        chapter=req.chapter,
-        volume=req.volume,
-        target_summary=req.target_summary,
-        word_count_target=req.word_count_target,
-        previous_hook=req.previous_hook,
-        character_names=req.character_names,
-        world_rules=req.world_rules,
-        constraints=req.constraints,
-    )
+async def plan_chapter_route(
+    req: PlanChapterRequest,
+    svc: ChapterService = Depends(_svc),
+) -> PlanChapterResponse:
     try:
-        plan = await PlannerAgent().plan(inp)
+        plan = await svc.plan_chapter(req)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"规划失败：{exc}")
     return PlanChapterResponse(
@@ -285,9 +197,9 @@ async def check_chapter(req: CheckChapterRequest) -> CheckChapterResponse:
     _try = getattr(_api, "_try_load_project", None) if _api else None
 
     checker = _CC()
-    plot_graph = None
+    plot_graph = get_plot_repository().get_plot_graph(req.project_id)
     mgr = _try(req.project_id) if _try else None
-    if mgr is not None:
+    if mgr is not None and not isinstance(mgr, ProjectHandle):
         try:
             kb = mgr.load_kb()
             plot_data = kb.get("plot_graph")
@@ -390,61 +302,88 @@ def _get_load_project_or_404():
 
 
 @router.get("/projects/{project_id}/chapters", response_model=list[ChapterListItem], summary="项目章节列表")
-async def list_project_chapters(project_id: str) -> list[ChapterListItem]:
-    mgr = _get_load_project_or_404()(project_id)
-    if not mgr.state:
-        return []
-    chapter_files = set(mgr.list_chapter_files())
-    items = []
-    for meta in sorted(mgr.state.chapters, key=lambda c: c.chapter):
-        d = meta.model_dump()
-        d["has_text"] = meta.chapter in chapter_files
-        items.append(d)
-    return items
+async def list_project_chapters(
+    project_id: str,
+    svc: ChapterService = Depends(_svc),
+) -> list[ChapterListItem]:
+    loader = _get_load_project_or_404()
+    if loader is not None:
+        mgr = loader(project_id)
+        if not mgr.state:
+            return []
+        chapter_files = set(mgr.list_chapter_files())
+        items = []
+        for meta in sorted(mgr.state.chapters, key=lambda chapter_meta: chapter_meta.chapter):
+            payload = meta.model_dump()
+            payload["has_text"] = meta.chapter in chapter_files
+            items.append(payload)
+        return [ChapterListItem.model_validate(item) for item in items]
+    items = await svc.list_project_chapters(project_id)
+    return [ChapterListItem.model_validate(item) for item in items]
 
 
 @router.get("/projects/{project_id}/chapters/{chapter_num}", response_model=ChapterTextResponse, summary="获取章节文本")
-async def get_chapter_text(project_id: str, chapter_num: int) -> ChapterTextResponse:
-    mgr = _get_load_project_or_404()(project_id)
-    text = mgr.load_chapter_text(chapter_num)
-    if text is None:
+async def get_chapter_text(
+    project_id: str,
+    chapter_num: int,
+    svc: ChapterService = Depends(_svc),
+) -> ChapterTextResponse:
+    loader = _get_load_project_or_404()
+    if loader is not None:
+        mgr = loader(project_id)
+        text = mgr.load_chapter_text(chapter_num)
+        if text is None:
+            raise HTTPException(status_code=404, detail={"detail": f"章节 {chapter_num} 文本不存在。", "code": "NOT_FOUND"})
+        meta = next(
+            (item for item in (mgr.state.chapters if mgr.state else []) if item.chapter == chapter_num),
+            None,
+        )
+        return ChapterTextResponse(
+            chapter=chapter_num,
+            text=text,
+            word_count=len(text),
+            summary=meta.summary if meta else "",
+            quality_score=meta.quality_score if meta else 0.0,
+            hook_score=meta.hook_score if meta else 0.0,
+            timestamp=meta.timestamp if meta else "",
+        )
+    payload = await svc.get_project_chapter(project_id, chapter_num)
+    if payload is None:
         raise HTTPException(status_code=404, detail={"detail": f"章节 {chapter_num} 文本不存在。", "code": "NOT_FOUND"})
-    meta = next(
-        (m for m in (mgr.state.chapters if mgr.state else []) if m.chapter == chapter_num),
-        None,
-    )
-    return ChapterTextResponse(
-        chapter=chapter_num,
-        text=text,
-        word_count=len(text),
-        summary=meta.summary if meta else "",
-        quality_score=meta.quality_score if meta else 0.0,
-        hook_score=meta.hook_score if meta else 0.0,
-        timestamp=meta.timestamp if meta else "",
-    )
+    return ChapterTextResponse.model_validate(payload)
 
 
 @router.get("/projects/{project_id}/export", response_model=ExportNovelResponse, summary="导出全本")
-async def export_project(project_id: str, format: str = "txt") -> ExportNovelResponse:
-    mgr = _get_load_project_or_404()(project_id)
-    chapter_nums = sorted(mgr.list_chapter_files())
-    if not chapter_nums:
+async def export_project(
+    project_id: str,
+    format: str = "txt",
+    svc: ChapterService = Depends(_svc),
+) -> ExportNovelResponse:
+    loader = _get_load_project_or_404()
+    if loader is not None:
+        mgr = loader(project_id)
+        chapter_nums = sorted(mgr.list_chapter_files())
+        if not chapter_nums:
+            raise HTTPException(status_code=404, detail={"detail": "该项目尚无已生成章节。", "code": "NOT_FOUND"})
+        parts: list[str] = []
+        total_words = 0
+        for chapter_num in chapter_nums:
+            text = mgr.load_chapter_text(chapter_num)
+            if not text:
+                continue
+            parts.append(f"第{chapter_num}章\n\n{text}\n\n{'─' * 40}\n")
+            total_words += len(text)
+        title = mgr.state.project_name if mgr.state else project_id
+        return ExportNovelResponse(
+            project_id=project_id,
+            title=title,
+            chapter_count=len(parts),
+            total_chapters=len(parts),
+            total_words=total_words,
+            format=format,
+            content="\n".join(parts),
+        )
+    payload = await svc.export_project(project_id, format=format)
+    if not payload.get("chapter_count"):
         raise HTTPException(status_code=404, detail={"detail": "该项目尚无已生成章节。", "code": "NOT_FOUND"})
-    parts: list[str] = []
-    total_words = 0
-    for n in chapter_nums:
-        text = mgr.load_chapter_text(n)
-        if not text:
-            continue
-        parts.append(f"第{n}章\n\n{text}\n\n{'─' * 40}\n")
-        total_words += len(text)
-    title = mgr.state.project_name if mgr.state else project_id
-    return ExportNovelResponse(
-        project_id=project_id,
-        title=title,
-        chapter_count=len(parts),
-        total_chapters=len(parts),
-        total_words=total_words,
-        format=format,
-        content="\n".join(parts),
-    )
+    return ExportNovelResponse.model_validate(payload)

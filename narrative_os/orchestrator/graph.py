@@ -66,7 +66,7 @@ from narrative_os.core.governance import (
     create_run_context,
     get_governance_plane,
 )
-from narrative_os.schemas.traces import RunStatus, RunType
+from narrative_os.schemas.traces import FailureRootCauseType, RunStatus, RunType
 
 # ------------------------------------------------------------------ #
 # 交互模式会话注册表（session_id → InteractiveSession）               #
@@ -491,9 +491,14 @@ async def planner_node(state: AgentGraphState) -> dict[str, Any]:
     )
     try:
         plan = await agent.plan(inp, strategy=_get_strategy(state), run_context=run_context)
-    except Exception:
+    except Exception as exc:
         if run_context is not None:
-            await run_context.complete_step("planner", RunStatus.FAILED)
+            failure_type = (
+                FailureRootCauseType.RULE_BLOCKED
+                if isinstance(exc, AuthoringInputError)
+                else FailureRootCauseType.MODEL_ERROR
+            )
+            await run_context.record_step_failure("planner", failure_type, str(exc))
         raise
 
     # 将规划写入 PlotGraph
@@ -546,9 +551,9 @@ async def writer_node(state: AgentGraphState) -> dict[str, Any]:
             retry_count=state.get("retry_count", 0),
             retry_reason=retry_reason,
         )
-    except Exception:
+    except Exception as exc:
         if run_context is not None:
-            await run_context.complete_step("writer", RunStatus.FAILED)
+            await run_context.record_step_failure("writer", FailureRootCauseType.MODEL_ERROR, str(exc))
         raise
     if run_context is not None:
         await run_context.complete_step("writer", RunStatus.COMPLETED)
@@ -572,9 +577,9 @@ async def critic_node(state: AgentGraphState) -> dict[str, Any]:
             plot_graph=state.get("plot_graph"),
             run_context=run_context,
         )
-    except Exception:
+    except Exception as exc:
         if run_context is not None:
-            await run_context.complete_step("critic", RunStatus.FAILED)
+            await run_context.record_step_failure("critic", FailureRootCauseType.MODEL_ERROR, str(exc))
         raise
     if run_context is not None:
         await run_context.complete_step("critic", RunStatus.COMPLETED)
@@ -596,9 +601,9 @@ async def editor_node(state: AgentGraphState) -> dict[str, Any]:
             strategy=_get_strategy(state),
             run_context=run_context,
         )
-    except Exception:
+    except Exception as exc:
         if run_context is not None:
-            await run_context.complete_step("editor", RunStatus.FAILED)
+            await run_context.record_step_failure("editor", FailureRootCauseType.MODEL_ERROR, str(exc))
         raise
     if run_context is not None:
         await run_context.complete_step("editor", RunStatus.COMPLETED)
@@ -634,7 +639,11 @@ async def maintenance_node(state: AgentGraphState) -> dict[str, Any]:
     draft: ChapterDraft | None = state.get("chapter_draft")
     if draft is None:
         if run_context is not None:
-            await run_context.complete_step("maintenance", RunStatus.FAILED)
+            await run_context.record_step_failure(
+                "maintenance",
+                FailureRootCauseType.PERSISTENCE_ERROR,
+                "maintenance input chapter_draft is missing",
+            )
         return {"maintenance_output": None}
 
     agent = MaintenanceAgent()
@@ -651,9 +660,13 @@ async def maintenance_node(state: AgentGraphState) -> dict[str, Any]:
             memory=state.get("memory"),
             run_context=run_context,
         )
-    except Exception:
+    except Exception as exc:
         if run_context is not None:
-            await run_context.complete_step("maintenance", RunStatus.FAILED)
+            await run_context.record_step_failure(
+                "maintenance",
+                _classify_pipeline_exception(exc),
+                str(exc),
+            )
         raise
 
     if run_context is not None:
@@ -814,7 +827,8 @@ async def run_chapter(
             raise RuntimeError(
                 f"GovernancePlane PRE_RUN 阻止执行：{_pre_run_result.blocked_reason}"
             )
-    except (RuntimeError, CostLimitExceeded):
+    except (RuntimeError, CostLimitExceeded) as exc:
+        await run_ctx.record_run_issue(FailureRootCauseType.RULE_BLOCKED, str(exc))
         await run_ctx.complete_run(RunStatus.FAILED)
         raise
     except Exception as exc:
@@ -858,7 +872,8 @@ async def run_chapter(
     config = {"configurable": {"thread_id": thread_id}}
     try:
         final = await app.ainvoke(pipeline_state, config=config)
-    except Exception:
+    except Exception as exc:
+        await run_ctx.record_run_issue(_classify_pipeline_exception(exc), str(exc))
         await run_ctx.complete_run(RunStatus.FAILED)
         _run_context_registry.pop(run_ctx.run_id, None)
         raise
@@ -890,7 +905,8 @@ async def run_chapter(
                 final["run_status"] = RunStatus.PAUSED.value
         else:
             await run_ctx.complete_run(RunStatus.COMPLETED)
-    except Exception:
+    except Exception as exc:
+        await run_ctx.record_run_issue(_classify_pipeline_exception(exc), str(exc))
         await run_ctx.complete_run(RunStatus.FAILED)
         raise
 
@@ -951,7 +967,7 @@ async def _build_authoring_package(
     current_volume_goal = plot_graph.get_current_volume_goal(project_id) if plot_graph is not None else ""
 
     compiler = NarrativeCompiler()
-    return compiler.compile_authoring(
+    package = compiler.compile_authoring(
         project_id=project_id,
         chapter_target=target,
         plot_graph=plot_graph,
@@ -963,6 +979,9 @@ async def _build_authoring_package(
         author_memory_anchors=author_memory_anchors,
         require_complete_inputs=not state.get("force_generate", False),
     )
+    await _inject_active_author_skill(project_id, package.write_context)
+    await _inject_active_benchmark(project_id, package.write_context)
+    return package
 
 
 async def _build_write_context(
@@ -990,10 +1009,9 @@ def _resolve_plot_graph(project_id: str, plot_graph: PlotGraph | None) -> PlotGr
         return plot_graph
 
     try:
-        kb = _load_state_manager(project_id).load_kb()
-        plot_data = kb.get("plot_graph") if isinstance(kb, dict) else None
-        if plot_data:
-            return PlotGraph.from_dict(plot_data)
+        from narrative_os.core.plot_repository import get_plot_repository
+
+        return get_plot_repository().get_plot_graph(project_id)
     except Exception:
         return None
     return None
@@ -1029,3 +1047,89 @@ def _get_run_context(state: AgentGraphState) -> RunContext | None:
     if not run_id:
         return None
     return _run_context_registry.get(run_id)
+
+
+async def _inject_active_author_skill(project_id: str, write_context: WriteContext) -> None:
+    try:
+        from narrative_os.infra.database import AsyncSessionLocal, ensure_database_runtime
+        from narrative_os.interface.services.benchmark_service import get_benchmark_service
+        from narrative_os.execution.context_builder import BenchmarkWriteSummary
+
+        await ensure_database_runtime()
+        async with AsyncSessionLocal() as db:
+            summary = await get_benchmark_service().get_active_author_skill_summary(db, project_id)
+        if summary is None:
+            return
+
+        skill_summary = BenchmarkWriteSummary(**summary)
+        mode = summary.get("application_mode") or "hybrid"
+        if mode == "guide":
+            write_context.constraints.style_directives = [
+                *skill_summary.top_rules[:2],
+                *skill_summary.scene_hints[:1],
+                *write_context.constraints.style_directives,
+            ]
+        elif mode == "strict":
+            write_context.constraints.hard_rules = [
+                *skill_summary.top_rules[:3],
+                *[f"规避：{item}" for item in skill_summary.anti_rules[:2]],
+                *write_context.constraints.hard_rules,
+            ]
+            write_context.constraints.style_directives = [
+                *skill_summary.scene_hints[:2],
+                *write_context.constraints.style_directives,
+            ]
+        else:
+            write_context.constraints.style_directives = [
+                *skill_summary.top_rules[:2],
+                *skill_summary.scene_hints[:2],
+                *write_context.constraints.style_directives,
+            ]
+            write_context.constraints.hard_rules = [
+                *[f"规避：{item}" for item in skill_summary.anti_rules[:1]],
+                *write_context.constraints.hard_rules,
+            ]
+
+        prefix = f"Author Skill（{mode}）：{skill_summary.profile_name}"
+        write_context.style_summary = f"{prefix}\n{write_context.style_summary}".strip()
+    except Exception:
+        return
+
+
+async def _inject_active_benchmark(project_id: str, write_context: WriteContext) -> None:
+    try:
+        from narrative_os.infra.database import AsyncSessionLocal, ensure_database_runtime
+        from narrative_os.interface.services.benchmark_service import get_benchmark_service
+        from narrative_os.execution.context_builder import BenchmarkWriteSummary
+
+        await ensure_database_runtime()
+        async with AsyncSessionLocal() as db:
+            summary = await get_benchmark_service().get_active_profile_summary(db, project_id)
+        if summary is None:
+            return
+
+        benchmark_summary = BenchmarkWriteSummary(**summary)
+        write_context.benchmark_summary = benchmark_summary
+        write_context.constraints.hard_rules = [
+            *benchmark_summary.top_rules[:3],
+            *[f"规避：{item}" for item in benchmark_summary.anti_rules[:2]],
+            *write_context.constraints.hard_rules,
+        ]
+        write_context.constraints.style_directives = [
+            *benchmark_summary.scene_hints[:2],
+            *write_context.constraints.style_directives,
+        ]
+        prefix = f"Active Benchmark：{benchmark_summary.profile_name}"
+        write_context.style_summary = f"{prefix}\n{write_context.style_summary}".strip()
+    except Exception:
+        return
+
+
+def _classify_pipeline_exception(exc: Exception) -> FailureRootCauseType:
+    if isinstance(exc, AuthoringInputError):
+        return FailureRootCauseType.RULE_BLOCKED
+
+    message = str(exc).lower()
+    if any(token in message for token in ("persist", "database", "sqlite", "commit", "rollback")):
+        return FailureRootCauseType.PERSISTENCE_ERROR
+    return FailureRootCauseType.MODEL_ERROR

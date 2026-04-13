@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from narrative_os.core.character import CharacterState
+from narrative_os.core.state_snapshot_store import load_runtime_snapshot_payload, save_runtime_snapshot_payload
 from narrative_os.infra.config import settings
 
 if TYPE_CHECKING:
@@ -48,36 +49,59 @@ class CharacterRepository:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(kb, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def _load_character_payloads(self, project_id: str) -> list[dict[str, Any]]:
+        snapshot = None
+        if self._state_root == Path(settings.state_dir):
+            snapshot = load_runtime_snapshot_payload(project_id)
+        if snapshot is not None:
+            raw_list = snapshot.get("characters")
+            if isinstance(raw_list, list):
+                return [item for item in raw_list if isinstance(item, dict)]
+
+        kb = self._load_kb(project_id)
+        raw_list = kb.get("characters", [])
+        if not isinstance(raw_list, list):
+            return []
+        return [item for item in raw_list if isinstance(item, dict)]
+
+    def _save_character_payloads(self, project_id: str, raw_list: list[dict[str, Any]]) -> None:
+        if self._state_root == Path(settings.state_dir):
+            save_runtime_snapshot_payload(project_id, characters=raw_list)
+
+        kb = self._load_kb(project_id)
+        kb["characters"] = raw_list
+        self._save_kb(project_id, kb)
+
     # ---------------------------------------------------------------- #
     # Public interface                                                  #
     # ---------------------------------------------------------------- #
 
     def list_characters(self, project_id: str) -> list[CharacterState]:
         """返回项目中所有角色的 CharacterState 列表。"""
-        kb = self._load_kb(project_id)
-        raw_list = kb.get("characters", [])
-        if not isinstance(raw_list, list):
-            return []
+        raw_list = self._load_character_payloads(project_id)
         result: list[CharacterState] = []
         for raw in raw_list:
-            if not isinstance(raw, dict):
-                continue
             try:
                 result.append(CharacterState.model_validate(raw))
             except Exception:
                 pass
         return result
 
-    def get_character(self, project_id: str, name: str) -> CharacterState | None:
-        """按名称查询角色，不存在时返回 None。支持从 MemorySystem 同步近期记忆缓存。"""
-        kb = self._load_kb(project_id)
-        raw_list = kb.get("characters", [])
-        if not isinstance(raw_list, list):
-            return None
-        raw = next(
-            (c for c in raw_list if isinstance(c, dict) and c.get("name") == name),
+    def list_character_payloads(self, project_id: str) -> list[dict[str, Any]]:
+        return self._load_character_payloads(project_id)
+
+    def get_character_payload(self, project_id: str, name: str) -> dict[str, Any] | None:
+        return next(
+            (item for item in self._load_character_payloads(project_id) if item.get("name") == name),
             None,
         )
+
+    def save_character_payloads(self, project_id: str, raw_list: list[dict[str, Any]]) -> None:
+        self._save_character_payloads(project_id, raw_list)
+
+    def get_character(self, project_id: str, name: str) -> CharacterState | None:
+        """按名称查询角色，不存在时返回 None。支持从 MemorySystem 同步近期记忆缓存。"""
+        raw = self.get_character_payload(project_id, name)
         if raw is None:
             return None
         try:
@@ -91,23 +115,18 @@ class CharacterRepository:
 
     def save_character(self, project_id: str, char: CharacterState) -> None:
         """保存（新增或更新）角色到 KB。"""
-        kb = self._load_kb(project_id)
-        raw_list = kb.get("characters", [])
-        if not isinstance(raw_list, list):
-            raw_list = []
+        raw_list = self._load_character_payloads(project_id)
 
         char_dict = char.model_dump()
         for i, c in enumerate(raw_list):
-            if isinstance(c, dict) and c.get("name") == char.name:
+            if c.get("name") == char.name:
                 raw_list[i] = char_dict
-                kb["characters"] = raw_list
-                self._save_kb(project_id, kb)
+                self._save_character_payloads(project_id, raw_list)
                 return
 
         # 不存在则追加
         raw_list.append(char_dict)
-        kb["characters"] = raw_list
-        self._save_kb(project_id, kb)
+        self._save_character_payloads(project_id, raw_list)
 
     # ---------------------------------------------------------------- #
     # Memory sync                                                       #

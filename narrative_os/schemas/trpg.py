@@ -59,6 +59,57 @@ class TurnRecordResponse(BaseModel):
     decision_options: list[str] = Field(default_factory=list)
 
 
+class PreviewMemoryAnchor(BaseModel):
+    label: str
+    source: str = "session"
+    importance: float | None = None
+
+
+class PreviewCharacterChange(BaseModel):
+    name: str
+    change: str = ""
+    actions_count: int = 0
+    final_pressure: float | None = None
+
+
+class SessionOnlyPreview(BaseModel):
+    summary: str = ""
+    memory_anchors: list[PreviewMemoryAnchor] = Field(default_factory=list)
+    character_changes: list[PreviewCharacterChange] = Field(default_factory=list)
+    projected_changeset_status: str = "runtime_only"
+
+
+class DraftChapterPreview(BaseModel):
+    chapter_text: str = ""
+    excerpt: str = ""
+    word_count: int = 0
+    quality_estimate: str = ""
+
+
+class CanonPendingChangePreview(BaseModel):
+    change_type: str = ""
+    description: str = ""
+    tag: str = ""
+    chapter: int = 0
+    before_snapshot: dict[str, Any] | None = None
+    after_value: dict[str, Any] = Field(default_factory=dict)
+
+
+class CanonChapterPreview(BaseModel):
+    draft_content: str = ""
+    pending_changes: list[CanonPendingChangePreview] = Field(default_factory=list)
+    approval_required_fields: list[str] = Field(default_factory=list)
+    requires_confirmation: bool = True
+    projected_changeset_status: str = "canon_pending"
+
+
+class ArchivePreviewResponse(BaseModel):
+    session_id: str
+    preview_session_only: SessionOnlyPreview = Field(default_factory=SessionOnlyPreview)
+    preview_draft_chapter: DraftChapterPreview = Field(default_factory=DraftChapterPreview)
+    preview_canon_chapter: CanonChapterPreview = Field(default_factory=CanonChapterPreview)
+
+
 class SessionSummary(BaseModel):
     duration_minutes: int = 0
     turn_count: int = 0
@@ -68,6 +119,9 @@ class SessionSummary(BaseModel):
     next_hook: str = ""
     character_delta: list[dict[str, Any]] = Field(default_factory=list)
     saved_chapter: int | None = None
+    preview_session_only: SessionOnlyPreview = Field(default_factory=SessionOnlyPreview)
+    preview_draft_chapter: DraftChapterPreview = Field(default_factory=DraftChapterPreview)
+    preview_canon_chapter: CanonChapterPreview = Field(default_factory=CanonChapterPreview)
 
 
 class SaveRequest(BaseModel):

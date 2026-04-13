@@ -32,6 +32,8 @@ export const projects = {
     client.get(`/projects/${id}/status`),
   changesets: (id: string) =>
     client.get(`/projects/${id}/changesets`),
+  changesetDetail: (id: string, changesetId: string) =>
+    client.get(`/projects/${id}/changesets/${changesetId}`),
   plot: (id: string) =>
     client.get<PlotGraphData>(`/projects/${id}/plot`),
   updatePlotVolumeGoal: (id: string, currentVolumeGoal: string) =>

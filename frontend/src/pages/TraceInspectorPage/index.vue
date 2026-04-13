@@ -49,6 +49,7 @@ const projectId = computed(() => (route.params.id as string) || 'default')
 
 interface RunListItem {
   run_id: string
+  run_type: string
   status: string
   chapter_num?: number | null
   started_at: string
@@ -113,6 +114,15 @@ async function submitApproval(decision: 'approve' | 'reject' | 'retry') {
   }
 }
 
+function runTypeLabel(runType: string) {
+  return {
+    chapter_generation: '章节生成',
+    benchmark_analysis: '对标分析',
+    author_distillation: '作者蒸馏',
+    worldbuilding: '世界构建',
+  }[runType] ?? runType
+}
+
 function formatRunLabel(run: RunListItem) {
   const chapter = run.chapter_num ? `第 ${run.chapter_num} 章` : '非章节运行'
   const status = {
@@ -121,7 +131,7 @@ function formatRunLabel(run: RunListItem) {
     failed: '失败',
     paused: '已暂停',
   }[run.status] ?? run.status
-  return `${chapter} · ${status}`
+  return `${chapter} · ${runTypeLabel(run.run_type)} · ${status}`
 }
 
 onMounted(async () => {

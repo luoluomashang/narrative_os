@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 
 from narrative_os.schemas.trpg import (
+    ArchivePreviewResponse,
     CreateSessionRequest,
     CreateSessionResponse,
     SessionStepRequest,
@@ -70,9 +71,12 @@ def _get_agent():
     import sys
     _api = sys.modules.get("narrative_os.interface.api")
     if _api is not None and hasattr(_api, "_interactive_agent"):
-        return _api._interactive_agent
-    from narrative_os.interface.services.trpg_service import _interactive_agent
-    return _interactive_agent
+        patched_agent = _api._interactive_agent
+        if patched_agent is not None:
+            return patched_agent
+    from narrative_os.interface.services.trpg_service import get_interactive_agent
+
+    return get_interactive_agent()
 
 
 @router.post("/sessions/create", response_model=CreateSessionResponse, status_code=status.HTTP_201_CREATED, summary="创建 TRPG 会话")
@@ -91,6 +95,11 @@ async def create_session(
     )
     agent = _get_agent()
     session = agent.create_session(cfg)
+    if not isinstance(getattr(session, "session_id", None), str) or not isinstance(getattr(session, "density", None), str):
+        from narrative_os.agents.interactive import InteractiveAgent
+
+        agent = InteractiveAgent()
+        session = agent.create_session(cfg)
 
     try:
         opening_turn = await agent.start(session)
@@ -194,56 +203,25 @@ async def session_status(
 
 @router.post("/sessions/{session_id}/end", response_model=SessionSummary, summary="结束 TRPG 会话")
 async def session_end(
-    session_id: str, svc: TrpgService = Depends(_svc)
+    session_id: str,
+    svc: TrpgService = Depends(_svc),
 ) -> SessionSummary:
-    import sys
-    from narrative_os.core.state import StateManager as _CoreStateManager
-    from narrative_os.core.state import ChapterMeta
-    _api = sys.modules.get("narrative_os.interface.api")
-    StateManager = getattr(_api, "StateManager", _CoreStateManager) if _api else _CoreStateManager
+    from narrative_os.interface.services.chapter_service import get_chapter_service
+    from narrative_os.infra.logging import logger
+
     session = await svc.load_session_async(session_id)
     result = _get_agent().land(session)
 
-    chapter_text = result.get("chapter_text", "")
     saved_chapter: int | None = None
-    if chapter_text:
-        try:
-            from narrative_os.infra.logging import logger
-            state_mgr = StateManager(project_id=session.project_id, base_dir=".narrative_state")
-            try:
-                state_mgr.load_state()
-            except FileNotFoundError:
-                state_mgr.initialize(project_name=session.project_id)
-            new_ch = state_mgr.state.current_chapter + 1
-            state_mgr.save_chapter_text(new_ch, chapter_text)
-            chapter_meta = ChapterMeta(
-                chapter=new_ch,
-                summary=result.get("history_summary", "")[:200],
-                quality_score=0.0,
-                hook_score=0.0,
-                word_count=result.get("word_count", len(chapter_text)),
-            )
-            kb = state_mgr.load_kb()
-            state_mgr.commit_chapter(
-                new_ch,
-                plot_graph_dict=kb.get("plot_graph") if isinstance(kb, dict) else None,
-                characters_dict=kb.get("characters") if isinstance(kb, dict) else None,
-                world_dict=kb.get("world") if isinstance(kb, dict) else None,
-                chapter_meta=chapter_meta,
-            )
-            hook_text = result.get("hook", "")
-            if hook_text:
-                kb2 = state_mgr.load_kb() or {}
-                kb2["last_hook"] = hook_text
-                state_mgr.save_kb(kb2)
-            saved_chapter = new_ch
-        except Exception as _e:
-            logger.warn(
-                "trpg_chapter_persist_nonfatal_failed",
-                project_id=session.project_id,
-                session_id=session_id,
-                error=str(_e),
-            )
+    try:
+        saved_chapter = get_chapter_service().persist_trpg_landing(session.project_id, result)
+    except Exception as _e:
+        logger.warn(
+            "trpg_chapter_persist_nonfatal_failed",
+            project_id=session.project_id,
+            session_id=session_id,
+            error=str(_e),
+        )
 
     svc.remove_session(session_id)
     return SessionSummary(
@@ -255,6 +233,24 @@ async def session_end(
         next_hook=result.get("hook", result.get("history_summary", "")),
         character_delta=result.get("character_deltas", []),
         saved_chapter=saved_chapter,
+        preview_session_only=result.get("preview_session_only", {}),
+        preview_draft_chapter=result.get("preview_draft_chapter", {}),
+        preview_canon_chapter=result.get("preview_canon_chapter", {}),
+    )
+
+
+@router.post("/sessions/{session_id}/preview-archives", response_model=ArchivePreviewResponse, summary="预览三种归档模式")
+async def preview_archives(
+    session_id: str,
+    svc: TrpgService = Depends(_svc),
+) -> ArchivePreviewResponse:
+    session = await svc.load_session_async(session_id)
+    preview = _get_agent().preview_archives(session)
+    return ArchivePreviewResponse(
+        session_id=session.session_id,
+        preview_session_only=preview.get("preview_session_only", {}),
+        preview_draft_chapter=preview.get("preview_draft_chapter", {}),
+        preview_canon_chapter=preview.get("preview_canon_chapter", {}),
     )
 
 

@@ -1,0 +1,38 @@
+{
+  "project_id": "ui-audit-0412",
+  "project_name": "UI Audit 0412",
+  "created_at": "2026-04-12T11:27:16.491716+00:00",
+  "updated_at": "2026-04-12T11:41:42.174210+00:00",
+  "current_step": "genesis",
+  "current_chapter": 2,
+  "current_volume": 1,
+  "current_cycle_id": "",
+  "chapters": [
+    {
+      "chapter": 1,
+      "summary": "你睁开眼，发现自己正躺在一辆颠簸的牛车上；“多谢老丈救命之恩",
+      "quality_score": 0.0,
+      "hook_score": 0.0,
+      "word_count": 823,
+      "timestamp": "2026-04-12T11:37:08.498577+00:00"
+    },
+    {
+      "chapter": 2,
+      "summary": "牛车吱呀作响，在黄土路上缓缓前行",
+      "quality_score": 0.0,
+      "hook_score": 0.0,
+      "word_count": 396,
+      "timestamp": "2026-04-12T11:41:42.173850+00:00"
+    }
+  ],
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "consecutive_no_payoff": 0,
+  "consecutive_hook_fail": 0,
+  "consecutive_low_words": 0,
+  "total_tokens_used": 0,
+  "last_confirmed_step": "",
+  "pending_approval": false,
+  "approval_context": {}
+}

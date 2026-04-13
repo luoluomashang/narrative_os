@@ -217,6 +217,8 @@ const factionForm = ref<Omit<Faction, 'id'>>({
   alignment: 'true_neutral',
   relation_map: {},
   power_system_id: null,
+  x: 120,
+  y: 120,
   notes: '',
 })
 
@@ -298,6 +300,8 @@ watch(
       alignment: 'true_neutral',
       relation_map: {},
       power_system_id: null,
+      x: 120 + Math.random() * 260,
+      y: 100 + Math.random() * 260,
       notes: '',
     }
   },

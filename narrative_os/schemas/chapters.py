@@ -35,6 +35,9 @@ class RunChapterResponse(BaseModel):
     passed: bool
     retry_count: int
     run_id: str = ""
+    benchmark_adherence_score: float | None = None
+    benchmark_humanness_score: float | None = None
+    benchmark_violations: list[str] = Field(default_factory=list)
 
 
 class PlanChapterRequest(BaseModel):
@@ -168,12 +171,25 @@ class WritingWorldSummary(BaseModel):
     rules: list[str] = Field(default_factory=list)
 
 
+class WritingBenchmarkSummary(BaseModel):
+    profile_id: str = ""
+    profile_name: str = ""
+    mode: str = "project_benchmark"
+    top_rules: list[str] = Field(default_factory=list)
+    anti_rules: list[str] = Field(default_factory=list)
+    scene_hints: list[str] = Field(default_factory=list)
+    active_scene_anchor_count: int = 0
+    application_mode: str | None = None
+
+
 class WritingContextResponse(BaseModel):
     project_id: str
     chapter: int = 1
     previous_hook: str = ""
     current_volume_goal: str = ""
     pending_changes_count: int = 0
+    active_benchmark: WritingBenchmarkSummary | None = None
+    active_author_skill: WritingBenchmarkSummary | None = None
     world: WritingWorldSummary = Field(default_factory=WritingWorldSummary)
     characters: list[WritingContextCharacter] = Field(default_factory=list)
     prechecks: list[WritingPrecheckItem] = Field(default_factory=list)

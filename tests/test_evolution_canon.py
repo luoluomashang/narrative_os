@@ -384,6 +384,9 @@ class TestCanonCommitAPIEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["changeset_id"] == cs_id
+        assert "preview_session_only" in data
+        assert "preview_draft_chapter" in data
+        assert "preview_canon_chapter" in data
 
     def test_get_nonexistent_changeset_returns_404(self, client: TestClient):
         resp = client.get("/projects/some_proj/changesets/nonexistent-id")

@@ -26,8 +26,10 @@
     </transition-group>
 
     <!-- Waveform area chart -->
-    <div v-if="metrics.length > 0" ref="chartEl" class="waveform-chart" />
-    <div v-else class="empty-state">暂无章节指标数据，请先生成章节后再查看趋势。</div>
+    <div class="chart-shell">
+      <div ref="chartEl" class="waveform-chart" :class="{ 'waveform-chart--hidden': metrics.length === 0 }" />
+      <div v-if="metrics.length === 0" class="empty-state">暂无章节指标数据，请先生成章节后再查看趋势。</div>
+    </div>
 
     <!-- Chapter detail popup -->
     <div v-if="selectedChapter" class="chapter-popup">
@@ -37,6 +39,10 @@
       </div>
       <div class="popup-body">
         <div class="popup-score">综合评分：{{ selectedChapter.score }}/10</div>
+        <div class="popup-benchmark">
+          <span>对标贴合 {{ Math.round(selectedChapter.benchmarkAdherence * 100) }}%</span>
+          <span>人味 {{ Math.round(selectedChapter.benchmarkHumanness * 100) }}%</span>
+        </div>
         <!-- 8D Radar Chart -->
         <div ref="radarEl" class="radar-8d" />
         <NButton variant="primary" @click="openInIDE(selectedChapter.chapter)">在场景IDE中打开</NButton>
@@ -64,8 +70,17 @@ interface ChapterMetric {
   tension: number
   pacing: number
   score: number
+  benchmarkAdherence: number
+  benchmarkHumanness: number
   qd: number[]  // 8D quality dimensions [0..7]
   dimensions: Array<{ label: string; value: number; trend: string }>
+}
+
+function normalizeScore(value: number | undefined, fallback = 5): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return fallback
+  }
+  return value <= 1 ? Math.round(value * 100) / 10 : value
 }
 
 const metrics = ref<ChapterMetric[]>([])
@@ -89,22 +104,30 @@ const summaryStats = computed(() => {
       { label: '平均张力', value: '0.0' },
       { label: '峰值张力', value: 0 },
       { label: '谷值张力', value: 0 },
+      { label: '平均贴合', value: '--' },
+      { label: '平均人味', value: '--' },
     ]
   }
   const avg = metrics.value.reduce((s, m) => s + m.tension, 0) / metrics.value.length
   const maxT = Math.max(...metrics.value.map(m => m.tension))
   const minT = Math.min(...metrics.value.map(m => m.tension))
+  const avgAdherence = metrics.value.reduce((s, m) => s + m.benchmarkAdherence, 0) / metrics.value.length
+  const avgHumanness = metrics.value.reduce((s, m) => s + m.benchmarkHumanness, 0) / metrics.value.length
   return [
     { label: '章节数', value: metrics.value.length },
     { label: '平均张力', value: avg.toFixed(1) },
     { label: '峰值张力', value: maxT },
     { label: '谷值张力', value: minT },
+    { label: '平均贴合', value: `${Math.round(avgAdherence * 100)}%` },
+    { label: '平均人味', value: `${Math.round(avgHumanness * 100)}%` },
   ]
 })
 
 interface SelectedChapter {
   chapter: number
   score: number
+  benchmarkAdherence: number
+  benchmarkHumanness: number
   qd: number[]
   dimensions: Array<{ label: string; value: number; trend: string }>
 }
@@ -189,6 +212,8 @@ async function refreshMetrics() {
           avg_tension?: number
           pacing_score?: number
           overall_score?: number
+          benchmark_adherence_score?: number
+          benchmark_humanness_score?: number
           qd_01?: number
           qd_02?: number
           qd_03?: number
@@ -200,19 +225,24 @@ async function refreshMetrics() {
         }
 
         return {
-        chapter: item.chapter,
-        tension: raw.avg_tension ?? item.quality_score ?? 5,
-        pacing: raw.pacing_score ?? 0.5,
-        score: raw.overall_score ?? item.quality_score ?? 5,
-        qd: [
-          raw.qd_01, raw.qd_02, raw.qd_03, raw.qd_04,
-          raw.qd_05, raw.qd_06, raw.qd_07, raw.qd_08,
-        ].map(v => typeof v === 'number' ? Math.round(v * 10) : 5) as number[],
-        dimensions: [
-          { label: '张力', value: raw.avg_tension ?? 5, trend: '→' },
-          { label: '节奏', value: raw.pacing_score ?? 5, trend: '↑' },
-        ],
-      }})
+          chapter: item.chapter,
+          tension: normalizeScore(raw.avg_tension ?? item.quality_score, 5),
+          pacing: normalizeScore(raw.pacing_score, 5),
+          score: normalizeScore(raw.overall_score ?? item.quality_score, 5),
+          benchmarkAdherence: typeof raw.benchmark_adherence_score === 'number' ? raw.benchmark_adherence_score : 0,
+          benchmarkHumanness: typeof raw.benchmark_humanness_score === 'number' ? raw.benchmark_humanness_score : 0,
+          qd: [
+            raw.qd_01, raw.qd_02, raw.qd_03, raw.qd_04,
+            raw.qd_05, raw.qd_06, raw.qd_07, raw.qd_08,
+          ].map(v => normalizeScore(v, 5)) as number[],
+          dimensions: [
+            { label: '张力', value: normalizeScore(raw.avg_tension ?? item.quality_score, 5), trend: '→' },
+            { label: '节奏', value: normalizeScore(raw.pacing_score, 5), trend: '↑' },
+            { label: '贴合', value: Math.round((raw.benchmark_adherence_score ?? 0) * 100) / 10, trend: '→' },
+            { label: '人味', value: Math.round((raw.benchmark_humanness_score ?? 0) * 100) / 10, trend: '→' },
+          ],
+        }
+      })
       chart?.setOption(buildOption(metrics.value))
       chart?.off('click')
       chart?.on('click', (params: { dataIndex: number }) => {
@@ -281,8 +311,10 @@ watch(selectedChapter, async (val) => {
 })
 
 onMounted(async () => {
-  if (!chartEl.value) return
-  chart = echarts.init(chartEl.value, null, { renderer: 'svg' })
+  await nextTick()
+  if (chartEl.value) {
+    chart = echarts.init(chartEl.value, null, { renderer: 'svg' })
+  }
   await refreshMetrics()
 })
 
@@ -312,10 +344,12 @@ onBeforeUnmount(() => { chart?.dispose(); radarChart?.dispose() })
 .summary-cards {
   display: flex;
   gap: var(--spacing-sm);
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 .summary-card {
   flex: 1;
+  min-width: 120px;
   background: var(--color-surface-l1);
   border-radius: var(--radius-card);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -338,11 +372,22 @@ onBeforeUnmount(() => { chart?.dispose(); radarChart?.dispose() })
 .warn-banner.fatigue { background: color-mix(in srgb, var(--color-hitl) 15%, transparent); border: 1px solid var(--color-hitl); }
 
 /* Waveform chart */
-.waveform-chart { flex: 1; min-height: 180px; }
-
-.empty-state {
+.chart-shell {
   flex: 1;
   min-height: 180px;
+  position: relative;
+}
+
+.waveform-chart { flex: 1; min-height: 180px; }
+
+.waveform-chart--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
   border: 1px dashed var(--color-surface-l2);
   border-radius: var(--radius-card);
   color: var(--color-text-secondary);
@@ -381,6 +426,13 @@ onBeforeUnmount(() => { chart?.dispose(); radarChart?.dispose() })
 .popup-body { padding: var(--spacing-md); display: flex; flex-direction: column; gap: var(--spacing-sm); }
 .radar-8d { height: 180px; width: 100%; }
 .popup-score { font-size: var(--text-h2); font-weight: 700; }
+.popup-benchmark {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
 .popup-dims { display: flex; flex-direction: column; gap: 4px; }
 .popup-dim { display: flex; align-items: center; gap: var(--spacing-sm); font-size: 13px; }
 .dim-bar { flex: 1; height: 4px; background: var(--color-surface-l2); border-radius: 2px; }

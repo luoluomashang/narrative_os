@@ -1,0 +1,52 @@
+{
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "5eed2ca6-3009-4d82-af7e-77ef49a845a5",
+        "chapter": 1,
+        "description": "test",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T08:17:31.306691+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "5eed2ca6-3009-4d82-af7e-77ef49a845a5",
+        "chapter": 1,
+        "description": "test",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T08:17:31.306691+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

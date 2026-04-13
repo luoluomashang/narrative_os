@@ -89,6 +89,11 @@ const routes = [
     meta: { title: '风格控制台', requiresProject: true },
   },
   {
+    path: '/project/:id/benchmark',
+    component: () => import('@/pages/BenchmarkStudio/index.vue'),
+    meta: { title: 'Benchmark Studio', requiresProject: true },
+  },
+  {
     path: '/project/:id/check',
     component: () => import('@/pages/ConsistencyChecker/index.vue'),
     meta: { title: '一致性检查', requiresProject: true },
@@ -129,7 +134,13 @@ router.beforeEach(async (to) => {
   if (projectId) {
     try {
       const store = useProjectStore()
-      if (store.projectId !== projectId) {
+      const loadedProjectId = (store.projectInfo as { project_id?: string } | null)?.project_id
+      const needsReload =
+        store.projectId !== projectId ||
+        !store.projectInfo ||
+        loadedProjectId !== projectId
+
+      if (needsReload) {
         store.setProjectId(projectId)
         try {
           await store.loadProjectInfo(projectId)

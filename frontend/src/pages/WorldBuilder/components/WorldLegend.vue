@@ -11,7 +11,7 @@
           :key="item.id"
           class="legend-item"
           :class="{ active: highlightFactionId === item.id, dimmed: highlightFactionId && highlightFactionId !== item.id }"
-          @click="toggleHighlight(item.id)"
+          @click="selectLegendItem(item.id)"
         >
           <span class="legend-swatch" :style="{ background: item.color }"></span>
           <span class="legend-name">{{ item.name }}</span>
@@ -27,7 +27,7 @@
           <span class="legend-name">无归属</span>
           <span class="legend-count">{{ unaffiliatedCount }}</span>
         </div>
-        <div v-if="highlightFactionId" class="legend-reset" @click="toggleHighlight(highlightFactionId!)">
+        <div v-if="highlightFactionId" class="legend-reset" @click="clearHighlight">
           清除筛选
         </div>
       </div>
@@ -46,6 +46,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'highlight', factionId: string | null): void
+  (e: 'select', factionId: string): void
 }>()
 
 const collapsed = ref(false)
@@ -81,6 +82,16 @@ const unaffiliatedCount = computed(
 function toggleHighlight(id: string) {
   highlightFactionId.value = highlightFactionId.value === id ? null : id
   emit('highlight', highlightFactionId.value)
+}
+
+function selectLegendItem(id: string) {
+  toggleHighlight(id)
+  emit('select', id)
+}
+
+function clearHighlight() {
+  highlightFactionId.value = null
+  emit('highlight', null)
 }
 </script>
 

@@ -1,5 +1,5 @@
 import client from './client'
-import type { CreateSessionRequest, CreateSessionResponse, StepSessionRequest, TurnRecordResponse, SessionStatusResponse, InterruptRequest, RollbackRequest, SessionSummary } from '@/types/session'
+import type { ArchivePreviewResponse, CreateSessionRequest, CreateSessionResponse, StepSessionRequest, TurnRecordResponse, SessionStatusResponse, InterruptRequest, RollbackRequest, SessionSummary } from '@/types/session'
 
 export const sessions = {
   create: (req: CreateSessionRequest) =>
@@ -12,6 +12,8 @@ export const sessions = {
     client.post(`/sessions/${id}/rollback`, req),
   end: (id: string) =>
     client.post<SessionSummary>(`/sessions/${id}/end`),
+  previewArchives: (id: string) =>
+    client.post<ArchivePreviewResponse>(`/sessions/${id}/preview-archives`),
   status: (id: string) =>
     client.get<SessionStatusResponse>(`/sessions/${id}/status`),
   // Phase 3: SL

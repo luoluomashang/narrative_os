@@ -2,20 +2,12 @@
   "project_id": "default",
   "project_name": "default",
   "created_at": "2026-04-06T10:08:57.585006+00:00",
-  "updated_at": "2026-04-11T18:00:38.124330+00:00",
+  "updated_at": "2026-04-12T13:57:05.436576+00:00",
   "current_step": "genesis",
-  "current_chapter": 3,
+  "current_chapter": 4,
   "current_volume": 1,
   "current_cycle_id": "",
   "chapters": [
-    {
-      "chapter": 1,
-      "summary": "第 1 章",
-      "quality_score": 0.563,
-      "hook_score": 0.3,
-      "word_count": 925,
-      "timestamp": "2026-04-07T04:30:08.301779+00:00"
-    },
     {
       "chapter": 2,
       "summary": "第 2 章",
@@ -25,12 +17,28 @@
       "timestamp": "2026-04-07T04:31:02.546794+00:00"
     },
     {
+      "chapter": 1,
+      "summary": "测试",
+      "quality_score": 0.8,
+      "hook_score": 0.7,
+      "word_count": 100,
+      "timestamp": "2026-04-12T08:32:46.234626+00:00"
+    },
+    {
       "chapter": 3,
       "summary": "高潮章节",
       "quality_score": 0.8,
       "hook_score": 0.7,
       "word_count": 6,
-      "timestamp": "2026-04-11T18:00:38.123456+00:00"
+      "timestamp": "2026-04-12T13:57:05.413917+00:00"
+    },
+    {
+      "chapter": 4,
+      "summary": "带对标评分的章节",
+      "quality_score": 0.8,
+      "hook_score": 0.7,
+      "word_count": 6,
+      "timestamp": "2026-04-12T13:57:05.436228+00:00"
     }
   ],
   "one_sentence": "",

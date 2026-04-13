@@ -1,0 +1,45 @@
+{
+  "one_sentence": "",
+  "one_paragraph": "",
+  "genre_tags": [],
+  "world": {
+    "power_system": null,
+    "factions": [],
+    "key_locations": [],
+    "rules": [],
+    "world_name": "",
+    "world_type": "continental",
+    "world_description": "",
+    "sandbox_raw": {
+      "world_name": "",
+      "world_type": "continental",
+      "world_description": "",
+      "regions": [],
+      "factions": [],
+      "power_systems": [],
+      "world_rules": [],
+      "relations": [],
+      "timeline_events": [
+        {
+          "id": "be333594-dd77-40d3-98d1-f8fcfba73c5b",
+          "year": "",
+          "title": "开国",
+          "description": "",
+          "linked_entity_id": null,
+          "event_type": "general"
+        },
+        {
+          "id": "da178640-4446-4a14-b78f-e8801c7e59a1",
+          "year": "",
+          "title": "灭世",
+          "description": "",
+          "linked_entity_id": null,
+          "event_type": "general"
+        }
+      ],
+      "canvas_viewport": {}
+    }
+  },
+  "plot_nodes": [],
+  "characters": []
+}

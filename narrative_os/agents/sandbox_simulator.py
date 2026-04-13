@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field
 
 from narrative_os.core.interactive_modes import ControlMode
+from narrative_os.execution.prompt_utils import plain_text_contract
 
 if TYPE_CHECKING:
     from narrative_os.core.character import CharacterState
@@ -133,16 +134,24 @@ class SandboxSimulator:
 
         events_text = "；".join(recent_events[-3:]) if recent_events else "无"
 
-        prompt = (
-            f"角色：{char.name}（{char.personality or char.description or '无描述'}）\n"
-            f"Drive：{drive_text or '未设定'}\n"
-            f"当前情绪：{char.emotion}，当前弧光阶段：{char.arc_stage}\n"
-            f"世界规则（前3条）：{world_rules or '无'}\n"
-            f"最近事件：{events_text}\n"
-            f"控制模式：{control_mode.value}\n\n"
-            f"请推断该角色本轮会主动做什么（1-2句话，第三人称，不超过60字）。"
-            f"如有位置变化，括号内注明；如有关系变化，在最后一行输出「[关系变化] 角色名:±0.1」。"
-            f"直接输出推演结果，无需前缀。"
+        prompt = "\n\n".join(
+            [
+                "\n".join(
+                    [
+                        f"角色：{char.name}（{char.personality or char.description or '无描述'}）",
+                        f"Drive：{drive_text or '未设定'}",
+                        f"当前情绪：{char.emotion}，当前弧光阶段：{char.arc_stage}",
+                        f"世界规则（前3条）：{world_rules or '无'}",
+                        f"最近事件：{events_text}",
+                        f"控制模式：{control_mode.value}",
+                    ]
+                ),
+                plain_text_contract(
+                    "请推断该角色本轮会主动做什么（1-2句话，第三人称，不超过60字）。",
+                    "如有位置变化，括号内注明；如有关系变化，在最后一行输出「[关系变化] 角色名:±0.1」。",
+                    "直接输出推演结果，无需前缀。",
+                ),
+            ]
         )
 
         from narrative_os.execution.llm_router import LLMRouter

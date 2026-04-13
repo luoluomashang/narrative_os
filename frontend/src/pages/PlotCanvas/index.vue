@@ -1,5 +1,18 @@
 <template>
-  <div class="plot-canvas-page">
+  <div class="plot-canvas-page app-page-surface">
+    <section class="app-hero-card">
+      <div>
+        <p class="app-eyebrow">Plot Canvas</p>
+        <h1 class="app-hero-title">剧情画布</h1>
+        <p class="app-hero-copy">维护当前卷目标与剧情节点张力，让项目主页、写前检查和剧情图谱保持一致。</p>
+      </div>
+      <div class="app-hero-meta">
+        <span class="app-pill">项目 {{ projectId }}</span>
+        <span class="app-pill app-pill--accent">节点 {{ nodes.length }}</span>
+        <span class="app-pill">{{ volumeGoalDraft.trim() ? '卷目标已配置' : '卷目标待配置' }}</span>
+      </div>
+    </section>
+
     <div v-if="error" class="error-card">
       <NCard>
         <p style="color: var(--color-error)">加载失败：{{ error }}</p>
@@ -201,12 +214,23 @@ onMounted(loadPlot)
 </script>
 
 <style scoped>
-.plot-canvas-page { height: 100%; display: flex; flex-direction: column; }
-.plot-layout { display: flex; gap: 16px; height: 100%; }
+.plot-canvas-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.plot-layout {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
 .flow-container {
   flex: 1; background: var(--color-surface-l1);
   border-radius: var(--radius-card); border: 1px solid var(--color-surface-l2);
-  position: relative; min-height: 400px; overflow: hidden;
+  position: relative; min-height: 400px; height: 100%; overflow: hidden;
 }
 .right-panel { width: 260px; flex-shrink: 0; overflow-y: auto; }
 .tension-chart { height: 120px; width: 100%; }
@@ -229,4 +253,14 @@ onMounted(loadPlot)
 }
 .error-card { padding: 16px; }
 h3 { font-size: var(--text-h2); margin-bottom: 12px; }
+
+@media (max-width: 960px) {
+  .plot-layout {
+    flex-direction: column;
+  }
+
+  .right-panel {
+    width: 100%;
+  }
+}
 </style>

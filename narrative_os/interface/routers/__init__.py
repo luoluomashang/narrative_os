@@ -5,6 +5,7 @@ from narrative_os.interface.routers import (  # noqa: F401
     trpg,
     chapters,
     projects,
+    benchmark,
     memory,
     settings,
     governance,

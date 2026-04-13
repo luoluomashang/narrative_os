@@ -69,6 +69,21 @@ class Project(Base):
         back_populates="project", cascade="all, delete-orphan"
     )
     cost_records: Mapped[list["CostRecord"]] = relationship(back_populates="project")
+    benchmark_sources: Mapped[list["BenchmarkSourceRecord"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    benchmark_snippets: Mapped[list["BenchmarkSnippetRecord"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    benchmark_profiles: Mapped[list["BenchmarkProfileRecord"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    benchmark_scores: Mapped[list["BenchmarkScoreRecord"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    author_skills: Mapped[list["AuthorSkillRecord"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 # ------------------------------------------------------------------ #
@@ -273,6 +288,168 @@ class StoryConcept(Base):
 
 
 # ------------------------------------------------------------------ #
+# BenchmarkSourceRecord                                               #
+# ------------------------------------------------------------------ #
+class BenchmarkSourceRecord(Base):
+    __tablename__ = "benchmark_sources"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    corpus_group: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    title: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    author_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    file_name: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    sha256: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    char_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    chapter_sep: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    source_type: Mapped[str] = mapped_column(
+        String(30), default="project_reference", server_default="project_reference"
+    )
+    text_content: Mapped[str] = mapped_column(Text, default="", server_default="")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    project: Mapped["Project"] = relationship(back_populates="benchmark_sources")
+
+
+# ------------------------------------------------------------------ #
+# BenchmarkSnippetRecord                                              #
+# ------------------------------------------------------------------ #
+class BenchmarkSnippetRecord(Base):
+    __tablename__ = "benchmark_snippets"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    profile_id: Mapped[str] = mapped_column(String(100), index=True)
+    source_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("benchmark_sources.id", ondelete="CASCADE"), index=True
+    )
+    scene_type: Mapped[str] = mapped_column(String(100), default="unknown", server_default="unknown")
+    chapter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    offset_start: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    offset_end: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    char_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    anchor_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    purity_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    distinctiveness_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    text: Mapped[str] = mapped_column(Text, default="", server_default="")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    project: Mapped["Project"] = relationship(back_populates="benchmark_snippets")
+
+    __table_args__ = (
+        Index("ix_benchmark_snippets_project_scene", "project_id", "scene_type"),
+    )
+
+
+# ------------------------------------------------------------------ #
+# BenchmarkProfileRecord                                              #
+# ------------------------------------------------------------------ #
+class BenchmarkProfileRecord(Base):
+    __tablename__ = "benchmark_profiles"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    run_id: Mapped[str | None] = mapped_column(String(100), index=True, nullable=True)
+    profile_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    profile_name: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    source_ids_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    stable_traits_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    conditional_traits_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    anti_traits_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    scene_anchors_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    humanness_baseline_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    status: Mapped[str] = mapped_column(String(30), default="draft", server_default="draft")
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    project: Mapped["Project"] = relationship(back_populates="benchmark_profiles")
+
+    __table_args__ = (
+        Index("ix_benchmark_profiles_project_created", "project_id", "created_at"),
+    )
+
+
+# ------------------------------------------------------------------ #
+# BenchmarkScoreRecord                                                #
+# ------------------------------------------------------------------ #
+class BenchmarkScoreRecord(Base):
+    __tablename__ = "benchmark_scores"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    run_id: Mapped[str | None] = mapped_column(String(100), index=True, nullable=True)
+    chapter: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    profile_id: Mapped[str] = mapped_column(String(100), index=True)
+    humanness_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    adherence_score: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    dimension_scores_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    violations_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    recommendations_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    project: Mapped["Project"] = relationship(back_populates="benchmark_scores")
+
+    __table_args__ = (
+        Index("ix_benchmark_scores_project_chapter", "project_id", "chapter"),
+    )
+
+
+# ------------------------------------------------------------------ #
+# AuthorSkillRecord                                                   #
+# ------------------------------------------------------------------ #
+class AuthorSkillRecord(Base):
+    __tablename__ = "author_skills"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    run_id: Mapped[str | None] = mapped_column(String(100), index=True, nullable=True)
+    skill_name: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    author_name: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    source_ids_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    stable_rules_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    conditional_rules_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    anti_rules_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    dialogue_rules_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    scene_patterns_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    chapter_hook_patterns_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    humanness_baseline_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    confidence_map_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    status: Mapped[str] = mapped_column(String(30), default="draft", server_default="draft")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    project: Mapped["Project"] = relationship(back_populates="author_skills")
+
+    __table_args__ = (
+        Index("ix_author_skills_project_created", "project_id", "created_at"),
+    )
+
+
+# ------------------------------------------------------------------ #
 # RunRecord                                                           #
 # ------------------------------------------------------------------ #
 class RunRecord(Base):
@@ -287,6 +464,12 @@ class RunRecord(Base):
     chapter_num: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     total_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    correlation_id: Mapped[str] = mapped_column(
+        String(40), default="", server_default="", index=True
+    )
+    failure_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    root_cause_step_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     user_id: Mapped[str] = mapped_column(
         String(100), default="local", server_default="local"
     )
@@ -314,6 +497,11 @@ class RunStepRecord(Base):
     step_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     agent_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
     status: Mapped[str] = mapped_column(String(30), default="running", server_default="running")
+    correlation_id: Mapped[str] = mapped_column(
+        String(40), default="", server_default=""
+    )
+    failure_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    failure_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -342,6 +530,9 @@ class ArtifactRecord(Base):
     agent_name: Mapped[str] = mapped_column(String(100), default="", server_default="")
     input_summary: Mapped[str] = mapped_column(Text, default="", server_default="")
     output_content: Mapped[str] = mapped_column(Text, default="", server_default="")
+    correlation_id: Mapped[str] = mapped_column(
+        String(40), default="", server_default=""
+    )
     quality_scores: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
     token_in: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     token_out: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -363,6 +554,9 @@ class ApprovalCheckpointRecord(Base):
     run_id: Mapped[str] = mapped_column(
         String(100), ForeignKey("runs.id", ondelete="CASCADE"), index=True
     )
+    correlation_id: Mapped[str] = mapped_column(
+        String(40), default="", server_default=""
+    )
     reason: Mapped[str] = mapped_column(Text, default="", server_default="")
     context: Mapped[str] = mapped_column(Text, default="", server_default="")
     decision: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -370,3 +564,145 @@ class ApprovalCheckpointRecord(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     run: Mapped["RunRecord"] = relationship(back_populates="approvals")
+
+
+# ------------------------------------------------------------------ #
+# Story Plan Records                                                  #
+# ------------------------------------------------------------------ #
+class BookPlanRecord(Base):
+    __tablename__ = "book_plans"
+
+    id: Mapped[str] = mapped_column(
+        String(100),
+        primary_key=True,
+        default=lambda: __import__("uuid").uuid4().hex,
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(100),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    title: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    premise: Mapped[str] = mapped_column(Text, default="", server_default="")
+    genre: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    total_volumes: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    notes_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    volumes: Mapped[list["VolumePlanRecord"]] = relationship(
+        back_populates="book_plan", cascade="all, delete-orphan"
+    )
+
+
+class VolumePlanRecord(Base):
+    __tablename__ = "volume_plans"
+
+    id: Mapped[str] = mapped_column(
+        String(100),
+        primary_key=True,
+        default=lambda: __import__("uuid").uuid4().hex,
+    )
+    book_plan_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("book_plans.id", ondelete="CASCADE"), index=True
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    volume_num: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    title: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    premise: Mapped[str] = mapped_column(Text, default="", server_default="")
+    arc_summary: Mapped[str] = mapped_column(Text, default="", server_default="")
+    notes_json: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    book_plan: Mapped["BookPlanRecord"] = relationship(back_populates="volumes")
+    chapters: Mapped[list["ChapterPlanRecord"]] = relationship(
+        back_populates="volume_plan", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_volume_plans_book_volume", "book_plan_id", "volume_num", unique=True),
+    )
+
+
+class ChapterPlanRecord(Base):
+    __tablename__ = "chapter_plans"
+
+    id: Mapped[str] = mapped_column(
+        String(100),
+        primary_key=True,
+        default=lambda: __import__("uuid").uuid4().hex,
+    )
+    volume_plan_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("volume_plans.id", ondelete="CASCADE"), index=True
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    chapter_num: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    volume_num: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    title: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    summary: Mapped[str] = mapped_column(Text, default="", server_default="")
+    hook: Mapped[str] = mapped_column(Text, default="", server_default="")
+    tension_target: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    dialogue_goals_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    legacy_outline_text: Mapped[str] = mapped_column(Text, default="", server_default="")
+    source_run_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    volume_plan: Mapped["VolumePlanRecord"] = relationship(back_populates="chapters")
+    scene_beats: Mapped[list["SceneBeatRecord"]] = relationship(
+        back_populates="chapter_plan", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_chapter_plans_project_volume_chapter", "project_id", "volume_num", "chapter_num", unique=True),
+    )
+
+
+class SceneBeatRecord(Base):
+    __tablename__ = "scene_beats"
+
+    id: Mapped[str] = mapped_column(
+        String(100),
+        primary_key=True,
+        default=lambda: __import__("uuid").uuid4().hex,
+    )
+    chapter_plan_id: Mapped[str] = mapped_column(
+        String(100), ForeignKey("chapter_plans.id", ondelete="CASCADE"), index=True
+    )
+    beat_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    beat_key: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    label: Mapped[str] = mapped_column(String(300), default="", server_default="")
+    objective: Mapped[str] = mapped_column(Text, default="", server_default="")
+    conflict: Mapped[str] = mapped_column(Text, default="", server_default="")
+    outcome: Mapped[str] = mapped_column(Text, default="", server_default="")
+    tension: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    location: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    characters_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    source_node_ids_json: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    estimated_words: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    user_id: Mapped[str] = mapped_column(
+        String(100), default="local", server_default="local"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+    chapter_plan: Mapped["ChapterPlanRecord"] = relationship(back_populates="scene_beats")
+
+    __table_args__ = (
+        Index("ix_scene_beats_chapter_index", "chapter_plan_id", "beat_index", unique=True),
+    )

@@ -1,9 +1,26 @@
 # Narrative OS
 
-> 项目版本基线：v2.1.0
-> 更新日期：2026-04-11
+> 项目版本基线：v2.1.1
+> 更新日期：2026-04-12
 
 面向长篇小说创作的多智能体叙事操作系统。
+
+## v2.1.1 本次收口
+
+- 统一版本真相源为 `narrative_os.__version__`，API / 包元数据 / 前端包版本同步到 2.1.1
+- `api_legacy.py` 收敛为兼容入口，不再维护第二套路由定义
+- 前端 OpenAPI 生成脚本改为跨平台执行链路，移除 Windows 专用 Python 路径
+- `frontend/src/api/world.ts` 改为直接复用 `api.gen.ts` 生成类型，避免手写世界模型漂移
+- 浏览器验收补齐缺失项目回退链路：访问不存在的 `/project/:id` 会自动返回项目列表，并显示可读错误提示
+- 统一 Character Matrix / Plot Canvas 与项目主页、Writing Workbench 的页头风格，减少核心流程中的 UI 断层
+- Character Matrix 首屏默认选中首个角色，进入页面后可直接编辑，不再停留在空白占位态
+- Writing Workbench 的“仅规划”结果改为结构化摘要输出，不再把原始 JSON 响应直接暴露给用户
+- TRPG 着陆归档会先剥离决策选项，再生成会话摘要、章节预览与下章钩子，避免总结区混入 `[选项 A/B/C]`
+- 新增 `Benchmark Studio` 浏览器验收闭环：项目级 benchmark、作者蒸馏 Skill、Skill 应用与写作页上下文展示已全部打通
+- 旧运行时 SQLite 数据库会在启动时自动补齐 benchmark / author skill 相关列，不再因历史库缺列导致 `/benchmark/jobs` 500
+- `Benchmark Studio` 已加入侧边栏“质量工具”，作者蒸馏在少于 3 部作品时会前端禁用提交按钮并显示当前填写数量
+- Writing Workbench 现已同时展示激活中的 benchmark 与 author skill，写作前可以直接确认 scene hints 与 anti-rules
+- Writing Workbench 会按前置检查阻断章节生成；当 WorldState 尚未发布时，前端会直接禁用“开始生成”，避免落到后端规则拦截
 
 从 prompts-only 流程升级为结构化工程化体系：
 - 类型化数据模型（剧情/角色/世界/记忆）
@@ -110,7 +127,7 @@
 - Maintenance 会自动生成 `CANON_PENDING` 变更集，审批通过后才写入知识库 / RuntimeWorldState
 
 ### 8. 可视化与运营面板
-- 情节画布、角色矩阵、记忆系统、质量仪表盘、风格控制台
+- 情节画布、角色矩阵、记忆系统、质量仪表盘、风格控制台、Benchmark Studio
 - Agent 工坊、消耗统计、插件市场、全局与项目设置
 - 项目状态机首页、Writing Workbench、TraceInspector 回放
 
@@ -180,9 +197,10 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 4. 点击世界构建中的“发布运行态”，生成并持久化 `RuntimeWorldState`。
 5. 在剧情画布中填写“当前卷目标”，或在已有 PlotGraph 上直接更新当前激活节点摘要（`/project/:id/plot`）。
 6. 进入角色矩阵补齐角色口吻、约束与动机，至少为主角补齐 Drive 层（`/project/:id/characters`）。
-7. 在章节撰写页使用 `Writing Workbench` 完成前置检查、规划、生成与 Trace 追踪（`/project/:id/write`）。
-8. 在项目首页、Agent 工坊或执行链路页审查待提交变更与 Run 树；其中 Agent 工坊与执行链路页现已统一读取同一份 Run / Step 数据（`/project/:id`、`/project/:id/agents`、`/project/:id/trace`）。
-9. 批准 `CANON_PENDING` 变更后，再进入一致性检查与人味化质检（`/project/:id/check`、`/project/:id/humanize`）。
+7. 在 `Benchmark Studio` 生成项目级 benchmark，必要时再蒸馏作者级 Skill 并应用到当前项目（`/project/:id/benchmark`）。
+8. 在章节撰写页使用 `Writing Workbench` 完成前置检查、规划、生成与 Trace 追踪；页头会同步展示激活中的 benchmark / skill，且只有在错误级前置检查通过后才允许发起章节生成（`/project/:id/write`）。
+9. 在项目首页、Agent 工坊或执行链路页审查待提交变更与 Run 树；其中 Agent 工坊与执行链路页现已统一读取同一份 Run / Step 数据（`/project/:id`、`/project/:id/agents`、`/project/:id/trace`）。
+10. 批准 `CANON_PENDING` 变更后，再进入一致性检查与人味化质检（`/project/:id/check`、`/project/:id/humanize`）。
 
 ## CLI 命令
 
@@ -218,6 +236,7 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 - `/project/:id/memory` 记忆系统
 - `/project/:id/memory-search` 记忆检索
 - `/project/:id/metrics` 质量仪表盘
+- `/project/:id/benchmark` Benchmark Studio
 - `/project/:id/style` 风格控制台
 - `/project/:id/check` 一致性检查
 - `/project/:id/humanize` 去 AI 痕迹
@@ -236,6 +255,16 @@ narrative humanize --input chapter1.md --output chapter1_human.md
 - `GET /projects/{project_id}/status`
 - `GET /cost`
 - `POST /metrics`
+
+### Benchmark / 作者蒸馏
+- `POST /projects/{project_id}/benchmark/jobs`
+- `GET /projects/{project_id}/benchmark/jobs/{run_id}`
+- `GET /projects/{project_id}/benchmark/profile`
+- `POST /projects/{project_id}/benchmark/profile/activate`
+- `GET /projects/{project_id}/benchmark/snippets`
+- `GET /projects/{project_id}/benchmark/skills`
+- `GET /projects/{project_id}/benchmark/skills/{skill_id}`
+- `POST /projects/{project_id}/benchmark/skills/{skill_id}/apply`
 
 ### TRPG
 - `POST /sessions/create`

@@ -207,7 +207,9 @@ async def worldbuilder_start() -> WorldbuilderStartResponse:
 
 @router.post("/worldbuilder/step", response_model=WorldbuilderStepResponse, summary="推进 WorldBuilder 步骤")
 async def worldbuilder_step(req: WorldbuilderStepRequest) -> WorldbuilderStepResponse:
-    from narrative_os.core.state import StateManager
+    from narrative_os.core.state_snapshot_store import save_runtime_snapshot_payload
+    from narrative_os.interface.services.project_service import get_project_service
+
     wb = _get_wb_session(req.wb_session_id)
     result = wb.submit_step(req.user_input)
     done = result.step.value == "done"
@@ -222,12 +224,11 @@ async def worldbuilder_step(req: WorldbuilderStepRequest) -> WorldbuilderStepRes
         }
         _wb_project_id = f"wb_{req.wb_session_id[:8]}"
         try:
-            _seed_mgr = StateManager(project_id=_wb_project_id, base_dir=".narrative_state")
-            try:
-                _seed_mgr.load_state()
-            except FileNotFoundError:
-                _seed_mgr.initialize(project_name=_wb_project_id)
-            _kb = _seed_mgr.load_kb()
+            project_svc = get_project_service()
+            seed_handle = project_svc.try_load_project(_wb_project_id)
+            if seed_handle is None:
+                seed_handle = project_svc.initialize_project(_wb_project_id, title=_wb_project_id)
+            _kb = seed_handle.load_kb()
             if wb_state.initial_characters:
                 _kb["characters"] = wb_state.initial_characters
             if wb_state.initial_world:
@@ -238,8 +239,13 @@ async def worldbuilder_step(req: WorldbuilderStepRequest) -> WorldbuilderStepRes
                 _kb["one_sentence"] = wb_state.one_sentence
             if wb_state.one_paragraph:
                 _kb["one_paragraph"] = wb_state.one_paragraph
-            _seed_mgr.save_kb(_kb)
-            _seed_mgr.save_state()
+            seed_handle.save_kb(_kb)
+            seed_handle.save_state()
+            save_runtime_snapshot_payload(
+                _wb_project_id,
+                characters=wb_state.initial_characters or [],
+                world=wb_state.initial_world or {},
+            )
         except Exception:
             pass
 

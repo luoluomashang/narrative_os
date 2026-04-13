@@ -104,6 +104,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useProjectStore } from '@/stores/projectStore'
 import { concept as conceptApi } from '@/api/world'
+import type { ConceptData } from '@/api/world'
 
 const store = useProjectStore()
 const router = useRouter()
@@ -114,10 +115,10 @@ const tagInputVisible = ref(false)
 const tagInputValue = ref('')
 const tagInputRef = ref<InstanceType<typeof import('element-plus')['ElInput']>>()
 
-const form = reactive({
+const form = reactive<ConceptData>({
   one_sentence: '',
   one_paragraph: '',
-  genre_tags: [] as string[],
+  genre_tags: [],
   world_type: 'continental',
 })
 

@@ -34,5 +34,25 @@
     "current_chapter": 0,
     "current_volume": 1,
     "snapshot_history": []
+  },
+  "plot_graph": {
+    "nodes": [
+      {
+        "id": "volume-goal-1",
+        "type": "setup",
+        "summary": "卷一：穿过荒原进入黑石镇",
+        "tension": 0.5,
+        "pacing_type": "rising",
+        "key_beat": "正面冲突",
+        "characters": [],
+        "location": "",
+        "status": "active",
+        "side_effects": [],
+        "branch_probability": {},
+        "chapter_ref": 1,
+        "notes": ""
+      }
+    ],
+    "edges": []
   }
 }

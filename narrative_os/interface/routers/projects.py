@@ -1,12 +1,11 @@
 """routers/projects.py — 项目管理 CRUD 路由模块。"""
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from narrative_os.core.plot_repository import get_plot_repository
 from narrative_os.schemas.projects import (
     CostHistoryItem,
     ProjectListItem,
@@ -31,109 +30,81 @@ def _svc() -> ProjectService:
     return get_project_service()
 
 
+def _load_status_manager(project_id: str, svc: ProjectService):
+    import sys
+
+    from narrative_os.core.state import StateManager as RuntimeStateManager
+
+    api_module = sys.modules.get("narrative_os.interface.api")
+    state_manager_cls = getattr(api_module, "StateManager", None) if api_module else None
+    if state_manager_cls is not None and state_manager_cls is not RuntimeStateManager:
+        mgr = state_manager_cls(project_id=project_id, base_dir=".narrative_state")
+        try:
+            state = mgr.load_state()
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"detail": f"项目 '{project_id}' 不存在。", "code": "NOT_FOUND"},
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            )
+        if getattr(mgr, "state", None) is None and state is not None:
+            mgr.state = state
+        return mgr
+    return svc.load_project_or_404(project_id)
+
+
 # ------------------------------------------------------------------ #
 # 项目 CRUD                                                            #
 # ------------------------------------------------------------------ #
 
 
 @router.get("/projects", summary="列出所有项目")
-async def list_projects() -> list[ProjectListItem]:
-    base = Path(".narrative_state")
-    if not base.exists():
-        return []
-    items: list[ProjectListItem] = []
-    for d in sorted(base.iterdir()):
-        if not d.is_dir():
-            continue
-        state_file = d / "state.json"
-        if not state_file.exists():
-            continue
-        title = ""
-        chapter_count = 0
-        last_modified = ""
-        try:
-            data = json.loads(state_file.read_text(encoding="utf-8"))
-            title = data.get("project_name", "") or d.name
-            chapter_count = data.get("current_chapter", 0)
-            last_modified = data.get("updated_at", "")
-        except Exception:
-            pass
-        items.append(ProjectListItem(
-            project_id=d.name,
-            title=title or d.name,
-            chapter_count=chapter_count,
-            total_chapters=chapter_count,
-            last_modified=last_modified,
-        ))
-    return items
+async def list_projects(svc: ProjectService = Depends(_svc)) -> list[ProjectListItem]:
+    return [ProjectListItem.model_validate(item) for item in svc.list_projects()]
 
 
 @router.post("/projects/init", response_model=ProjectInitResponse, status_code=status.HTTP_201_CREATED, summary="初始化项目")
 async def init_project(req: ProjectInitRequest) -> ProjectInitResponse:
-    import sys
-    _api = sys.modules.get("narrative_os.interface.api")
-    _SM = getattr(_api, "StateManager", None) if _api else None
-    if _SM is None:
-        from narrative_os.core.state import StateManager as _SM
-    mgr = _SM(project_id=req.project_id, base_dir=".narrative_state")
     try:
-        state = mgr.initialize(project_name=req.title or req.project_id)
+        handle = _svc().initialize_project(
+            req.project_id,
+            title=req.title,
+            genre=req.genre,
+            description=req.description,
+        )
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"初始化失败：{exc}")
-    if req.genre or req.description:
-        try:
-            kb = mgr.load_kb()
-            if req.genre:
-                kb["genre"] = req.genre
-            if req.description:
-                kb["description"] = req.description
-            mgr.save_kb(kb)
-        except Exception:
-            pass
+    state = handle.state
     return ProjectInitResponse(
         project_id=req.project_id,
         created_at=state.created_at,
-        state_dir=str(mgr._dir),
+        state_dir=handle.dir_path,
     )
 
 
 @router.get("/projects/{project_id}/status", response_model=ProjectStatusResponse, summary="查看项目状态")
-async def project_status(project_id: str) -> ProjectStatusResponse:
-    import sys
+async def project_status(
+    project_id: str,
+    svc: ProjectService = Depends(_svc),
+) -> ProjectStatusResponse:
     from narrative_os.core.character_repository import get_character_repository
-    from narrative_os.core.evolution import ChangeTag, get_canon_commit
-    from narrative_os.core.plot import PlotGraph
-    from narrative_os.core.state import StateManager as _CoreStateManager
+    from narrative_os.core.canon_repository import get_canon_repository
     from narrative_os.core.world_repository import get_world_repository
     from narrative_os.infra.database import AsyncSessionLocal
     from narrative_os.interface.services.world_service import WorldService
-    _api = sys.modules.get("narrative_os.interface.api")
-    SM = getattr(_api, "StateManager", _CoreStateManager) if _api else _CoreStateManager
-    mgr = SM(project_id=project_id, base_dir=".narrative_state")
-    try:
-        mgr.load_state()
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"detail": f"项目 '{project_id}' 不存在。", "code": "NOT_FOUND"},
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+    mgr = _load_status_manager(project_id, svc)
     state = mgr.state
-    kb = mgr.load_kb()
-    plot_graph = None
-    plot_data = kb.get("plot_graph") if isinstance(kb, dict) else None
-    if plot_data:
-        try:
-            plot_graph = PlotGraph.from_dict(plot_data)
-        except Exception:
-            plot_graph = None
+    plot_graph = get_plot_repository().get_plot_graph(project_id)
 
     world_repo = get_world_repository()
     world_published = world_repo.has_published_world(project_id)
     characters = get_character_repository().list_characters(project_id)
-    changesets = get_canon_commit(project_id).list_changesets(project_id)
-    concept_ready = bool(kb.get("concept") or state.one_sentence)
+    concept_ready = bool(state.one_sentence)
     try:
         async with AsyncSessionLocal() as db:
             concept = await WorldService().get_concept(project_id, db)
@@ -144,12 +115,7 @@ async def project_status(project_id: str) -> ProjectStatusResponse:
         )
     except Exception:
         pass
-    pending_changes_count = sum(
-        1
-        for changeset in changesets
-        for change in changeset.changes
-        if change.tag == ChangeTag.CANON_PENDING
-    )
+    pending_changes_count = get_canon_repository().pending_changes_count(project_id)
     current_volume_goal = plot_graph.get_current_volume_goal(project_id) if plot_graph is not None else ""
 
     workflow_nodes = [
@@ -278,25 +244,26 @@ async def rollback_project(
     project_id: str, req: ProjectRollbackRequest, svc: ProjectService = Depends(_svc)
 ) -> ProjectRollbackResponse:
     import sys
+
     _api = sys.modules.get("narrative_os.interface.api")
     _lp = getattr(_api, "_load_project_or_404", None) if _api else None
-    mgr = _lp(project_id) if _lp else svc.load_project_or_404(project_id)
-    current = mgr.state.current_chapter if mgr.state else 0
-    target = max(0, current - req.steps)
-    versions = mgr.list_versions()
-    if not versions:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"项目 '{project_id}' 没有可用的版本快照。",
-        )
-    available = [v for v in versions if v <= target]
-    if not available:
-        available = versions
-    target = available[-1]
-    try:
+    if _lp is not None:
+        mgr = _lp(project_id)
+        current = mgr.state.current_chapter if mgr.state else 0
+        target = max(0, current - req.steps)
+        versions = mgr.list_versions()
+        if not versions:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"项目 '{project_id}' 没有可用的版本快照。",
+            )
+        available = [version for version in versions if version <= target]
+        if not available:
+            available = versions
+        target = available[-1]
         snapshot = mgr.rollback(chapter=target)
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"回滚失败：{exc}")
+    else:
+        _, target, snapshot = svc.rollback_project(project_id, req.steps)
     return ProjectRollbackResponse(
         success=True,
         project_id=project_id,
@@ -361,11 +328,28 @@ async def get_metrics_history(
     project_id: str, svc: ProjectService = Depends(_svc)
 ) -> list[MetricsHistoryItem]:
     import sys
+    from narrative_os.core.benchmark_repository import get_benchmark_repository
+    from narrative_os.infra.database import AsyncSessionLocal, ensure_database_runtime
+
     _api = sys.modules.get("narrative_os.interface.api")
     _lp = getattr(_api, "_load_project_or_404", None) if _api else None
     mgr = _lp(project_id) if _lp else svc.load_project_or_404(project_id)
     if not mgr.state or not mgr.state.chapters:
         return []
+    score_by_chapter: dict[int, dict[str, float]] = {}
+    try:
+        await ensure_database_runtime()
+        async with AsyncSessionLocal() as db:
+            scores = await get_benchmark_repository().list_scores_by_project(db, project_id)
+        for score in scores:
+            if score.chapter in score_by_chapter:
+                continue
+            score_by_chapter[score.chapter] = {
+                "benchmark_adherence_score": score.adherence_score,
+                "benchmark_humanness_score": score.humanness_score,
+            }
+    except Exception:
+        score_by_chapter = {}
     return [
         {
             "chapter": m.chapter,
@@ -374,6 +358,8 @@ async def get_metrics_history(
             "hook_score": m.hook_score,
             "word_count": m.word_count,
             "timestamp": m.timestamp,
+            "benchmark_adherence_score": score_by_chapter.get(m.chapter, {}).get("benchmark_adherence_score", 0.0),
+            "benchmark_humanness_score": score_by_chapter.get(m.chapter, {}).get("benchmark_humanness_score", 0.0),
             "qd_01": round(m.quality_score * 0.9 + m.hook_score * 0.1, 3),
             "qd_02": round(m.quality_score * 0.85, 3),
             "qd_03": round((m.quality_score + m.hook_score) / 2, 3),

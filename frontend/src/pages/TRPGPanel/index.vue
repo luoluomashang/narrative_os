@@ -22,15 +22,79 @@
         <div class="summary-row">
           <span>帮回触发</span><span>{{ store.summary?.bangui_count ?? 0 }} 次</span>
         </div>
-        <div v-if="store.summary?.next_hook" class="summary-hook">
+        <div v-if="summaryHookText" class="summary-hook">
           <span class="hook-label">下章钩子</span>
-          <p class="hook-text">{{ store.summary.next_hook }}</p>
+          <p class="hook-text">{{ summaryHookText }}</p>
         </div>
         <div v-if="store.summary?.character_delta?.length" class="summary-delta">
           <span class="delta-label">角色状态变化</span>
           <p v-for="d in store.summary.character_delta" :key="d.name" class="delta-item">
             {{ d.name }}：{{ d.change }}
           </p>
+        </div>
+        <div v-if="summaryArchivePreview" class="archive-preview-block">
+          <div class="archive-tabs">
+            <button
+              v-for="tab in archiveTabs"
+              :key="tab.key"
+              class="archive-tab"
+              :class="{ active: archivePreviewTab === tab.key }"
+              @click="archivePreviewTab = tab.key"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <div v-if="archivePreviewTab === 'session_only'" class="archive-preview-card">
+            <div class="preview-title">会话归档</div>
+            <p class="preview-summary">{{ summarySessionOnlyText || '本次会话将仅归档为互动记录。' }}</p>
+            <div v-if="summaryArchivePreview.preview_session_only.memory_anchors.length" class="preview-chip-row">
+              <span
+                v-for="anchor in summaryArchivePreview.preview_session_only.memory_anchors"
+                :key="anchor.label"
+                class="preview-chip"
+              >
+                {{ anchor.label }}
+              </span>
+            </div>
+          </div>
+
+          <div v-else-if="archivePreviewTab === 'draft_chapter'" class="archive-preview-card">
+            <div class="preview-title">章节草稿</div>
+            <div class="preview-metric-row">
+              <span>预计字数</span>
+              <strong>{{ summaryArchivePreview.preview_draft_chapter.word_count }}</strong>
+            </div>
+            <div class="preview-metric-row">
+              <span>质量评估</span>
+              <strong>{{ summaryArchivePreview.preview_draft_chapter.quality_estimate || '待评估' }}</strong>
+            </div>
+            <p class="preview-excerpt">{{ summaryDraftExcerptText || '暂无可预览正文。' }}</p>
+          </div>
+
+          <div v-else class="archive-preview-card">
+            <div class="preview-title">正史审批</div>
+            <p class="preview-summary">该模式会把互动结果整理为待审 Canon 变更集。</p>
+            <div class="preview-chip-row">
+              <span
+                v-for="field in summaryArchivePreview.preview_canon_chapter.approval_required_fields"
+                :key="field"
+                class="preview-chip warning"
+              >
+                {{ field }}
+              </span>
+            </div>
+            <div v-if="summaryArchivePreview.preview_canon_chapter.pending_changes.length" class="canon-change-list">
+              <div
+                v-for="(item, index) in summaryArchivePreview.preview_canon_chapter.pending_changes"
+                :key="`${item.change_type}-${index}`"
+                class="canon-change-item"
+              >
+                <span class="canon-change-type">{{ item.change_type }}</span>
+                <span class="canon-change-desc">{{ item.description }}</span>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="summary-actions">
           <button class="n-btn ghost" @click="store.reset">返回标准模式</button>
@@ -119,7 +183,7 @@
 
           <!-- Narrative text -->
           <div class="dm-narrative" ref="narrativeEl">
-            <NTypewriter :text="narrativeText" :speed="35" />
+            <NTypewriter :text="sanitizedNarrativeText" :speed="35" />
           </div>
 
           <!-- Latest decision options in DM area -->
@@ -203,7 +267,7 @@
               <span class="turn-who">{{ rec.who === 'dm' ? 'DM' : '玩家' }} #{{ rec.turn_id }}</span>
               <span v-if="rec.rolled_back" class="rolled-label">已撤销 ×</span>
               <span v-if="rec.is_rewrite" class="rewrite-label">当前重写</span>
-              <p class="turn-content">{{ rec.content }}</p>
+              <p class="turn-content">{{ sanitizeDisplayText(rec.content) }}</p>
             </div>
           </div>
         </div>
@@ -211,6 +275,10 @@
 
       <!-- Bangui shortcut bar -->
       <div class="bangui-bar">
+        <div class="bangui-bar-header">
+          <span class="bangui-title">帮回指令</span>
+          <span class="bangui-subtitle">用于卡顿解套、抬压、补反馈或快速推进，不会替换你的输入权限。</span>
+        </div>
         <button
           v-for="(btn, i) in banguiButtons"
           :key="i"
@@ -219,10 +287,13 @@
             'active-bangui': activeBangui === btn.trigger,
             'disabled-bangui': store.phase === 'INTERRUPT' && activeBangui !== btn.trigger,
           }"
+          :title="`${btn.label}：${btn.description}`"
+          :aria-label="`${btn.label}：${btn.description}`"
           :style="{ pointerEvents: store.phase === 'INTERRUPT' && activeBangui !== btn.trigger ? 'none' : 'auto' }"
           @click="triggerBangui(btn.trigger)"
         >
-          {{ btn.label }}
+          <span class="bangui-btn-label">{{ btn.label }}</span>
+          <span class="bangui-btn-desc">{{ btn.description }}</span>
         </button>
       </div>
       <!-- Dangerous option confirm modal -->
@@ -253,7 +324,7 @@
               回退 {{ n }} 步
             </label>
             <label class="radio-row">
-              <input type="radio" v-model="rollbackSteps" :value="customSteps" />
+              <input type="radio" v-model="rollbackSteps" :value="CUSTOM_ROLLBACK_VALUE" />
               自定义
               <input type="number" v-model.number="customSteps" min="1" max="20" class="custom-steps" />
               步
@@ -269,9 +340,76 @@
 
       <!-- End session confirm -->
       <div v-if="showEndModal" class="modal-overlay" @click.self="showEndModal = false">
-        <div class="modal-box end-modal">
-          <h3>确认结束会话？</h3>
-          <p>系统将收束剧情、更新角色状态并保存本回会话。历史记录将保存至章节。</p>
+        <div class="modal-box end-modal preview-modal">
+          <h3>结束前归档预览</h3>
+          <p>确认着陆前，先检查三种归档结果。当前会话尚未结束。</p>
+          <div v-if="previewLoading" class="preview-loading">正在生成归档预览…</div>
+          <div v-else-if="modalArchivePreview" class="archive-preview-block compact">
+            <div class="archive-tabs">
+              <button
+                v-for="tab in archiveTabs"
+                :key="tab.key"
+                class="archive-tab"
+                :class="{ active: archivePreviewTab === tab.key }"
+                @click="archivePreviewTab = tab.key"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+
+            <div v-if="archivePreviewTab === 'session_only'" class="archive-preview-card">
+              <div class="preview-title">会话归档</div>
+              <p class="preview-summary">{{ modalSessionOnlyText || '本次会话将仅归档为互动记录。' }}</p>
+              <div v-if="modalArchivePreview.preview_session_only.character_changes.length" class="canon-change-list">
+                <div
+                  v-for="item in modalArchivePreview.preview_session_only.character_changes"
+                  :key="item.name"
+                  class="canon-change-item"
+                >
+                  <span class="canon-change-type">{{ item.name }}</span>
+                  <span class="canon-change-desc">{{ item.change }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="archivePreviewTab === 'draft_chapter'" class="archive-preview-card">
+              <div class="preview-title">章节草稿</div>
+              <div class="preview-metric-row">
+                <span>预计字数</span>
+                <strong>{{ modalArchivePreview.preview_draft_chapter.word_count }}</strong>
+              </div>
+              <div class="preview-metric-row">
+                <span>质量评估</span>
+                <strong>{{ modalArchivePreview.preview_draft_chapter.quality_estimate || '待评估' }}</strong>
+              </div>
+              <p class="preview-excerpt">{{ modalArchivePreview.preview_draft_chapter.excerpt || '暂无可预览正文。' }}</p>
+            </div>
+
+            <div v-else class="archive-preview-card">
+              <div class="preview-title">正史审批</div>
+              <p class="preview-summary">该模式会生成待审批变更集，需要二次确认后才能回流正史。</p>
+              <div class="preview-chip-row">
+                <span
+                  v-for="field in modalArchivePreview.preview_canon_chapter.approval_required_fields"
+                  :key="field"
+                  class="preview-chip warning"
+                >
+                  {{ field }}
+                </span>
+              </div>
+              <div v-if="modalArchivePreview.preview_canon_chapter.pending_changes.length" class="canon-change-list">
+                <div
+                  v-for="(item, index) in modalArchivePreview.preview_canon_chapter.pending_changes"
+                  :key="`${item.change_type}-${index}`"
+                  class="canon-change-item"
+                >
+                  <span class="canon-change-type">{{ item.change_type }}</span>
+                  <span class="canon-change-desc">{{ item.description }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p v-else class="preview-loading">归档预览暂不可用，仍可直接结束会话。</p>
           <div class="modal-actions">
             <button class="n-btn ghost" @click="showEndModal = false">继续会话</button>
             <button class="n-btn danger" @click="doEndSession">确认着陆</button>
@@ -288,12 +426,12 @@
             <div v-for="s in savesList" :key="s.save_id" class="sl-item">
               <div class="sl-info">
                 <span class="sl-trigger">{{ s.trigger }}</span>
-                <span class="sl-turn">回合 {{ s.turn }}</span>
+                <span class="sl-turn">回合 {{ displayTurn(s.turn) }}</span>
                 <span class="sl-ts">{{ s.timestamp.slice(0, 16) }}</span>
                 <span class="sl-pressure">压力 {{ s.scene_pressure?.toFixed(1) }}</span>
               </div>
               <div class="sl-actions">
-                <button class="n-btn primary sm" @click="doLoadSave(s.save_id)">读档</button>
+                <button class="n-btn primary sm" @click="doLoadSave(s)">读档</button>
                 <button class="n-btn danger sm" @click="doDeleteSave(s.save_id)">删除</button>
               </div>
             </div>
@@ -327,6 +465,45 @@ import NTypewriter from '@/components/common/NTypewriter.vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useToast } from '@/composables/useToast'
 import { sessions as sessionsApi } from '@/api/sessions'
+import type { ArchivePreviewResponse } from '@/types/session'
+
+interface PreviewSessionOnlyModel {
+  summary: string
+  memory_anchors: Array<{ label: string; source: string; importance?: number | null }>
+  character_changes: Array<{ name: string; change: string; actions_count: number; final_pressure?: number | null }>
+  projected_changeset_status: string
+}
+
+interface PreviewDraftChapterModel {
+  chapter_text: string
+  excerpt: string
+  word_count: number
+  quality_estimate: string
+}
+
+interface PreviewCanonChangeModel {
+  change_type: string
+  description: string
+  tag: string
+  chapter: number
+  before_snapshot?: Record<string, unknown> | null
+  after_value?: Record<string, unknown>
+}
+
+interface PreviewCanonChapterModel {
+  draft_content: string
+  pending_changes: PreviewCanonChangeModel[]
+  approval_required_fields: string[]
+  requires_confirmation: boolean
+  projected_changeset_status: string
+}
+
+interface ArchivePreviewModel {
+  session_id: string
+  preview_session_only: PreviewSessionOnlyModel
+  preview_draft_chapter: PreviewDraftChapterModel
+  preview_canon_chapter: PreviewCanonChapterModel
+}
 
 const route = useRoute()
 const projectId = computed(() => (route.params.id as string) || 'default')
@@ -340,7 +517,8 @@ const narrativeEl = ref<HTMLElement | null>(null)
 const historyEl = ref<HTMLElement | null>(null)
 const showRollbackModal = ref(false)
 const showEndModal = ref(false)
-const rollbackSteps = ref(1)
+const CUSTOM_ROLLBACK_VALUE = -1
+const rollbackSteps = ref<number>(1)
 const customSteps = ref(1)
 const activeBangui = ref<string | null>(null)
 const contextWarned = ref(false)
@@ -357,6 +535,75 @@ const showSLModal = ref(false)
 const controlMode = ref<'user_driven' | 'semi_agent' | 'full_agent' | 'director'>('user_driven')
 interface SaveEntry { save_id: string; trigger: string; timestamp: string; turn: number; scene_pressure: number }
 const savesList = ref<SaveEntry[]>([])
+type ArchiveTabKey = 'session_only' | 'draft_chapter' | 'canon_chapter'
+const archivePreviewTab = ref<ArchiveTabKey>('session_only')
+const archivePreview = ref<ArchivePreviewModel | null>(null)
+const previewLoading = ref(false)
+const archiveTabs: Array<{ key: ArchiveTabKey; label: string }> = [
+  { key: 'session_only', label: '会话归档' },
+  { key: 'draft_chapter', label: '章节草稿' },
+  { key: 'canon_chapter', label: '正史审批' },
+]
+
+function emptyArchivePreview(): ArchivePreviewModel {
+  return {
+    session_id: '',
+    preview_session_only: {
+      summary: '',
+      memory_anchors: [],
+      character_changes: [],
+      projected_changeset_status: 'runtime_only',
+    },
+    preview_draft_chapter: {
+      chapter_text: '',
+      excerpt: '',
+      word_count: 0,
+      quality_estimate: '',
+    },
+    preview_canon_chapter: {
+      draft_content: '',
+      pending_changes: [],
+      approval_required_fields: [],
+      requires_confirmation: true,
+      projected_changeset_status: 'canon_pending',
+    },
+  }
+}
+
+function normalizeArchivePreview(
+  preview: Partial<ArchivePreviewResponse> | null | undefined,
+): ArchivePreviewModel {
+  const fallback = emptyArchivePreview()
+  const previewSessionOnly: Partial<PreviewSessionOnlyModel> = preview?.preview_session_only ?? {}
+  const previewDraftChapter: Partial<PreviewDraftChapterModel> = preview?.preview_draft_chapter ?? {}
+  const previewCanonChapter: Partial<PreviewCanonChapterModel> = preview?.preview_canon_chapter ?? {}
+  return {
+    session_id: preview?.session_id ?? fallback.session_id,
+    preview_session_only: {
+      summary: previewSessionOnly.summary ?? fallback.preview_session_only.summary,
+      memory_anchors: previewSessionOnly.memory_anchors ?? fallback.preview_session_only.memory_anchors,
+      character_changes: previewSessionOnly.character_changes ?? fallback.preview_session_only.character_changes,
+      projected_changeset_status:
+        previewSessionOnly.projected_changeset_status ?? fallback.preview_session_only.projected_changeset_status,
+    },
+    preview_draft_chapter: {
+      chapter_text: previewDraftChapter.chapter_text ?? fallback.preview_draft_chapter.chapter_text,
+      excerpt: previewDraftChapter.excerpt ?? fallback.preview_draft_chapter.excerpt,
+      word_count: previewDraftChapter.word_count ?? fallback.preview_draft_chapter.word_count,
+      quality_estimate: previewDraftChapter.quality_estimate ?? fallback.preview_draft_chapter.quality_estimate,
+    },
+    preview_canon_chapter: {
+      draft_content: previewCanonChapter.draft_content ?? fallback.preview_canon_chapter.draft_content,
+      pending_changes: previewCanonChapter.pending_changes ?? fallback.preview_canon_chapter.pending_changes,
+      approval_required_fields:
+        previewCanonChapter.approval_required_fields ?? fallback.preview_canon_chapter.approval_required_fields,
+      requires_confirmation:
+        previewCanonChapter.requires_confirmation ?? fallback.preview_canon_chapter.requires_confirmation,
+      projected_changeset_status:
+        previewCanonChapter.projected_changeset_status ?? fallback.preview_canon_chapter.projected_changeset_status,
+    },
+  }
+}
 
 interface ToastItem { id: number; type: 'info' | 'warning' | 'error' | 'success'; message: string }
 const toasts = ref<ToastItem[]>([])
@@ -365,6 +612,46 @@ function pushToast(type: ToastItem['type'], message: string, duration = 4000) {
   const id = ++toastSeq
   toasts.value.push({ id, type, message })
   setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id) }, duration)
+}
+
+function displayTurn(turn: number | null | undefined) {
+  const turnValue = Number(turn)
+  if (!Number.isFinite(turnValue) || turnValue <= 0) return 0
+  return Math.floor((turnValue + 1) / 2)
+}
+
+const latestNarrativeFromHistory = computed(() => {
+  for (let i = store.history.length - 1; i >= 0; i--) {
+    const record = store.history[i] as Record<string, unknown>
+    if (record.rolled_back) continue
+    if (record.who && record.who !== 'dm') continue
+    if (typeof record.content === 'string' && record.content.trim()) {
+      return record.content
+    }
+  }
+  return ''
+})
+
+function syncNarrativeFromHistory(forceEmpty = false) {
+  const nextNarrative = latestNarrativeFromHistory.value
+  if (!nextNarrative && !forceEmpty) return
+  if (narrativeText.value !== nextNarrative) {
+    narrativeText.value = nextNarrative
+    scrollNarrative()
+  }
+}
+
+function applyLoadedSaveState(restoredTurn: number, save?: SaveEntry) {
+  store.turn = displayTurn(restoredTurn)
+  store.phase = 'PING_PONG'
+  if (typeof save?.scene_pressure === 'number') {
+    store.scenePressure = save.scene_pressure
+  }
+  store.history = store.history.map((record) => ({
+    ...record,
+    rolled_back: record.turn_id >= restoredTurn,
+  }))
+  syncNarrativeFromHistory(true)
 }
 
 // WebSocket
@@ -416,6 +703,7 @@ function connectWs() {
         const rec = msg.record as Record<string, unknown>
         if (rec) {
           store.history.push({ ...rec, rolled_back: false } as Parameters<typeof store.history.push>[0])
+          syncNarrativeFromHistory()
           // Update risk levels and decision type from record
           latestRiskLevels.value = (rec.risk_levels as string[]) ?? []
           latestDecisionType.value = (rec.decision_type as string) ?? 'action'
@@ -481,7 +769,7 @@ async function startSession() {
   disconnectWs()
   await store.createSession({ project_id: projectId.value })
   if (store.sessionId) {
-    narrativeText.value = ''
+    syncNarrativeFromHistory(true)
     latestDecisionType.value = 'action'
     latestRiskLevels.value = []
     connectWs()
@@ -532,12 +820,33 @@ async function triggerBangui(trigger: string) {
 }
 
 async function doRollback() {
-  const steps = rollbackSteps.value
+  const steps = rollbackSteps.value === CUSTOM_ROLLBACK_VALUE ? customSteps.value : rollbackSteps.value
   showRollbackModal.value = false
   await store.rollback(steps)
 }
 
-function confirmEnd() { showEndModal.value = true }
+async function loadArchivePreview() {
+  if (!store.sessionId) {
+    archivePreview.value = null
+    return
+  }
+  previewLoading.value = true
+  try {
+    const res = await sessionsApi.previewArchives(store.sessionId)
+    archivePreview.value = normalizeArchivePreview(res.data)
+  } catch {
+    archivePreview.value = null
+    pushToast('warning', '无法加载归档预览，将允许直接结束会话')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function confirmEnd() {
+  archivePreviewTab.value = 'session_only'
+  showEndModal.value = true
+  await loadArchivePreview()
+}
 
 async function doEndSession() {
   showEndModal.value = false
@@ -549,7 +858,7 @@ async function doCreateSave() {
   if (!store.sessionId) return
   try {
     const res = await sessionsApi.createSave(projectId.value, store.sessionId, 'manual')
-    pushToast('success', `存档成功 (回合 ${res.data.turn})`)
+    pushToast('success', `存档成功 (回合 ${displayTurn(res.data.turn)})`)
     // Refresh list if modal open
     if (showSLModal.value) await fetchSaves()
   } catch {
@@ -572,13 +881,13 @@ async function openSLModal() {
   showSLModal.value = true
 }
 
-async function doLoadSave(saveId: string) {
+async function doLoadSave(save: SaveEntry) {
   if (!store.sessionId) return
   try {
-    const res = await sessionsApi.loadSave(projectId.value, store.sessionId, saveId)
+    const res = await sessionsApi.loadSave(projectId.value, store.sessionId, save.save_id)
     showSLModal.value = false
-    store.turn = res.data.restored_turn
-    pushToast('success', `已读档至回合 ${res.data.restored_turn}`)
+    applyLoadedSaveState(res.data.restored_turn, save)
+    pushToast('success', `已读档至回合 ${displayTurn(res.data.restored_turn)}`)
   } catch {
     pushToast('error', '读档失败')
   }
@@ -625,6 +934,37 @@ function scrollHistory() {
   })
 }
 
+function sanitizeDisplayText(text: unknown) {
+  if (typeof text !== 'string') return ''
+  return text.replace(/\*\*/g, '')
+}
+
+function sanitizeSummaryText(text: unknown, maxLength = 220) {
+  const cleaned = sanitizeDisplayText(text)
+    .replace(/\|/g, ' ')
+    .replace(/(?:\[选项\s*[A-Z]\][\s\S]*)$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!cleaned) {
+    return ''
+  }
+
+  if (cleaned.length <= maxLength) {
+    return cleaned
+  }
+
+  return `${cleaned.slice(0, maxLength).trim()}…`
+}
+
+function normalizeDecisionOption(option: unknown) {
+  return sanitizeDisplayText(option)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[。；;，,\s]+$/g, '')
+    .trim()
+}
+
 // Context window monitoring
 const contextPct = computed(() => Math.min((store.turn / maxTurns) * 100, 100))
 const contextFull = computed(() => store.turn >= maxTurns)
@@ -643,6 +983,16 @@ watch(() => store.turn, (t) => {
     store.phase = 'PACING_ALERT'
   }
 })
+
+watch(latestNarrativeFromHistory, (text) => {
+  if (text) {
+    syncNarrativeFromHistory()
+    return
+  }
+  if (!store.sessionId) {
+    syncNarrativeFromHistory(true)
+  }
+}, { immediate: true })
 
 // Phase 4 computed — pressure
 const pressurePct = computed(() => Math.min((store.scenePressure / 10) * 100, 100))
@@ -668,12 +1018,7 @@ function extractDecisionOptions(content: string) {
 
   let match: RegExpExecArray | null = null
   while ((match = optionPattern.exec(normalized)) !== null) {
-    const optionText = match[1]
-      .replace(/\*\*/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .replace(/[。；;，,\s]+$/g, '')
-      .trim()
+    const optionText = normalizeDecisionOption(match[1])
     if (optionText) {
       options.push(optionText)
     }
@@ -682,13 +1027,17 @@ function extractDecisionOptions(content: string) {
   return options
 }
 
+const sanitizedNarrativeText = computed(() => sanitizeDisplayText(narrativeText.value))
+
 // Latest DM options
 const latestOptions = computed(() => {
   for (let i = store.history.length - 1; i >= 0; i--) {
     const r = store.history[i] as Record<string, unknown>
     if (r.rolled_back) continue
     if (r.has_decision && (r.decision_options as unknown[])?.length) {
-      return r.decision_options as string[]
+      return (r.decision_options as unknown[])
+        .map(normalizeDecisionOption)
+        .filter((option): option is string => Boolean(option))
     }
     if (typeof r.content === 'string') {
       const parsedOptions = extractDecisionOptions(r.content)
@@ -721,16 +1070,42 @@ const decisionTypeIcon = computed(() => {
   return icons[latestDecisionType.value] ?? icons.default
 })
 
+const summaryArchivePreview = computed(() => {
+  if (!store.summary) return null
+  return normalizeArchivePreview({
+    session_id: '',
+    preview_session_only: store.summary.preview_session_only,
+    preview_draft_chapter: store.summary.preview_draft_chapter,
+    preview_canon_chapter: store.summary.preview_canon_chapter,
+  })
+})
+
+const summaryHookText = computed(() => sanitizeSummaryText(store.summary?.next_hook, 280))
+
+const summarySessionOnlyText = computed(() =>
+  sanitizeSummaryText(summaryArchivePreview.value?.preview_session_only.summary, 140),
+)
+
+const summaryDraftExcerptText = computed(() =>
+  sanitizeSummaryText(summaryArchivePreview.value?.preview_draft_chapter.excerpt, 180),
+)
+
+const modalArchivePreview = computed(() => archivePreview.value)
+
+const modalSessionOnlyText = computed(() =>
+  sanitizeSummaryText(modalArchivePreview.value?.preview_session_only.summary, 140),
+)
+
 // Bangui 8 buttons
 const banguiButtons = [
-  { trigger: '帮回主动1', label: '主动型1' },
-  { trigger: '帮回主动2', label: '主动型2' },
-  { trigger: '帮回被动1', label: '被动型1' },
-  { trigger: '帮回被动2', label: '被动型2' },
-  { trigger: '帮回黑暗1', label: '黑暗型1' },
-  { trigger: '帮回黑暗2', label: '黑暗型2' },
-  { trigger: '帮回推进1', label: '推进型1' },
-  { trigger: '帮回推进2', label: '推进型2' },
+  { trigger: '帮回主动1', label: '主动介入', description: '立刻插入外部动作，打破僵局' },
+  { trigger: '帮回主动2', label: '主动施压', description: '让 NPC 或局势先出招，快速抬压' },
+  { trigger: '帮回被动1', label: '被动回应', description: '顺着当前行动，给出明确反馈' },
+  { trigger: '帮回被动2', label: '被动揭示', description: '补充线索、后果或隐藏反应' },
+  { trigger: '帮回黑暗1', label: '黑暗压迫', description: '提高代价、风险和压迫感' },
+  { trigger: '帮回黑暗2', label: '黑暗扭转', description: '引入反噬、恶意变化或失控感' },
+  { trigger: '帮回推进1', label: '快速推进', description: '跳过拉扯，直接推进到下一节点' },
+  { trigger: '帮回推进2', label: '抛出钩子', description: '给出新目标、新人物或新冲突' },
 ]
 
 onUnmounted(() => {
@@ -758,6 +1133,162 @@ onUnmounted(() => {
 }
 .init-title { font-size: var(--text-h1); font-weight: var(--weight-h1); color: var(--color-text-primary); }
 .init-sub { color: var(--color-text-secondary); }
+
+.session-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--spacing-lg);
+}
+
+.summary-card {
+  width: min(760px, 100%);
+  background: var(--color-surface-l1);
+  border: 1px solid var(--color-surface-l2);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.summary-title {
+  margin: 0 0 var(--spacing-xs);
+  color: var(--color-text-primary);
+}
+
+.summary-row,
+.preview-metric-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  color: var(--color-text-secondary);
+}
+
+.summary-hook,
+.summary-delta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hook-label,
+.delta-label,
+.preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.hook-text,
+.delta-item,
+.preview-summary,
+.preview-excerpt {
+  margin: 0;
+  color: var(--color-text-primary);
+  line-height: 1.7;
+}
+
+.summary-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.archive-preview-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.archive-preview-block.compact {
+  margin-top: var(--spacing-md);
+}
+
+.archive-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archive-tab {
+  border: 1px solid var(--color-surface-l2);
+  background: var(--color-surface-l2);
+  color: var(--color-text-secondary);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.archive-tab.active {
+  color: var(--color-text-primary);
+  border-color: var(--color-ai-active);
+  background: color-mix(in srgb, var(--color-ai-active) 18%, var(--color-surface-l2));
+}
+
+.archive-preview-card {
+  border: 1px solid var(--color-surface-l2);
+  background: var(--color-base);
+  border-radius: var(--radius-card);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.preview-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preview-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-surface-l2);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.preview-chip.warning {
+  background: color-mix(in srgb, var(--color-warning) 18%, var(--color-surface-l2));
+  color: var(--color-text-primary);
+}
+
+.canon-change-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.canon-change-item {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-btn);
+  background: var(--color-surface-l1);
+}
+
+.canon-change-type {
+  color: var(--color-ai-active);
+  font-size: 12px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.canon-change-desc {
+  color: var(--color-text-primary);
+  line-height: 1.6;
+}
+
+.preview-loading {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
 
 /* Session bar */
 .session-bar {
@@ -911,6 +1442,23 @@ onUnmounted(() => {
   border-top: 1px solid var(--color-surface-l2);
   flex-shrink: 0;
 }
+.bangui-bar-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bangui-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.bangui-subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
 .bangui-btn {
   background: var(--color-surface-l2);
   border: 1px solid var(--color-surface-l2);
@@ -920,9 +1468,16 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 12px;
   transition: all 200ms;
-  text-align: center;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 72px;
 }
+.bangui-btn-label { font-size: 13px; font-weight: 700; }
+.bangui-btn-desc { font-size: 12px; line-height: 1.4; color: var(--color-text-secondary); }
 .bangui-btn:hover { border-color: var(--color-hitl); color: var(--color-hitl); }
+.bangui-btn:hover .bangui-btn-desc { color: var(--color-text-primary); }
 .bangui-btn.active-bangui {
   border-color: var(--color-hitl);
   background: rgba(255, 46, 136, 0.15);

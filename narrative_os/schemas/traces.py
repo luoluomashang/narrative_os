@@ -12,6 +12,8 @@ class RunType(str, Enum):
     TRPG_TURN = "trpg_turn"
     WORLD_PUBLISH = "world_publish"
     CANON_COMMIT = "canon_commit"
+    BENCHMARK_ANALYSIS = "benchmark_analysis"
+    AUTHOR_DISTILLATION = "author_distillation"
 
 
 class RunStatus(str, Enum):
@@ -28,6 +30,19 @@ class ArtifactType(str, Enum):
     FINAL_TEXT = "final_text"
     MAINTENANCE = "maintenance"
     WORLD_DELTA = "world_delta"
+    BENCHMARK_REPORT = "benchmark_report"
+    BENCHMARK_PROFILE = "benchmark_profile"
+    BENCHMARK_SNIPPET = "benchmark_snippet"
+    BENCHMARK_SCORE = "benchmark_score"
+    AUTHOR_SKILL = "author_skill"
+
+
+class FailureRootCauseType(str, Enum):
+    MODEL_ERROR = "model_error"
+    RULE_BLOCKED = "rule_blocked"
+    APPROVAL_PAUSED = "approval_paused"
+    PERSISTENCE_ERROR = "persistence_error"
+    UNKNOWN = "unknown"
 
 
 class Artifact(BaseModel):
@@ -38,6 +53,7 @@ class Artifact(BaseModel):
     agent_name: str
     input_summary: str
     output_content: str
+    correlation_id: str = ""
     quality_scores: dict[str, float] = Field(default_factory=dict)
     token_in: int = 0
     token_out: int = 0
@@ -52,6 +68,9 @@ class RunStep(BaseModel):
     step_index: int
     agent_name: str
     status: RunStatus
+    correlation_id: str = ""
+    failure_type: FailureRootCauseType | None = None
+    failure_message: str | None = None
     artifact: Artifact | None = None
     started_at: str
     ended_at: str | None = None
@@ -60,6 +79,7 @@ class RunStep(BaseModel):
 class ApprovalCheckpoint(BaseModel):
     checkpoint_id: str
     run_id: str
+    correlation_id: str = ""
     reason: str
     context: str
     created_at: str
@@ -67,11 +87,20 @@ class ApprovalCheckpoint(BaseModel):
     decision: str | None = None
 
 
+class RunRootCause(BaseModel):
+    type: FailureRootCauseType
+    message: str = ""
+    step_id: str | None = None
+    correlation_id: str = ""
+
+
 class Run(BaseModel):
     run_id: str
     project_id: str
     run_type: RunType
     status: RunStatus
+    correlation_id: str = ""
+    root_cause: RunRootCause | None = None
     chapter_num: int | None = None
     session_id: str | None = None
     steps: list[RunStep] = Field(default_factory=list)

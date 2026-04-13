@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -14,6 +14,7 @@ from narrative_os.agents.interactive import (
     SessionPhase,
     TurnRecord,
 )
+from narrative_os.core.memory import MemoryPool
 
 
 # ------------------------------------------------------------------ #
@@ -216,6 +217,42 @@ class TestLand:
         turns_before = session.turn
         out = agent.land(session)
         assert out["turns"] == turns_before
+
+    async def test_land_persists_trpg_memory_in_isolated_pool(self, agent, session):
+        await agent.start(session)
+        with patch("narrative_os.agents.interactive.MemorySystem") as mock_memory_cls:
+            mock_memory = mock_memory_cls.return_value
+            out = agent.land(session)
+
+        assert session.memory_summary_cache == out["history_summary"]
+        assert mock_memory.write_memory.call_count >= 1
+        assert all(call.kwargs["pool"] == MemoryPool.TRPG for call in mock_memory.write_memory.call_args_list)
+
+    async def test_land_strips_embedded_decision_options_from_summary_outputs(self, agent, session):
+        session.history = [
+            TurnRecord(
+                turn_id=0,
+                who="dm",
+                content="你在荒原苏醒。 [选项 A]：追问老汉 [选项 B]：保持沉默",
+            ),
+            TurnRecord(
+                turn_id=1,
+                who="user",
+                content="我先道谢。",
+            ),
+            TurnRecord(
+                turn_id=2,
+                who="dm",
+                content="老汉眯起眼打量你。 [选项 A]：继续追问 [选项 B]：直接下车",
+            ),
+        ]
+
+        out = agent.land(session)
+
+        assert "[选项 A]" not in out["hook"]
+        assert "[选项 A]" not in out["history_summary"]
+        assert "[选项 A]" not in out["preview_session_only"]["summary"]
+        assert "[选项 A]" not in out["preview_draft_chapter"]["excerpt"]
 
 
 # ------------------------------------------------------------------ #

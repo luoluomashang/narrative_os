@@ -90,6 +90,9 @@
             <el-icon><Tools /></el-icon>
             <span>质量工具</span>
           </template>
+          <el-menu-item :index="`/project/${store.projectId}/benchmark`">
+            <el-icon><DataLine /></el-icon>Benchmark Studio
+          </el-menu-item>
           <el-menu-item :index="`/project/${store.projectId}/metrics`">
             <el-icon><TrendCharts /></el-icon>质量仪表盘
           </el-menu-item>
@@ -143,6 +146,7 @@ import {
   Coin,
   Connection,
   Cpu,
+  DataLine,
   DataAnalysis,
   Document,
   DocumentAdd,

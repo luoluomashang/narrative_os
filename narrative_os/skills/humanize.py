@@ -27,6 +27,7 @@ from narrative_os.execution.llm_router import (
     RoutingStrategy,
     get_default_routing_strategy,
 )
+from narrative_os.execution.prompt_utils import plain_text_contract
 from narrative_os.infra.config import load_yaml
 from narrative_os.skills.dsl import SkillRegistry, SkillRequest
 
@@ -158,10 +159,11 @@ class Humanizer:
 
         lines.extend([
             "",
-            "## 输出要求",
-            "1. 直接输出改写后的文本，不要加任何说明或前置语句。",
-            "2. 保持原文字数大致相当（允许 ±20%）。",
-            "3. 改写后文本必须是完整的，不得截断。",
+            plain_text_contract(
+                "直接输出改写后的文本，不要加任何说明或前置语句。",
+                "保持原文字数大致相当（允许 ±20%）。",
+                "改写后文本必须是完整的，不得截断。",
+            ),
         ])
 
         prompt = "\n".join(lines)

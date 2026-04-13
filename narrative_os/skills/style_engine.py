@@ -25,6 +25,7 @@ from narrative_os.execution.llm_router import (
     RoutingStrategy,
     get_default_routing_strategy,
 )
+from narrative_os.execution.prompt_utils import plain_text_contract
 from narrative_os.infra.config import load_yaml
 from narrative_os.skills.dsl import SkillRegistry, SkillRequest, SkillResponse
 
@@ -267,7 +268,7 @@ class StyleEngine:
             parts.append("额外规则：\n" + "\n".join(f"- {r}" for r in profile.custom_rules[:5]))
         if profile.warning_words:
             parts.append("禁止使用词汇：" + "、".join(profile.warning_words[:15]))
-        parts.append("改写后只输出正文，不加说明。")
+        parts.append(plain_text_contract("改写后只输出正文，不加说明。"))
         return "\n\n".join(parts)
 
 

@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from narrative_os.schemas.trpg import CanonChapterPreview, DraftChapterPreview, SessionOnlyPreview
+
 
 class ChangeSetListItem(BaseModel):
     changeset_id: str
@@ -25,6 +27,9 @@ class ChangeSetDetail(BaseModel):
     status: str
     created_at: str
     changes: list[dict[str, Any]] = []
+    preview_session_only: SessionOnlyPreview = SessionOnlyPreview()
+    preview_draft_chapter: DraftChapterPreview = DraftChapterPreview()
+    preview_canon_chapter: CanonChapterPreview = CanonChapterPreview()
 
 
 class ChangeSetApproveResponse(BaseModel):

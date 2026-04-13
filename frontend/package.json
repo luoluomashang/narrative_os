@@ -1,11 +1,11 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.1.1",
   "type": "module",
   "scripts": {
-    "gen:openapi": "..\\..\\.venv\\Scripts\\python.exe ..\\scripts\\export_openapi.py ..\\..\\openapi.json",
-    "gen:types": "pnpm run gen:openapi && pnpm exec openapi-typescript ..\\..\\openapi.json -o src/types/api.gen.ts && node scripts/postprocess-openapi-types.mjs",
+    "gen:openapi": "cross-env NARRATIVE_OPENAPI_OUT=../../openapi.json node scripts/run-export-openapi.mjs",
+    "gen:types": "pnpm run gen:openapi && pnpm exec openapi-typescript ../../openapi.json -o src/types/api.gen.ts && node scripts/postprocess-openapi-types.mjs",
     "dev": "pnpm run gen:types && vite",
     "build": "pnpm run gen:types && vue-tsc -b && vite build",
     "preview": "vite preview",
@@ -38,12 +38,17 @@
     "@types/d3-force": "^3.0.10",
     "@types/node": "^24.12.0",
     "@vitejs/plugin-vue": "^6.0.5",
+    "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.9.0",
+    "cross-env": "^7.0.3",
+    "jsdom": "^29.0.2",
+    "msw": "^2.13.2",
     "openapi-typescript": "^7.8.0",
     "typescript": "~5.9.3",
     "unplugin-auto-import": "^21.0.0",
     "unplugin-vue-components": "^32.0.0",
     "vite": "^8.0.1",
+    "vitest": "^4.1.4",
     "vue-tsc": "^3.2.5"
   }
 }

@@ -72,9 +72,13 @@ class MaintenanceOutput(BaseModel):
     updated_characters: list[CharacterState] = Field(default_factory=list)
     memory_summary: str = ""
     memory_anchor: str = ""
+    memory_anchors: list[dict[str, Any]] = Field(default_factory=list)
     next_hook: str = ""
     completed_nodes: list[str] = Field(default_factory=list)
     activated_nodes: list[str] = Field(default_factory=list)
+    plot_progress: dict[str, Any] = Field(default_factory=dict)
+    world_state_delta: list[dict[str, Any]] = Field(default_factory=list)
+    canon_pending_changes: list[dict[str, Any]] = Field(default_factory=list)
     changeset_id: str | None = None
     warnings: list[str] = Field(default_factory=list)
 
@@ -134,11 +138,13 @@ class MaintenanceAgent:
 
         # 3. 压缩短期记忆 → mid 层
         mem_summary = self._compress_memory(memory, inp.chapter_draft, warnings)
-        anchor = self._write_memory_anchor(memory, inp.chapter_draft, warnings)
+        anchor_payload = self._write_memory_anchor(memory, inp.chapter_draft, warnings)
+        anchor = self._format_memory_anchor(anchor_payload)
+        memory_anchors = self._build_memory_anchor_entries(mem_summary, anchor_payload)
         if mem_summary or anchor:
             successful_steps += 1
 
-        changeset_id = self._create_world_changeset(inp, warnings)
+        changeset_id, canon_pending_changes = self._create_world_changeset(inp, warnings)
         if changeset_id is not None:
             successful_steps += 1
 
@@ -159,14 +165,25 @@ class MaintenanceAgent:
             warnings=len(warnings),
         )
 
+        plot_progress = self._build_plot_progress(plot_graph, completed, activated)
+        world_state_delta = self._build_world_state_delta(
+            original_characters=inp.characters,
+            updated_characters=updated,
+            canon_pending_changes=canon_pending_changes,
+        )
+
         result = MaintenanceOutput(
             chapter=inp.chapter_draft.chapter,
             updated_characters=updated,
             memory_summary=mem_summary,
             memory_anchor=anchor,
+            memory_anchors=memory_anchors,
             next_hook=hook,
             completed_nodes=completed,
             activated_nodes=activated,
+            plot_progress=plot_progress,
+            world_state_delta=world_state_delta,
+            canon_pending_changes=canon_pending_changes,
             changeset_id=changeset_id,
             warnings=warnings,
         )
@@ -379,6 +396,28 @@ class MaintenanceAgent:
             warnings.append(f"后续节点激活失败: {exc}")
             return []
 
+    def _build_plot_progress(
+        self,
+        graph: PlotGraph | None,
+        completed: list[str],
+        activated: list[str],
+    ) -> dict[str, Any]:
+        def _serialize(node_id: str) -> dict[str, Any]:
+            node = graph._nodes.get(node_id) if graph is not None else None
+            return {
+                "node_id": node_id,
+                "summary": getattr(node, "summary", ""),
+                "node_type": getattr(getattr(node, "type", None), "value", ""),
+                "status": getattr(getattr(node, "status", None), "value", ""),
+            }
+
+        return {
+            "completed": [_serialize(node_id) for node_id in completed],
+            "activated": [_serialize(node_id) for node_id in activated],
+            "completed_count": len(completed),
+            "activated_count": len(activated),
+        }
+
     # ---------------------------------------------------------------- #
     # 记忆压缩                                                            #
     # ---------------------------------------------------------------- #
@@ -414,9 +453,9 @@ class MaintenanceAgent:
         memory: MemorySystem | None,
         draft: ChapterDraft,
         warnings: list[str],
-    ) -> str:
+    ) -> dict[str, Any] | None:
         if memory is None:
-            return ""
+            return None
 
         key_pivot = self._summarize_key_event(draft)
         next_debt = self._extract_next_hook(draft)
@@ -431,19 +470,51 @@ class MaintenanceAgent:
             )
         except Exception as exc:
             warnings.append(f"记忆锚点写入失败: {exc}")
-            return ""
+            return None
 
+        return anchor
+
+    def _format_memory_anchor(self, anchor: dict[str, Any] | None) -> str:
+        if not anchor:
+            return ""
         return (
-            f"[锚点-章{draft.chapter}] {anchor['key_pivot']} | 悬念:{anchor['burning_question']}"
+            f"[锚点-章{anchor.get('chapter', 0)}] {anchor.get('key_pivot', '')} | 悬念:{anchor.get('burning_question', '')}"
         )[:150]
+
+    def _build_memory_anchor_entries(
+        self,
+        memory_summary: str,
+        anchor: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        entries: list[dict[str, Any]] = []
+        if memory_summary:
+            entries.append(
+                {
+                    "type": "summary",
+                    "layer": "mid",
+                    "content": memory_summary,
+                }
+            )
+        if anchor:
+            entries.append(
+                {
+                    "type": "anchor",
+                    "layer": "short",
+                    "chapter": anchor.get("chapter", 0),
+                    "key_pivot": anchor.get("key_pivot", ""),
+                    "burning_question": anchor.get("burning_question", ""),
+                    "next_chapter_debt": anchor.get("next_chapter_debt", ""),
+                }
+            )
+        return entries
 
     def _create_world_changeset(
         self,
         inp: MaintenanceInput,
         warnings: list[str],
-    ) -> str | None:
+    ) -> tuple[str | None, list[dict[str, Any]]]:
         if not inp.chapter_draft.draft_text.strip():
-            return None
+            return None, []
 
         try:
             from narrative_os.core.evolution import (
@@ -474,10 +545,66 @@ class MaintenanceAgent:
                 ],
                 commit_mode=SessionCommitMode.DRAFT_CHAPTER,
             )
-            return cs.changeset_id
+            pending_changes = [
+                {
+                    "change_type": change.change_type,
+                    "description": change.description,
+                    "tag": getattr(change.tag, "value", str(change.tag)),
+                    "chapter": change.chapter,
+                    "before_snapshot": change.before_snapshot,
+                    "after_value": change.after_value,
+                }
+                for change in cs.pending_changes()
+            ]
+            return cs.changeset_id, pending_changes
         except Exception as exc:
             warnings.append(f"WorldChangeSet 创建失败: {exc}")
-            return None
+            return None, []
+
+    def _build_world_state_delta(
+        self,
+        *,
+        original_characters: list[CharacterState],
+        updated_characters: list[CharacterState],
+        canon_pending_changes: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        deltas: list[dict[str, Any]] = []
+        original_by_name = {character.name: character for character in original_characters}
+        for updated in updated_characters:
+            original = original_by_name.get(updated.name)
+            if original is None:
+                continue
+            if original.arc_stage != updated.arc_stage:
+                deltas.append(
+                    {
+                        "change_type": "character_arc",
+                        "target": updated.name,
+                        "before": original.arc_stage,
+                        "after": updated.arc_stage,
+                        "effect": f"角色弧由 {original.arc_stage} 推进到 {updated.arc_stage}",
+                    }
+                )
+            if original.runtime.current_agenda != updated.runtime.current_agenda:
+                deltas.append(
+                    {
+                        "change_type": "character_runtime",
+                        "target": updated.name,
+                        "before": original.runtime.current_agenda,
+                        "after": updated.runtime.current_agenda,
+                        "effect": "当前行动议程已更新",
+                    }
+                )
+        for change in canon_pending_changes:
+            deltas.append(
+                {
+                    "change_type": change.get("change_type", "world_change"),
+                    "target": change.get("after_value", {}).get("event", "timeline"),
+                    "before": "",
+                    "after": change.get("description", ""),
+                    "effect": "已生成待审批的世界状态变更",
+                }
+            )
+        return deltas
 
     def _persist_hook(
         self,

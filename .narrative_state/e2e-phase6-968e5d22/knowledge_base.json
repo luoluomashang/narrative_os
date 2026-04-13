@@ -1,0 +1,52 @@
+{
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "111da9ba-cdcd-4377-9d15-50c05d350a35",
+        "chapter": 1,
+        "description": "发现血魔踪迹",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T07:20:36.270876+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "111da9ba-cdcd-4377-9d15-50c05d350a35",
+        "chapter": 1,
+        "description": "发现血魔踪迹",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T07:20:36.270876+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

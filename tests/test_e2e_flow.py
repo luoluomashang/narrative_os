@@ -164,6 +164,25 @@ class TestTRPGSessionEnd:
             "character_deltas": [],
             "turns": 10,
             "history_summary": "故事摘要。",
+            "preview_session_only": {
+                "summary": "会话归档摘要",
+                "memory_anchors": [{"label": "关键记忆", "source": "session", "importance": 0.9}],
+                "character_changes": [],
+                "projected_changeset_status": "runtime_only",
+            },
+            "preview_draft_chapter": {
+                "chapter_text": "这是 TRPG 章节正文内容，超过一百字。" * 10,
+                "excerpt": "这是 TRPG 章节正文内容",
+                "word_count": 200,
+                "quality_estimate": "结构完整，建议补充细节后转草稿",
+            },
+            "preview_canon_chapter": {
+                "draft_content": "这是 TRPG 章节正文内容，超过一百字。" * 10,
+                "pending_changes": [{"change_type": "story_hook", "description": "新的章节钩子", "tag": "canon_pending", "chapter": 10, "after_value": {"hook": "下一章悬念。"}}],
+                "approval_required_fields": ["章节正文", "正史挂载确认"],
+                "requires_confirmation": True,
+                "projected_changeset_status": "canon_pending",
+            },
         }
 
         mgr = _base_mgr("trpg_proj", 0)
@@ -180,9 +199,57 @@ class TestTRPGSessionEnd:
         body = r.json()
         assert body["word_count"] == 200
         assert body["next_hook"] == "下一章悬念。"
+        assert body["preview_session_only"]["summary"] == "会话归档摘要"
+        assert body["preview_draft_chapter"]["word_count"] == 200
+        assert body["preview_canon_chapter"]["pending_changes"][0]["change_type"] == "story_hook"
         # 持久化应该被调用
         mgr.save_chapter_text.assert_called_once()
         mgr.commit_chapter.assert_called_once()
+
+    def test_preview_archives_returns_structured_payload(self, client):
+        """preview-archives 返回三种归档模式的结构化预览。"""
+        from narrative_os.agents.interactive import InteractiveSession, InteractiveAgent
+
+        mock_session = MagicMock(spec=InteractiveSession)
+        mock_session.session_id = "trpg_preview_001"
+        mock_session.project_id = "trpg_preview_proj"
+
+        mock_agent = MagicMock(spec=InteractiveAgent)
+        mock_agent.preview_archives.return_value = {
+            "preview_session_only": {
+                "summary": "仅归档互动记录",
+                "memory_anchors": [{"label": "记忆锚点", "source": "session", "importance": 0.8}],
+                "character_changes": [],
+                "projected_changeset_status": "runtime_only",
+            },
+            "preview_draft_chapter": {
+                "chapter_text": "草稿正文",
+                "excerpt": "草稿正文",
+                "word_count": 120,
+                "quality_estimate": "内容较短，建议继续扩写",
+            },
+            "preview_canon_chapter": {
+                "draft_content": "草稿正文",
+                "pending_changes": [],
+                "approval_required_fields": ["章节正文"],
+                "requires_confirmation": True,
+                "projected_changeset_status": "canon_pending",
+            },
+        }
+
+        import time
+        with _sessions_lock:
+            _sessions["trpg_preview_001"] = (mock_session, time.time())
+
+        with patch("narrative_os.interface.api._interactive_agent", mock_agent):
+            r = client.post("/sessions/trpg_preview_001/preview-archives")
+
+        assert r.status_code == 200
+        body = r.json()
+        assert body["session_id"] == "trpg_preview_001"
+        assert body["preview_session_only"]["summary"] == "仅归档互动记录"
+        assert body["preview_draft_chapter"]["word_count"] == 120
+        assert body["preview_canon_chapter"]["approval_required_fields"] == ["章节正文"]
 
     def test_session_end_no_text(self, client):
         """chapter_text 为空时不调用持久化，但仍返回 200。"""
@@ -199,6 +266,25 @@ class TestTRPGSessionEnd:
             "character_deltas": [],
             "turns": 0,
             "history_summary": "",
+            "preview_session_only": {
+                "summary": "",
+                "memory_anchors": [],
+                "character_changes": [],
+                "projected_changeset_status": "runtime_only",
+            },
+            "preview_draft_chapter": {
+                "chapter_text": "",
+                "excerpt": "",
+                "word_count": 0,
+                "quality_estimate": "暂无可归档正文",
+            },
+            "preview_canon_chapter": {
+                "draft_content": "",
+                "pending_changes": [],
+                "approval_required_fields": [],
+                "requires_confirmation": True,
+                "projected_changeset_status": "canon_pending",
+            },
         }
 
         mgr = _base_mgr("trpg_proj2", 0)

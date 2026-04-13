@@ -33,10 +33,13 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function loadProjectInfo(id: string) {
+    error.value = null
     try {
       const res = await projects.status(id)
       projectInfo.value = res.data
     } catch (e: unknown) {
+      projectId.value = null
+      projectInfo.value = null
       error.value = e instanceof Error ? e.message : '加载项目信息失败'
       throw e
     }

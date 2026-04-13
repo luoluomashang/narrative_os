@@ -47,11 +47,42 @@
           </div>
         </div>
 
+        <div v-if="runData?.root_cause" class="detail-block root-cause-block">
+          <div class="block-label">根因诊断</div>
+          <div class="root-cause-pill">{{ rootCauseLabel }}</div>
+          <div class="block-value" v-if="runData.root_cause.message">{{ runData.root_cause.message }}</div>
+          <div class="trace-meta-grid">
+            <div class="trace-meta-item" v-if="runData.root_cause.step_id">
+              <div class="trace-meta-key">根因步骤</div>
+              <div class="trace-meta-val mono">{{ runData.root_cause.step_id }}</div>
+            </div>
+            <div class="trace-meta-item" v-if="runData.root_cause.correlation_id || runData.correlation_id">
+              <div class="trace-meta-key">Correlation ID</div>
+              <div class="trace-meta-val mono">{{ runData.root_cause.correlation_id || runData.correlation_id }}</div>
+            </div>
+          </div>
+        </div>
+
         <div v-if="!selectedStep" class="detail-empty">选择左侧步骤查看详情</div>
         <template v-else>
           <div class="detail-block">
             <div class="block-label">步骤</div>
             <div class="block-value mono">{{ selectedStep.agent_name }} / {{ selectedStep.step_id }}</div>
+          </div>
+
+          <div class="detail-block" v-if="selectedStep.failure_type || selectedStep.failure_message || selectedStep.correlation_id || selectedStep.artifact?.correlation_id">
+            <div class="block-label">步骤诊断</div>
+            <div class="trace-meta-grid">
+              <div class="trace-meta-item" v-if="selectedStep.failure_type">
+                <div class="trace-meta-key">失败类型</div>
+                <div class="trace-meta-val">{{ selectedStep.failure_type }}</div>
+              </div>
+              <div class="trace-meta-item" v-if="selectedStep.correlation_id || selectedStep.artifact?.correlation_id">
+                <div class="trace-meta-key">Correlation ID</div>
+                <div class="trace-meta-val mono">{{ selectedStep.correlation_id || selectedStep.artifact?.correlation_id }}</div>
+              </div>
+            </div>
+            <pre v-if="selectedStep.failure_message" class="block-pre">{{ selectedStep.failure_message }}</pre>
           </div>
 
           <div class="detail-block" v-if="selectedStep.artifact">
@@ -196,6 +227,7 @@ const expandOutput = ref(true)
 interface RunArtifact {
   artifact_id: string
   agent_name: string
+  correlation_id?: string
   input_summary: string
   output_content: string
   quality_scores: Record<string, number>
@@ -211,15 +243,26 @@ interface RunStepData {
   step_index: number
   agent_name: string
   status: string
+  correlation_id?: string
+  failure_type?: string | null
+  failure_message?: string | null
   artifact?: RunArtifact | null
 }
 
 interface RunTraceData {
   run_id: string
   status: string
+  correlation_id?: string
+  root_cause?: {
+    type: string
+    message?: string
+    step_id?: string | null
+    correlation_id?: string
+  } | null
   steps: RunStepData[]
   approval_checkpoint?: {
     reason: string
+    correlation_id?: string
   } | null
 }
 
@@ -232,6 +275,16 @@ const runData = computed<RunTraceData | null>(() => {
 const isRunTrace = computed(() => !!runData.value)
 const runSteps = computed(() => runData.value?.steps ?? [])
 const selectedStep = computed(() => runSteps.value.find(step => step.step_id === selectedId.value) ?? runSteps.value[0] ?? null)
+const rootCauseLabel = computed(() => {
+  const type = runData.value?.root_cause?.type
+  return {
+    model_error: '模型错误',
+    rule_blocked: '规则阻断',
+    approval_paused: '人工审批暂停',
+    persistence_error: '持久化错误',
+    unknown: '未知原因',
+  }[type ?? ''] ?? type ?? '未知原因'
+})
 const scoreEntries = computed(() => {
   const scores = selectedStep.value?.artifact?.quality_scores ?? {}
   return Object.entries(scores).map(([key, value]) => ({
@@ -457,6 +510,39 @@ const TraceNode: ReturnType<typeof defineComponent> = defineComponent({
   margin-top: var(--spacing-xl);
 }
 .detail-block { display: flex; flex-direction: column; gap: 4px; }
+.root-cause-block {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 32%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+}
+.root-cause-pill {
+  width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-warning) 20%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.trace-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.trace-meta-item {
+  background: var(--color-surface-l1);
+  border-radius: var(--radius-card);
+  padding: 10px 12px;
+}
+.trace-meta-key {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+.trace-meta-val {
+  font-size: 13px;
+  word-break: break-all;
+}
 .approval-banner {
   display: flex;
   justify-content: space-between;

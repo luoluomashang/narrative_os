@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from narrative_os.agents.interactive import InteractiveAgent, InteractiveSession
+from narrative_os.agents.interactive import InteractiveSession
 from narrative_os.infra.database import AsyncSessionLocal, fire_and_forget
 from narrative_os.infra.models import TrpgSession as TrpgSessionModel
 
@@ -22,10 +22,15 @@ _sessions: dict[str, tuple[InteractiveSession, float]] = {}
 _sessions_lock = Lock()
 SESSION_TTL_SECONDS = 3600
 
-_interactive_agent = InteractiveAgent()
+_interactive_agent: Any | None = None
 
 
-def get_interactive_agent() -> InteractiveAgent:
+def get_interactive_agent():
+    global _interactive_agent
+    if _interactive_agent is None:
+        from narrative_os.agents.interactive import InteractiveAgent
+
+        _interactive_agent = InteractiveAgent()
     return _interactive_agent
 
 

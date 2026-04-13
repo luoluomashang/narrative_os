@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from narrative_os.execution.prompt_utils import json_object_contract, parse_json_response
+
 if TYPE_CHECKING:
     from narrative_os.core.character import CharacterState
     from narrative_os.core.world import WorldState
@@ -156,15 +158,22 @@ class RuleResolver:
             f"所属势力={actor_character.faction or '无'}）"
         )
 
-        prompt = (
-            f"你是一个 TRPG 世界裁定系统，判断玩家行动是否在世界规则内可执行。\n\n"
-            f"角色状态：{char_status}\n"
-            f"行动描述：{user_action}\n"
-            f"世界规则（前5条）：{world_rules_text}\n"
-            f"活跃势力：{factions_text}\n"
-            f"力量体系：{power_system}\n\n"
-            f"请用以下JSON格式回复（不要有其他内容）：\n"
-            f'{{"allowed":true/false,"modified_action":"修正后行动（与原文相同则复制）","world_consequence":"世界后果（1句）","warnings":["警告1"],"blocked_reason":"阻止原因（allowed=false时填写）"}}'
+        prompt = "\n\n".join(
+            [
+                "你是一个 TRPG 世界裁定系统，判断玩家行动是否在世界规则内可执行。",
+                "\n".join(
+                    [
+                        f"角色状态：{char_status}",
+                        f"行动描述：{user_action}",
+                        f"世界规则（前5条）：{world_rules_text}",
+                        f"活跃势力：{factions_text}",
+                        f"力量体系：{power_system}",
+                    ]
+                ),
+                json_object_contract(
+                    '{"allowed": true/false, "modified_action": "修正后行动（与原文相同则复制）", "world_consequence": "世界后果（1句）", "warnings": ["警告1"], "blocked_reason": "阻止原因（allowed=false时填写）"}'
+                ),
+            ]
         )
 
         router = LLMRouter()
@@ -179,15 +188,10 @@ class RuleResolver:
         resp = await router.call(req)
         raw = resp.content.strip()
 
-        # 解析 JSON
-        import json
         try:
-            # 处理可能出现的 markdown 代码块
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            data = json.loads(raw)
+            data = parse_json_response(raw, expect="object")
+            if not isinstance(data, dict):
+                raise ValueError("invalid resolver payload")
             return RuleResolutionResult(
                 allowed=bool(data.get("allowed", True)),
                 modified_action=str(data.get("modified_action", user_action)),

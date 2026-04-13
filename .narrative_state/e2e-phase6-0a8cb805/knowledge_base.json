@@ -1,0 +1,96 @@
+{
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "b4d322a1-42f9-4d76-9ad6-7d6a34c8cb45": {
+        "id": "b4d322a1-42f9-4d76-9ad6-7d6a34c8cb45",
+        "name": "北极城",
+        "region_type": "capital",
+        "terrain": "",
+        "climate": "",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      },
+      "6c1bb90b-8602-4d05-bfcb-b6e9aa7ab890": {
+        "id": "6c1bb90b-8602-4d05-bfcb-b6e9aa7ab890",
+        "name": "幽暗森林",
+        "region_type": "forest",
+        "terrain": "",
+        "climate": "",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "b4d322a1-42f9-4d76-9ad6-7d6a34c8cb45": {
+        "id": "b4d322a1-42f9-4d76-9ad6-7d6a34c8cb45",
+        "name": "北极城",
+        "region_type": "capital",
+        "terrain": "",
+        "climate": "",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      },
+      "6c1bb90b-8602-4d05-bfcb-b6e9aa7ab890": {
+        "id": "6c1bb90b-8602-4d05-bfcb-b6e9aa7ab890",
+        "name": "幽暗森林",
+        "region_type": "forest",
+        "terrain": "",
+        "climate": "",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

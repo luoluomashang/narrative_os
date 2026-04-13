@@ -218,6 +218,37 @@ class TestNarrativeCompilerInteractive:
         prompt = pkg.to_system_prompt()
         assert "semi_agent" in prompt or "互动控制层" in prompt or "控制模式" in prompt
 
+    def test_compile_interactive_uses_trpg_and_canon_pools(self, tmp_path):
+        from narrative_os.core.memory import MemoryPool, MemorySystem
+
+        compiler = NarrativeCompiler()
+        session = _make_session()
+        mem = MemorySystem(project_id="interactive_pool_proj", persist_dir=str(tmp_path))
+        mem.write_memory(
+            "玄天大陆_TRPG_互动记忆",
+            memory_type="event",
+            layer="short",
+            importance=0.9,
+            pool=MemoryPool.TRPG,
+        )
+        mem.write_memory(
+            "玄天大陆_AUTHOR_作者记忆",
+            memory_type="event",
+            layer="short",
+            importance=0.9,
+            pool=MemoryPool.AUTHOR,
+        )
+
+        pkg = compiler.compile_interactive(
+            project_id="interactive_pool_proj",
+            session=session,
+            memory=mem,
+        )
+
+        prompt_text = " ".join(pkg.write_context.short_term_memory)
+        assert "TRPG_互动记忆" in prompt_text
+        assert "AUTHOR_作者记忆" not in prompt_text
+
     def test_control_layer_model(self):
         ctrl = ControlLayerInjection(
             control_mode="full_agent",

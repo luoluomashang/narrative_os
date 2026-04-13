@@ -48,11 +48,12 @@ function emotionBg(emotion: string): string {
 
 <style scoped>
 .char-list {
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
   background: var(--color-surface-l1);
-  border-radius: var(--radius-card);
+  border-radius: 20px;
   border: 1px solid var(--color-surface-l2);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
   overflow-y: auto;
 }
 .char-list-header {
@@ -111,5 +112,12 @@ function emotionBg(emotion: string): string {
   color: var(--color-text-secondary);
   font-size: 13px;
   text-align: center;
+}
+
+@media (max-width: 960px) {
+  .char-list {
+    width: 100%;
+    max-height: 240px;
+  }
 }
 </style>

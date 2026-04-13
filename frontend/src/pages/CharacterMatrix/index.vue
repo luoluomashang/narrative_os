@@ -1,8 +1,25 @@
 <template>
-  <div class="char-matrix">
+  <div class="char-page app-page-surface">
+    <section class="app-hero-card">
+      <div>
+        <p class="app-eyebrow">Character Matrix</p>
+        <h1 class="app-hero-title">角色矩阵</h1>
+        <p class="app-hero-copy">集中编辑角色档案、关系、Drive 与 Runtime，减少在多个页面间来回切换造成的上下文割裂。</p>
+      </div>
+      <div class="app-hero-meta">
+        <span class="app-pill">项目 {{ projectId }}</span>
+        <span class="app-pill app-pill--accent">角色 {{ characters.length }}</span>
+        <span class="app-pill">当前 {{ selected?.name || '未选择' }}</span>
+      </div>
+    </section>
+
+    <div class="char-matrix">
     <!-- Error -->
-    <div v-if="error" style="padding:16px">
-      <NCard><p style="color:var(--color-error)">加载失败：{{ error }}</p><NButton variant="ghost" @click="load">重试</NButton></NCard>
+    <div v-if="error" class="char-error">
+      <NCard>
+        <p class="char-error__text">加载失败：{{ error }}</p>
+        <NButton variant="ghost" @click="load">重试</NButton>
+      </NCard>
     </div>
     <template v-else>
       <!-- Left: character list -->
@@ -73,6 +90,7 @@
         </div>
       </div>
     </template>
+    </div>
 
     <!-- Create Form Dialog -->
     <CharacterForm :visible="showCreateForm" @close="showCreateForm = false" @submit="handleCreate" />
@@ -119,6 +137,16 @@ async function load() {
   try {
     const res = await projects.characters(projectId.value)
     characters.value = res.data
+    const nextSelected = selected.value && res.data.some((item) => item.name === selected.value?.name)
+      ? selected.value.name
+      : res.data[0]?.name
+
+    if (nextSelected) {
+      await selectByName(nextSelected)
+    } else {
+      selected.value = null
+      detail.value = null
+    }
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : '请求失败'
   } finally {
@@ -208,9 +236,65 @@ onMounted(load)
 </script>
 
 <style scoped>
-.char-matrix { display: flex; height: 100%; gap: 16px; }
-.char-detail { flex: 1; overflow-y: auto; }
-.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-.tab-btn { background: transparent; border: 1px solid var(--color-surface-l2); color: var(--color-text-secondary); padding: 4px 12px; border-radius: var(--radius-btn); cursor: pointer; font-size: 13px; transition: all 150ms; }
-.tab-btn.active { background: var(--color-surface-l2); color: var(--color-ai-active); border-color: var(--color-ai-active); }
+.char-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.char-matrix {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  gap: 16px;
+}
+
+.char-detail {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.char-error {
+  padding: 16px 0;
+}
+
+.char-error__text {
+  margin-bottom: 12px;
+  color: var(--color-error);
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.tab-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d6d3d1;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 150ms;
+}
+
+.tab-btn:hover {
+  border-color: rgba(46, 242, 255, 0.28);
+  color: #f8fafc;
+}
+
+.tab-btn.active {
+  background: rgba(46, 242, 255, 0.12);
+  color: var(--color-ai-active);
+  border-color: rgba(46, 242, 255, 0.4);
+}
+
+@media (max-width: 960px) {
+  .char-matrix {
+    flex-direction: column;
+  }
+}
 </style>

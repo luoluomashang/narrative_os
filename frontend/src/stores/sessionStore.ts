@@ -83,6 +83,7 @@ export const useSessionStore = defineStore('session', () => {
           count++
         }
       }
+      turn.value = history.value.filter(r => !r.rolled_back).length
       phase.value = 'ROLLBACK'
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Unknown error'

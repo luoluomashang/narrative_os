@@ -215,3 +215,52 @@ class WorldMapEdge(BaseModel):
 class WorldMapLayoutResponse(BaseModel):
     nodes: list[WorldMapNode] = Field(default_factory=list)
     edges: list[WorldMapEdge] = Field(default_factory=list)
+
+
+class WorldPublishReport(BaseModel):
+    factions_compiled: int = 0
+    regions_compiled: int = 0
+    power_systems_compiled: int = 0
+    rules_compiled: int = 0
+    timeline_events_compiled: int = 0
+    relations_compiled: int = 0
+
+
+class WorldRuntimeDiffEntry(BaseModel):
+    target_id: str = ""
+    target_name: str = ""
+    change_type: str = ""
+    before: str = ""
+    after: str = ""
+    effect: str = ""
+    note: str = ""
+
+
+class WorldRuntimeDiffSection(BaseModel):
+    key: str
+    label: str
+    items: list[WorldRuntimeDiffEntry] = Field(default_factory=list)
+
+
+class WorldRuntimeDiff(BaseModel):
+    sections: list[WorldRuntimeDiffSection] = Field(default_factory=list)
+    auto_fix_notes: list[str] = Field(default_factory=list)
+
+
+class WorldPublishPreviewResponse(BaseModel):
+    status: Literal["ready", "validation_failed"]
+    warnings: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    publish_report: WorldPublishReport | None = None
+    runtime_diff: WorldRuntimeDiff | None = None
+
+
+class WorldPublishResponse(BaseModel):
+    status: Literal["published", "validation_failed"]
+    world_version: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    publish_report: WorldPublishReport | None = None
+    runtime_diff: WorldRuntimeDiff | None = None

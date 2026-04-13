@@ -31,6 +31,37 @@
       :title="`RuntimeWorldState 已发布 ${publishSummary.world_version}：地区 ${publishSummary.regions} / 势力 ${publishSummary.factions} / 体系 ${publishSummary.power_systems} / 关系 ${publishSummary.relations}`"
     />
 
+    <el-card v-if="publishSummary?.runtime_diff?.sections.length" shadow="never" class="publish-diff-card">
+      <template #header>运行态结构化 Diff</template>
+      <div
+        v-for="section in publishSummary.runtime_diff.sections"
+        :key="section.key"
+        class="publish-diff-section"
+      >
+        <div class="publish-diff-section-title">{{ section.label }}</div>
+        <div
+          v-for="item in section.items"
+          :key="`${section.key}-${item.target_id}-${item.target_name}`"
+          class="publish-diff-item"
+        >
+          <div class="publish-diff-item-title">{{ item.target_name || item.target_id || item.change_type }}</div>
+          <div class="publish-diff-item-effect">{{ item.effect }}</div>
+          <div v-if="item.before || item.after" class="publish-diff-item-compare">{{ item.before }} → {{ item.after }}</div>
+          <div v-if="item.note" class="publish-diff-item-note">{{ item.note }}</div>
+        </div>
+      </div>
+      <div v-if="publishSummary.runtime_diff.auto_fix_notes.length" class="publish-autofix-block">
+        <div class="publish-diff-section-title">自动补全提示</div>
+        <div
+          v-for="(note, index) in publishSummary.runtime_diff.auto_fix_notes"
+          :key="`${index}-${note}`"
+          class="publish-autofix-note"
+        >
+          {{ note }}
+        </div>
+      </div>
+    </el-card>
+
     <div class="sandbox-layout">
       <aside class="left-panel">
         <el-card shadow="never" class="panel-card">
@@ -138,6 +169,7 @@
           :factions="worldData.factions"
           :regions="worldData.regions"
           @highlight="onLegendHighlight"
+          @select="onLegendSelect"
         />
 
         <MapViewCanvas
@@ -313,7 +345,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import * as d3 from 'd3-force'
 import '@vue-flow/core/dist/style.css'
 import { world } from '@/api/world'
-import type { Faction, Region, WorldRelation, WorldSandboxData } from '@/api/world'
+import type { Faction, Region, WorldPublishPreviewResponse, WorldRelation, WorldRuntimeDiff, WorldSandboxData } from '@/api/world'
 import RegionNode from './components/RegionNode.vue'
 import FactionNode from './components/FactionNode.vue'
 import FactionGroupNode from './components/FactionGroupNode.vue'
@@ -342,7 +374,7 @@ const finalizing = ref(false)
 const publishing = ref(false)
 const error = ref('')
 const finalizeSummary = ref<{ regions: number; factions: number; power_systems: number; relations: number } | null>(null)
-const publishSummary = ref<{ world_version: string; regions: number; factions: number; power_systems: number; relations: number } | null>(null)
+const publishSummary = ref<{ world_version: string; regions: number; factions: number; power_systems: number; relations: number; runtime_diff: WorldRuntimeDiff | null } | null>(null)
 
 const worldData = reactive<WorldSandboxData>({
   world_name: '',
@@ -407,6 +439,16 @@ watch(activeView, () => {
 
 function onLegendHighlight(factionId: string | null) {
   highlightFactionId.value = factionId
+}
+
+function onLegendSelect(factionId: string) {
+  const found = worldData.factions.find((f) => f.id === factionId)
+  if (!found) return
+  selectedRelation.value = null
+  relationDraft.value = null
+  regionDraft.value = null
+  selectedNode.value = { id: found.id, position: { x: found.x ?? 0, y: found.y ?? 0 }, data: { label: found.name, kind: 'faction' } }
+  factionDraft.value = JSON.parse(JSON.stringify(found))
 }
 
 const focusNeighborIds = computed(() => {
@@ -1228,22 +1270,39 @@ async function publishWorld() {
 
   publishing.value = true
   try {
+    const preview = await world.previewPublish(projectId.value)
+    if (preview.data.status !== 'ready' || !preview.data.publish_report) {
+      await ElMessageBox.alert(
+        renderPublishValidationHtml(preview.data),
+        '发布前校验未通过',
+        {
+          confirmButtonText: '知道了',
+          type: 'warning',
+          dangerouslyUseHTMLString: true,
+        },
+      )
+      return
+    }
+
+    try {
+      await ElMessageBox.confirm(
+        renderPublishPreviewHtml(preview.data),
+        '发布前结构化预览',
+        {
+          confirmButtonText: '确认发布',
+          cancelButtonText: '取消',
+          type: 'info',
+          dangerouslyUseHTMLString: true,
+        },
+      )
+    } catch {
+      return
+    }
+
     const res = await world.publish(projectId.value)
     if (res.data.status !== 'published' || !res.data.publish_report) {
-      const escapeHtml = (value: string) => value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-      const errors = res.data.errors ?? []
-      const warnings = res.data.warnings ?? []
-      const lines = [
-        ...errors.map((item) => `错误：${item}`),
-        ...warnings.map((item) => `提示：${item}`),
-      ]
       await ElMessageBox.alert(
-        lines.length > 0
-          ? lines.map((item) => escapeHtml(item)).join('<br>')
-          : '发布前校验未通过，请先完善世界设定。',
+        renderPublishValidationHtml(res.data),
         '运行态发布失败',
         {
           confirmButtonText: '知道了',
@@ -1260,11 +1319,55 @@ async function publishWorld() {
       factions: Number(res.data.publish_report.factions_compiled || 0),
       power_systems: Number(res.data.publish_report.power_systems_compiled || 0),
       relations: Number(res.data.publish_report.relations_compiled || 0),
+      runtime_diff: res.data.runtime_diff ?? preview.data.runtime_diff ?? null,
     }
     ElMessage.success('RuntimeWorldState 已发布')
   } finally {
     publishing.value = false
   }
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+function renderPublishValidationHtml(response: Pick<WorldPublishPreviewResponse, 'errors' | 'warnings' | 'suggestions'>) {
+  const lines = [
+    ...(response.errors ?? []).map((item) => `错误：${item}`),
+    ...(response.warnings ?? []).map((item) => `提示：${item}`),
+    ...(response.suggestions ?? []).map((item) => `建议：${item}`),
+  ]
+  if (lines.length === 0) {
+    return '发布前校验未通过，请先完善世界设定。'
+  }
+  return lines.map((item) => escapeHtml(item)).join('<br>')
+}
+
+function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
+  const report = response.publish_report
+  const sections = response.runtime_diff?.sections ?? []
+  const sectionBlocks = sections.slice(0, 4).map((section) => {
+    const items = section.items.slice(0, 3).map((item) => {
+      const title = escapeHtml(item.target_name || item.target_id || item.change_type)
+      const effect = escapeHtml(item.effect)
+      const compare = item.before || item.after ? `<div class="wb-preview-compare">${escapeHtml(item.before)} → ${escapeHtml(item.after)}</div>` : ''
+      return `<div class="wb-preview-item"><strong>${title}</strong><div>${effect}</div>${compare}</div>`
+    }).join('')
+    return `<div class="wb-preview-section"><div class="wb-preview-title">${escapeHtml(section.label)}</div>${items}</div>`
+  }).join('')
+  const autofix = (response.runtime_diff?.auto_fix_notes ?? []).slice(0, 3)
+    .map((note) => `<div class="wb-preview-note">${escapeHtml(note)}</div>`)
+    .join('')
+  return [
+    report
+      ? `即将发布：地区 ${report.regions_compiled} / 势力 ${report.factions_compiled} / 体系 ${report.power_systems_compiled} / 关系 ${report.relations_compiled}`
+      : '即将发布运行态世界。',
+    sectionBlocks,
+    autofix,
+  ].filter(Boolean).join('<br>')
 }
 </script>
 
@@ -1305,6 +1408,55 @@ async function publishWorld() {
 
 .finalize-alert {
   margin-bottom: 8px;
+}
+
+.publish-diff-card {
+  margin-bottom: 8px;
+  border: 1px solid var(--color-surface-l2);
+  background: var(--color-surface-l1);
+}
+
+.publish-diff-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.publish-diff-section:last-child {
+  margin-bottom: 0;
+}
+
+.publish-diff-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.publish-diff-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-base);
+  border: 1px solid var(--color-surface-l2);
+}
+
+.publish-diff-item-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.publish-diff-item-effect,
+.publish-diff-item-compare,
+.publish-diff-item-note,
+.publish-autofix-note {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.publish-autofix-block {
+  border-top: 1px dashed var(--color-surface-l2);
+  padding-top: 12px;
 }
 
 .sandbox-layout {

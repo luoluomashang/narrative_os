@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "timestamp": "2026-04-12T11:37:08.498628+00:00",
+  "project_id": "ui-audit-0412",
+  "plot_graph": {
+    "nodes": [
+      {
+        "id": "volume-goal-1",
+        "type": "setup",
+        "summary": "追查失落北境为何从王朝档案中被系统性抹除，并抢在冬祭前找回第一份原始疆图。",
+        "tension": 0.5,
+        "pacing_type": "rising",
+        "key_beat": "正面冲突",
+        "characters": [],
+        "location": "",
+        "status": "active",
+        "side_effects": [],
+        "branch_probability": {},
+        "chapter_ref": 1,
+        "notes": ""
+      }
+    ],
+    "edges": []
+  },
+  "characters": [
+    {
+      "name": "沈砚",
+      "traits": [
+        "记忆力过目不忘",
+        "谨慎"
+      ],
+      "goal": "找回被篡改的疆域真相",
+      "backstory": "王朝档案署的年轻抄写员，唯一保留失落北境记忆的人。",
+      "description": "",
+      "personality": "",
+      "alias": [],
+      "speech_style": "",
+      "catchphrases": [],
+      "dialogue_examples": [],
+      "motivations": [],
+      "scenario_context": "",
+      "system_instructions": "",
+      "faction": "档案署",
+      "emotion": "平静",
+      "health": 1.0,
+      "relationships": {},
+      "arc_stage": "防御",
+      "memory": [],
+      "behavior_constraints": [],
+      "voice_fingerprint": {},
+      "snapshot_history": [],
+      "is_alive": true,
+      "chapter_introduced": 1
+    }
+  ],
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "3e88fad0-099e-4e99-9146-49657a762e56": {
+        "id": "3e88fad0-099e-4e99-9146-49657a762e56",
+        "name": "失落北境",
+        "region_type": "区域",
+        "terrain": "冻原与裂谷",
+        "climate": "长冬极夜",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [
+          "档案崇拜",
+          "边境要塞"
+        ],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

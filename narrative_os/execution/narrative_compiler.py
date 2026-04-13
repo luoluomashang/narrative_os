@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from narrative_os.core.memory import MemoryPool
 from narrative_os.execution.context_builder import (
     ChapterTarget,
     ContextBuilder,
@@ -322,6 +323,7 @@ class NarrativeCompiler:
         session: "InteractiveSession",
         world: "WorldState | None" = None,
         characters: "list[CharacterState] | None" = None,
+        memory: "MemorySystem | None" = None,
         lorebook: "Lorebook | None" = None,
         token_budget: int = 6000,
     ) -> InteractiveRuntimePackage:
@@ -338,10 +340,21 @@ class NarrativeCompiler:
             word_count_target=200,
         )
 
+        resolved_memory = memory
+        if resolved_memory is None:
+            try:
+                from narrative_os.core.memory import MemorySystem
+
+                resolved_memory = MemorySystem(project_id=project_id)
+            except Exception:
+                resolved_memory = None
+
         ctx = self._cb.build(
             chapter_target=chapter_target,
             characters=characters,
             world=world,
+            memory=resolved_memory,
+            memory_pools=[MemoryPool.TRPG, MemoryPool.CANON] if resolved_memory is not None else None,
             project_id=project_id,
         )
 

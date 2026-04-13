@@ -51,6 +51,10 @@
         <strong>继续撰写</strong>
         <p>进入 Writing Workbench，查看运行链路和前置检查。</p>
       </button>
+      <button class="action-card shell accent-benchmark" @click="go(`/project/${projectId}/benchmark`)">
+        <strong>Benchmark Studio</strong>
+        <p>上传参考文本、生成对标 profile，并激活当前项目基准。</p>
+      </button>
       <button class="action-card shell accent-world" @click="go(`/project/${projectId}/worldbuilder`)">
         <strong>世界构建</strong>
         <p>发布 RuntimeWorldState，解除写作前的硬阻塞。</p>
@@ -109,7 +113,11 @@ function go(path: string) {
 }
 
 onMounted(async () => {
-  await store.loadProjectInfo(projectId.value)
+  try {
+    await store.loadProjectInfo(projectId.value)
+  } catch {
+    router.replace('/projects')
+  }
 })
 </script>
 
@@ -264,7 +272,7 @@ onMounted(async () => {
 }
 
 .action-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .action-card {
@@ -279,6 +287,10 @@ onMounted(async () => {
 
 .accent-world {
   background: linear-gradient(180deg, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0.96));
+}
+
+.accent-benchmark {
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.14), rgba(255, 251, 235, 0.98));
 }
 
 .accent-character {

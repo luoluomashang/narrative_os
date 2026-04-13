@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from pydantic import BaseModel, Field
 
+from narrative_os.execution.prompt_utils import build_character_voice_block
 from narrative_os.skills.dsl import SkillRegistry, SkillRequest
 
 if TYPE_CHECKING:
@@ -225,7 +226,13 @@ class ConsistencyChecker:
                     if ex.dialogue:
                         voice_ref_parts.append(f"对话示例（{ex.context}）：{ex.dialogue}")
                 if voice_ref_parts:
-                    voice_ref = "\n".join(voice_ref_parts)
+                    voice_ref = build_character_voice_block(
+                        speech_style=speech_style,
+                        under_pressure=vf.under_pressure if vf else "",
+                        dialogue_examples=dialogue_examples[:3],
+                        include_personality=False,
+                        example_title="对话示例",
+                    )
                     prompt = (
                         f"判断以下文本中「{char.name}」的对话是否符合其口吻设定。\n"
                         f"口吻参考：\n{voice_ref}\n\n"

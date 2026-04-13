@@ -255,6 +255,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/world/publish-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预览世界发布：校验 + sandbox → runtime 结构化 diff */
+        post: operations["preview_world_publish_projects__project_id__world_publish_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/world/publish": {
         parameters: {
             query?: never;
@@ -418,6 +435,23 @@ export interface paths {
         /** 获取项目情节图 */
         get: operations["get_project_plot_projects__project_id__plot_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/plot/volume-goal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新当前卷目标 */
+        put: operations["update_project_plot_volume_goal_projects__project_id__plot_volume_goal_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -628,6 +662,23 @@ export interface paths {
         put?: never;
         /** 结束 TRPG 会话 */
         post: operations["session_end_sessions__session_id__end_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sessions/{session_id}/preview-archives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预览三种归档模式 */
+        post: operations["preview_archives_sessions__session_id__preview_archives_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1113,6 +1164,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/benchmark/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 创建 benchmark job */
+        post: operations["create_benchmark_job_projects__project_id__benchmark_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/benchmark/jobs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询 benchmark job 详情 */
+        get: operations["get_benchmark_job_projects__project_id__benchmark_jobs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/benchmark/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取项目当前 benchmark profile */
+        get: operations["get_benchmark_profile_projects__project_id__benchmark_profile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/benchmark/snippets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取 benchmark snippets */
+        get: operations["list_benchmark_snippets_projects__project_id__benchmark_snippets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/benchmark/profile/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 激活项目 benchmark profile */
+        post: operations["activate_benchmark_profile_projects__project_id__benchmark_profile_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/benchmark/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取作者蒸馏 skill 列表 */
+        get: operations["list_benchmark_skills_projects__project_id__benchmark_skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/benchmark/skills/{skill_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取作者蒸馏 skill 详情 */
+        get: operations["get_benchmark_skill_projects__project_id__benchmark_skills__skill_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/benchmark/skills/{skill_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 应用作者蒸馏 skill 到当前项目 */
+        post: operations["apply_benchmark_skill_projects__project_id__benchmark_skills__skill_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/memory": {
         parameters: {
             query?: never;
@@ -1120,10 +1307,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * 三层记忆快照
-         * @description 返回三层记忆系统的计数快照。项目不存在时返回空快照。
-         */
+        /** 三层记忆快照 */
         get: operations["get_project_memory_projects__project_id__memory_get"];
         put?: never;
         post?: never;
@@ -1140,10 +1324,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * RAG 记忆检索
-         * @description RAG 检索记忆。
-         */
+        /** RAG 记忆检索 */
         get: operations["search_project_memory_get_projects__project_id__memory_search_get"];
         put?: never;
         /** 按语义搜索记忆 */
@@ -1578,6 +1759,11 @@ export interface components {
             checkpoint_id: string;
             /** Run Id */
             run_id: string;
+            /**
+             * Correlation Id
+             * @default
+             */
+            correlation_id: string;
             /** Reason */
             reason: string;
             /** Context */
@@ -1588,6 +1774,14 @@ export interface components {
             resolved_at?: string | null;
             /** Decision */
             decision?: string | null;
+        };
+        /** ArchivePreviewResponse */
+        ArchivePreviewResponse: {
+            /** Session Id */
+            session_id: string;
+            preview_session_only?: components["schemas"]["SessionOnlyPreview"];
+            preview_draft_chapter?: components["schemas"]["DraftChapterPreview"];
+            preview_canon_chapter?: components["schemas"]["CanonChapterPreview"];
         };
         /** Artifact */
         Artifact: {
@@ -1613,6 +1807,11 @@ export interface components {
             input_summary: string;
             /** Output Content */
             output_content: string;
+            /**
+             * Correlation Id
+             * @default
+             */
+            correlation_id: string;
             /** Quality Scores */
             quality_scores?: {
                 [key: string]: number;
@@ -1644,7 +1843,70 @@ export interface components {
          * ArtifactType
          * @enum {string}
          */
-        ArtifactType: "outline" | "draft" | "critique" | "final_text" | "maintenance" | "world_delta";
+        ArtifactType: "outline" | "draft" | "critique" | "final_text" | "maintenance" | "world_delta" | "benchmark_report" | "benchmark_profile" | "benchmark_snippet" | "benchmark_score" | "author_skill";
+        /** AuthorSkillProfile */
+        AuthorSkillProfile: {
+            /** Skill Id */
+            skill_id: string;
+            /** Origin Project Id */
+            origin_project_id: string;
+            /** Run Id */
+            run_id?: string | null;
+            /**
+             * Skill Name
+             * @default
+             */
+            skill_name: string;
+            /**
+             * Author Name
+             * @default
+             */
+            author_name: string;
+            /** Source Ids */
+            source_ids?: string[];
+            /** Stable Rules */
+            stable_rules?: {
+                [key: string]: unknown;
+            }[];
+            /** Conditional Rules */
+            conditional_rules?: {
+                [key: string]: unknown;
+            }[];
+            /** Anti Rules */
+            anti_rules?: {
+                [key: string]: unknown;
+            }[];
+            /** Dialogue Rules */
+            dialogue_rules?: {
+                [key: string]: unknown;
+            }[];
+            /** Scene Patterns */
+            scene_patterns?: {
+                [key: string]: unknown;
+            };
+            /** Chapter Hook Patterns */
+            chapter_hook_patterns?: {
+                [key: string]: unknown;
+            }[];
+            /** Humanness Baseline */
+            humanness_baseline?: {
+                [key: string]: unknown;
+            };
+            /** Confidence Map */
+            confidence_map?: {
+                [key: string]: unknown;
+            };
+            /** @default draft */
+            status: components["schemas"]["BenchmarkProfileStatus"];
+            /** Created At */
+            created_at: string;
+            /**
+             * Applied
+             * @default false
+             */
+            applied: boolean;
+            application_mode?: components["schemas"]["BenchmarkSkillApplyMode"] | null;
+        };
         /**
          * BehaviorConstraint
          * @description 行为约束规则（硬约束，Critic Agent 必须校验）。
@@ -1666,6 +1928,339 @@ export interface components {
              * @default
              */
             context: string;
+        };
+        /** BenchmarkJobCreateRequest */
+        BenchmarkJobCreateRequest: {
+            job_type: components["schemas"]["BenchmarkJobType"];
+            /** @default single_work */
+            mode: components["schemas"]["BenchmarkJobMode"];
+            /** Source Ids */
+            source_ids?: string[];
+            /** Sources */
+            sources?: components["schemas"]["BenchmarkSourceCreateRequest"][];
+            /** Chapter Sep */
+            chapter_sep?: string | null;
+            /**
+             * Extract Snippets
+             * @default true
+             */
+            extract_snippets: boolean;
+            /** Target Platform */
+            target_platform?: string | null;
+            /** Author Name */
+            author_name?: string | null;
+            /** Corpus Group */
+            corpus_group?: string | null;
+        };
+        /** BenchmarkJobCreateResponse */
+        BenchmarkJobCreateResponse: {
+            /** Run Id */
+            run_id: string;
+            /** Status */
+            status: string;
+            profile: components["schemas"]["BenchmarkProfile"];
+            author_skill?: components["schemas"]["AuthorSkillProfile"] | null;
+            /** Source Ids */
+            source_ids?: string[];
+            /**
+             * Snippet Count
+             * @default 0
+             */
+            snippet_count: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
+        /** BenchmarkJobDetailResponse */
+        BenchmarkJobDetailResponse: {
+            run: components["schemas"]["Run"];
+            profile?: components["schemas"]["BenchmarkProfile"] | null;
+            author_skill?: components["schemas"]["AuthorSkillProfile"] | null;
+            /** Sources */
+            sources?: components["schemas"]["BenchmarkSource"][];
+            /** Snippets */
+            snippets?: components["schemas"]["BenchmarkSnippet"][];
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
+        /**
+         * BenchmarkJobMode
+         * @enum {string}
+         */
+        BenchmarkJobMode: "single_work" | "multi_work" | "scene";
+        /**
+         * BenchmarkJobType
+         * @enum {string}
+         */
+        BenchmarkJobType: "project_benchmark" | "author_distillation";
+        /** BenchmarkProfile */
+        BenchmarkProfile: {
+            /** Profile Id */
+            profile_id: string;
+            /** Project Id */
+            project_id: string;
+            profile_type: components["schemas"]["BenchmarkJobType"];
+            /**
+             * Profile Name
+             * @default
+             */
+            profile_name: string;
+            /** Source Ids */
+            source_ids?: string[];
+            /** Stable Traits */
+            stable_traits?: {
+                [key: string]: unknown;
+            }[];
+            /** Conditional Traits */
+            conditional_traits?: {
+                [key: string]: unknown;
+            }[];
+            /** Anti Traits */
+            anti_traits?: {
+                [key: string]: unknown;
+            }[];
+            /** Scene Anchors */
+            scene_anchors?: {
+                [key: string]: unknown;
+            };
+            /** Humanness Baseline */
+            humanness_baseline?: {
+                [key: string]: unknown;
+            };
+            /** @default draft */
+            status: components["schemas"]["BenchmarkProfileStatus"];
+            /**
+             * Snippet Count
+             * @default 0
+             */
+            snippet_count: number;
+            /** Created At */
+            created_at: string;
+            /** Activated At */
+            activated_at?: string | null;
+        };
+        /** BenchmarkProfileActivateRequest */
+        BenchmarkProfileActivateRequest: {
+            /** Profile Id */
+            profile_id: string;
+        };
+        /**
+         * BenchmarkProfileStatus
+         * @enum {string}
+         */
+        BenchmarkProfileStatus: "draft" | "active";
+        /**
+         * BenchmarkSceneType
+         * @enum {string}
+         */
+        BenchmarkSceneType: "battle" | "emotion" | "reveal" | "daily" | "ensemble" | "general";
+        /**
+         * BenchmarkSkillApplyMode
+         * @enum {string}
+         */
+        BenchmarkSkillApplyMode: "guide" | "hybrid" | "strict";
+        /** BenchmarkSkillApplyRequest */
+        BenchmarkSkillApplyRequest: {
+            /** @default hybrid */
+            mode: components["schemas"]["BenchmarkSkillApplyMode"];
+        };
+        /** BenchmarkSkillApplyResponse */
+        BenchmarkSkillApplyResponse: {
+            skill: components["schemas"]["AuthorSkillProfile"];
+            mode: components["schemas"]["BenchmarkSkillApplyMode"];
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
+        /** BenchmarkSkillListResponse */
+        BenchmarkSkillListResponse: {
+            /** Items */
+            items?: components["schemas"]["AuthorSkillProfile"][];
+            /** Active Skill Id */
+            active_skill_id?: string | null;
+            active_mode?: components["schemas"]["BenchmarkSkillApplyMode"] | null;
+        };
+        /** BenchmarkSnippet */
+        BenchmarkSnippet: {
+            /** Snippet Id */
+            snippet_id: string;
+            /** Profile Id */
+            profile_id: string;
+            /** Project Id */
+            project_id: string;
+            /** Source Id */
+            source_id: string;
+            scene_type: components["schemas"]["BenchmarkSceneType"];
+            /** Chapter */
+            chapter?: number | null;
+            /**
+             * Offset Start
+             * @default 0
+             */
+            offset_start: number;
+            /**
+             * Offset End
+             * @default 0
+             */
+            offset_end: number;
+            /**
+             * Char Count
+             * @default 0
+             */
+            char_count: number;
+            /**
+             * Anchor Score
+             * @default 0
+             */
+            anchor_score: number;
+            /**
+             * Purity Score
+             * @default 0
+             */
+            purity_score: number;
+            /**
+             * Distinctiveness Score
+             * @default 0
+             */
+            distinctiveness_score: number;
+            /**
+             * Source Hit Verified
+             * @default false
+             */
+            source_hit_verified: boolean;
+            /** Text */
+            text: string;
+        };
+        /** BenchmarkSnippetListResponse */
+        BenchmarkSnippetListResponse: {
+            profile?: components["schemas"]["BenchmarkProfile"] | null;
+            /** Items */
+            items?: components["schemas"]["BenchmarkSnippet"][];
+        };
+        /** BenchmarkSource */
+        BenchmarkSource: {
+            /** Source Id */
+            source_id: string;
+            /** Project Id */
+            project_id: string;
+            /**
+             * Corpus Group
+             * @default
+             */
+            corpus_group: string;
+            /** Title */
+            title: string;
+            /** Author Name */
+            author_name?: string | null;
+            /**
+             * File Name
+             * @default
+             */
+            file_name: string;
+            /**
+             * Sha256
+             * @default
+             */
+            sha256: string;
+            /**
+             * Char Count
+             * @default 0
+             */
+            char_count: number;
+            /** Chapter Sep */
+            chapter_sep?: string | null;
+            source_type: components["schemas"]["BenchmarkSourceType"];
+            /** Created At */
+            created_at: string;
+        };
+        /** BenchmarkSourceCreateRequest */
+        BenchmarkSourceCreateRequest: {
+            /** Title */
+            title: string;
+            /**
+             * File Name
+             * @default
+             */
+            file_name: string;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** Author Name */
+            author_name?: string | null;
+            /**
+             * Corpus Group
+             * @default
+             */
+            corpus_group: string;
+            /** Chapter Sep */
+            chapter_sep?: string | null;
+        };
+        /**
+         * BenchmarkSourceType
+         * @enum {string}
+         */
+        BenchmarkSourceType: "project_reference" | "author_reference";
+        /** CanonChapterPreview */
+        CanonChapterPreview: {
+            /**
+             * Draft Content
+             * @default
+             */
+            draft_content: string;
+            /** Pending Changes */
+            pending_changes?: components["schemas"]["CanonPendingChangePreview"][];
+            /** Approval Required Fields */
+            approval_required_fields?: string[];
+            /**
+             * Requires Confirmation
+             * @default true
+             */
+            requires_confirmation: boolean;
+            /**
+             * Projected Changeset Status
+             * @default canon_pending
+             */
+            projected_changeset_status: string;
+        };
+        /** CanonPendingChangePreview */
+        CanonPendingChangePreview: {
+            /**
+             * Change Type
+             * @default
+             */
+            change_type: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Tag
+             * @default
+             */
+            tag: string;
+            /**
+             * Chapter
+             * @default 0
+             */
+            chapter: number;
+            /** Before Snapshot */
+            before_snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** After Value */
+            after_value?: {
+                [key: string]: unknown;
+            };
         };
         /** ChangeSetApproveResponse */
         ChangeSetApproveResponse: {
@@ -1693,6 +2288,34 @@ export interface components {
             changes: {
                 [key: string]: unknown;
             }[];
+            /**
+             * @default {
+             *       "summary": "",
+             *       "memory_anchors": [],
+             *       "character_changes": [],
+             *       "projected_changeset_status": "runtime_only"
+             *     }
+             */
+            preview_session_only: components["schemas"]["SessionOnlyPreview"];
+            /**
+             * @default {
+             *       "chapter_text": "",
+             *       "excerpt": "",
+             *       "word_count": 0,
+             *       "quality_estimate": ""
+             *     }
+             */
+            preview_draft_chapter: components["schemas"]["DraftChapterPreview"];
+            /**
+             * @default {
+             *       "draft_content": "",
+             *       "pending_changes": [],
+             *       "approval_required_fields": [],
+             *       "requires_confirmation": true,
+             *       "projected_changeset_status": "canon_pending"
+             *     }
+             */
+            preview_canon_chapter: components["schemas"]["CanonChapterPreview"];
         };
         /** ChangeSetListItem */
         ChangeSetListItem: {
@@ -2370,6 +2993,29 @@ export interface components {
              */
             action: string;
         };
+        /** DraftChapterPreview */
+        DraftChapterPreview: {
+            /**
+             * Chapter Text
+             * @default
+             */
+            chapter_text: string;
+            /**
+             * Excerpt
+             * @default
+             */
+            excerpt: string;
+            /**
+             * Word Count
+             * @default 0
+             */
+            word_count: number;
+            /**
+             * Quality Estimate
+             * @default
+             */
+            quality_estimate: string;
+        };
         /** ExportNovelResponse */
         ExportNovelResponse: {
             /** Project Id */
@@ -2509,6 +3155,11 @@ export interface components {
              */
             is_active: boolean;
         };
+        /**
+         * FailureRootCauseType
+         * @enum {string}
+         */
+        FailureRootCauseType: "model_error" | "rule_blocked" | "approval_paused" | "persistence_error" | "unknown";
         /** FinalizeWorldResponse */
         FinalizeWorldResponse: {
             /**
@@ -2845,6 +3496,16 @@ export interface components {
              */
             timestamp: string;
             /**
+             * Benchmark Adherence Score
+             * @default 0
+             */
+            benchmark_adherence_score: number;
+            /**
+             * Benchmark Humanness Score
+             * @default 0
+             */
+            benchmark_humanness_score: number;
+            /**
              * Qd 01
              * @default 0
              */
@@ -3059,6 +3720,11 @@ export interface components {
             nodes?: components["schemas"]["PlotNode"][];
             /** Edges */
             edges?: components["schemas"]["PlotEdge"][];
+            /**
+             * Current Volume Goal
+             * @default
+             */
+            current_volume_goal: string;
         };
         /** PlotNode */
         PlotNode: {
@@ -3081,6 +3747,11 @@ export interface components {
             tension: number;
         } & {
             [key: string]: unknown;
+        };
+        /** PlotVolumeGoalUpdateRequest */
+        PlotVolumeGoalUpdateRequest: {
+            /** Current Volume Goal */
+            current_volume_goal: string;
         };
         /** PluginInfo */
         PluginInfo: {
@@ -3162,6 +3833,35 @@ export interface components {
              * @default 0
              */
             level_count: number;
+        };
+        /** PreviewCharacterChange */
+        PreviewCharacterChange: {
+            /** Name */
+            name: string;
+            /**
+             * Change
+             * @default
+             */
+            change: string;
+            /**
+             * Actions Count
+             * @default 0
+             */
+            actions_count: number;
+            /** Final Pressure */
+            final_pressure?: number | null;
+        };
+        /** PreviewMemoryAnchor */
+        PreviewMemoryAnchor: {
+            /** Label */
+            label: string;
+            /**
+             * Source
+             * @default session
+             */
+            source: string;
+            /** Importance */
+            importance?: number | null;
         };
         /** ProjectInitRequest */
         ProjectInitRequest: {
@@ -3612,6 +4312,12 @@ export interface components {
             project_id: string;
             run_type: components["schemas"]["RunType"];
             status: components["schemas"]["RunStatus"];
+            /**
+             * Correlation Id
+             * @default
+             */
+            correlation_id: string;
+            root_cause?: components["schemas"]["RunRootCause"] | null;
             /** Chapter Num */
             chapter_num?: number | null;
             /** Session Id */
@@ -3716,11 +4422,33 @@ export interface components {
              * @default
              */
             run_id: string;
+            /** Benchmark Adherence Score */
+            benchmark_adherence_score?: number | null;
+            /** Benchmark Humanness Score */
+            benchmark_humanness_score?: number | null;
+            /** Benchmark Violations */
+            benchmark_violations?: string[];
         };
         /** RunListResponse */
         RunListResponse: {
             /** Items */
             items?: components["schemas"]["Run"][];
+        };
+        /** RunRootCause */
+        RunRootCause: {
+            type: components["schemas"]["FailureRootCauseType"];
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Step Id */
+            step_id?: string | null;
+            /**
+             * Correlation Id
+             * @default
+             */
+            correlation_id: string;
         };
         /**
          * RunStatus
@@ -3738,6 +4466,14 @@ export interface components {
             /** Agent Name */
             agent_name: string;
             status: components["schemas"]["RunStatus"];
+            /**
+             * Correlation Id
+             * @default
+             */
+            correlation_id: string;
+            failure_type?: components["schemas"]["FailureRootCauseType"] | null;
+            /** Failure Message */
+            failure_message?: string | null;
             artifact?: components["schemas"]["Artifact"] | null;
             /** Started At */
             started_at: string;
@@ -3748,7 +4484,7 @@ export interface components {
          * RunType
          * @enum {string}
          */
-        RunType: "chapter_generation" | "trpg_turn" | "world_publish" | "canon_commit";
+        RunType: "chapter_generation" | "trpg_turn" | "world_publish" | "canon_commit" | "benchmark_analysis" | "author_distillation";
         /** SavePoint */
         SavePoint: {
             /** Save Id */
@@ -3800,6 +4536,23 @@ export interface components {
             changes_count: number;
             /** Canon Confirmed */
             canon_confirmed: boolean;
+        };
+        /** SessionOnlyPreview */
+        SessionOnlyPreview: {
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Memory Anchors */
+            memory_anchors?: components["schemas"]["PreviewMemoryAnchor"][];
+            /** Character Changes */
+            character_changes?: components["schemas"]["PreviewCharacterChange"][];
+            /**
+             * Projected Changeset Status
+             * @default runtime_only
+             */
+            projected_changeset_status: string;
         };
         /** SessionStatusResponse */
         SessionStatusResponse: {
@@ -3867,6 +4620,9 @@ export interface components {
             }[];
             /** Saved Chapter */
             saved_chapter?: number | null;
+            preview_session_only?: components["schemas"]["SessionOnlyPreview"];
+            preview_draft_chapter?: components["schemas"]["DraftChapterPreview"];
+            preview_canon_chapter?: components["schemas"]["CanonChapterPreview"];
         };
         /** SettingsUpdateRequest */
         SettingsUpdateRequest: {
@@ -4184,6 +4940,73 @@ export interface components {
             /** Completeness Hints */
             completeness_hints?: string[];
         };
+        /** WorldPublishPreviewResponse */
+        WorldPublishPreviewResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "validation_failed";
+            /** Warnings */
+            warnings?: string[];
+            /** Suggestions */
+            suggestions?: string[];
+            /** Errors */
+            errors?: string[];
+            publish_report?: components["schemas"]["WorldPublishReport"] | null;
+            runtime_diff?: components["schemas"]["WorldRuntimeDiff"] | null;
+        };
+        /** WorldPublishReport */
+        WorldPublishReport: {
+            /**
+             * Factions Compiled
+             * @default 0
+             */
+            factions_compiled: number;
+            /**
+             * Regions Compiled
+             * @default 0
+             */
+            regions_compiled: number;
+            /**
+             * Power Systems Compiled
+             * @default 0
+             */
+            power_systems_compiled: number;
+            /**
+             * Rules Compiled
+             * @default 0
+             */
+            rules_compiled: number;
+            /**
+             * Timeline Events Compiled
+             * @default 0
+             */
+            timeline_events_compiled: number;
+            /**
+             * Relations Compiled
+             * @default 0
+             */
+            relations_compiled: number;
+        };
+        /** WorldPublishResponse */
+        WorldPublishResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "published" | "validation_failed";
+            /** World Version */
+            world_version?: string | null;
+            /** Warnings */
+            warnings?: string[];
+            /** Suggestions */
+            suggestions?: string[];
+            /** Errors */
+            errors?: string[];
+            publish_report?: components["schemas"]["WorldPublishReport"] | null;
+            runtime_diff?: components["schemas"]["WorldRuntimeDiff"] | null;
+        };
         /**
          * WorldRelation
          * @description 地区/势力之间的关系（对应 Vue-Flow edge）
@@ -4210,6 +5033,60 @@ export interface components {
              * @default
              */
             description: string;
+        };
+        /** WorldRuntimeDiff */
+        WorldRuntimeDiff: {
+            /** Sections */
+            sections?: components["schemas"]["WorldRuntimeDiffSection"][];
+            /** Auto Fix Notes */
+            auto_fix_notes?: string[];
+        };
+        /** WorldRuntimeDiffEntry */
+        WorldRuntimeDiffEntry: {
+            /**
+             * Target Id
+             * @default
+             */
+            target_id: string;
+            /**
+             * Target Name
+             * @default
+             */
+            target_name: string;
+            /**
+             * Change Type
+             * @default
+             */
+            change_type: string;
+            /**
+             * Before
+             * @default
+             */
+            before: string;
+            /**
+             * After
+             * @default
+             */
+            after: string;
+            /**
+             * Effect
+             * @default
+             */
+            effect: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** WorldRuntimeDiffSection */
+        WorldRuntimeDiffSection: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Items */
+            items?: components["schemas"]["WorldRuntimeDiffEntry"][];
         };
         /**
          * WorldSandboxData
@@ -4340,6 +5217,37 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** WritingBenchmarkSummary */
+        WritingBenchmarkSummary: {
+            /**
+             * Profile Id
+             * @default
+             */
+            profile_id: string;
+            /**
+             * Profile Name
+             * @default
+             */
+            profile_name: string;
+            /**
+             * Mode
+             * @default project_benchmark
+             */
+            mode: string;
+            /** Top Rules */
+            top_rules?: string[];
+            /** Anti Rules */
+            anti_rules?: string[];
+            /** Scene Hints */
+            scene_hints?: string[];
+            /**
+             * Active Scene Anchor Count
+             * @default 0
+             */
+            active_scene_anchor_count: number;
+            /** Application Mode */
+            application_mode?: string | null;
+        };
         /** WritingContextCharacter */
         WritingContextCharacter: {
             /** Name */
@@ -4386,6 +5294,8 @@ export interface components {
              * @default 0
              */
             pending_changes_count: number;
+            active_benchmark?: components["schemas"]["WritingBenchmarkSummary"] | null;
+            active_author_skill?: components["schemas"]["WritingBenchmarkSummary"] | null;
             world?: components["schemas"]["WritingWorldSummary"];
             /** Characters */
             characters?: components["schemas"]["WritingContextCharacter"][];
@@ -5394,6 +6304,37 @@ export interface operations {
             };
         };
     };
+    preview_world_publish_projects__project_id__world_publish_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldPublishPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     publish_world_projects__project_id__world_publish_post: {
         parameters: {
             query?: never;
@@ -5411,9 +6352,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WorldPublishResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5697,6 +6636,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlotGraphData"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_plot_volume_goal_projects__project_id__plot_volume_goal_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlotVolumeGoalUpdateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6291,6 +7265,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_archives_sessions__session_id__preview_archives_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchivePreviewResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7278,6 +8283,276 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_benchmark_job_projects__project_id__benchmark_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkJobCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkJobCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_benchmark_job_projects__project_id__benchmark_jobs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkJobDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_benchmark_profile_projects__project_id__benchmark_profile_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkProfile"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_benchmark_snippets_projects__project_id__benchmark_snippets_get: {
+        parameters: {
+            query?: {
+                profile_id?: string | null;
+                scene_type?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkSnippetListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_benchmark_profile_projects__project_id__benchmark_profile_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkProfileActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_benchmark_skills_projects__project_id__benchmark_skills_get: {
+        parameters: {
+            query?: {
+                author_name?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkSkillListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_benchmark_skill_projects__project_id__benchmark_skills__skill_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorSkillProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_benchmark_skill_projects__project_id__benchmark_skills__skill_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                skill_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BenchmarkSkillApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BenchmarkSkillApplyResponse"];
                 };
             };
             /** @description Validation Error */

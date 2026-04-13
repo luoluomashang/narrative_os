@@ -80,7 +80,9 @@ class WorldValidator:
         self._check_faction_region_refs(sandbox, report)
         self._check_relation_map_refs(sandbox, report)
         self._check_power_system_refs(sandbox, report)
+        self._check_power_levels(sandbox, report)
         self._check_timeline_entity_refs(sandbox, report)
+        self._check_timeline_chronology(sandbox, report)
         self._check_bidirectional_consistency(sandbox, report)
         self._suggest_improvements(sandbox, concept, report)
 
@@ -182,6 +184,32 @@ class WorldValidator:
                         f"'{region.power_access.custom_system_id}' 不存在"
                     )
 
+    def _check_power_levels(
+        self, sandbox: WorldSandboxData, report: ValidationReport
+    ) -> None:
+        """校验力量等级定义合法性。"""
+        for power_system in sandbox.power_systems:
+            if not power_system.levels:
+                report.add_warning(f"力量体系 '{power_system.name}' 未定义任何等级")
+                continue
+            seen_names: set[str] = set()
+            for index, level in enumerate(power_system.levels, start=1):
+                level_name = level.name.strip()
+                if not level_name:
+                    report.add_error(
+                        f"力量体系 '{power_system.name}' 的第 {index} 个等级名称不能为空"
+                    )
+                    continue
+                if level_name in seen_names:
+                    report.add_error(
+                        f"力量体系 '{power_system.name}' 存在重复等级名称 '{level_name}'"
+                    )
+                seen_names.add(level_name)
+                if index > 1 and not level.requirements.strip():
+                    report.add_warning(
+                        f"力量体系 '{power_system.name}' 的等级 '{level_name}' 未填写晋升条件"
+                    )
+
     def _check_timeline_entity_refs(
         self, sandbox: WorldSandboxData, report: ValidationReport
     ) -> None:
@@ -199,6 +227,40 @@ class WorldValidator:
                     f"时间线事件 '{event.title}'（ID: {event.id}）引用的实体 ID "
                     f"'{event.linked_entity_id}' 不存在，该关联将被忽略"
                 )
+
+    def _check_timeline_chronology(
+        self, sandbox: WorldSandboxData, report: ValidationReport
+    ) -> None:
+        """校验时间线顺序，给出明显的因果/年代异常提示。"""
+        parsed: list[tuple[int, int, str]] = []
+        seen_pairs: set[tuple[str, str]] = set()
+        for index, event in enumerate(sandbox.timeline_events):
+            pair = (event.year.strip(), event.title.strip())
+            if pair in seen_pairs:
+                report.add_warning(
+                    f"时间线事件 '{event.title}' 在年份 '{event.year}' 下重复定义，请确认是否为重复事件"
+                )
+            seen_pairs.add(pair)
+            year_value = self._parse_year_value(event.year)
+            if year_value is not None:
+                parsed.append((index, year_value, event.title))
+
+        for previous, current in zip(parsed, parsed[1:]):
+            previous_index, previous_year, previous_title = previous
+            current_index, current_year, current_title = current
+            if current_year < previous_year and current_index > previous_index:
+                report.add_warning(
+                    f"时间线顺序可能冲突：'{current_title}' ({current_year}) 排在 '{previous_title}' ({previous_year}) 之后"
+                )
+
+    def _parse_year_value(self, raw_year: str) -> int | None:
+        digits = "".join(ch for ch in raw_year if ch.isdigit() or ch == "-")
+        if not digits or digits in {"-", "--"}:
+            return None
+        try:
+            return int(digits)
+        except ValueError:
+            return None
 
     def _check_bidirectional_consistency(
         self, sandbox: WorldSandboxData, report: ValidationReport

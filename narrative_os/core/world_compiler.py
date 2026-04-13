@@ -167,6 +167,130 @@ class WorldCompiler:
 
         return world, report
 
+    def build_runtime_diff(
+        self,
+        sandbox: WorldSandboxData,
+        world: WorldState,
+    ) -> dict[str, Any]:
+        """生成 sandbox -> runtime 的结构化 diff 预览。"""
+        sections: list[dict[str, Any]] = []
+        auto_fix_notes: list[str] = []
+
+        geography_items: list[dict[str, str]] = []
+        for region in sandbox.regions:
+            runtime_region = world.geography.get(region.id, {})
+            sandbox_factions = "、".join(region.faction_ids) if region.faction_ids else "无"
+            runtime_factions_list = runtime_region.get("faction_ids", []) if isinstance(runtime_region, dict) else []
+            runtime_factions = "、".join(runtime_factions_list) if runtime_factions_list else "无"
+            effect = "地区已编译为运行态 geography"
+            if set(runtime_factions_list) != set(region.faction_ids):
+                effect = "编译时补全了地区与势力的双向归属"
+                auto_fix_notes.append(
+                    f"地区 '{region.name}' 的势力归属已由运行态自动补全为：{runtime_factions}"
+                )
+            geography_items.append(
+                {
+                    "target_id": region.id,
+                    "target_name": region.name,
+                    "change_type": "region_projection",
+                    "before": f"沙盘势力：{sandbox_factions}",
+                    "after": f"运行态势力：{runtime_factions}",
+                    "effect": effect,
+                    "note": runtime_region.get("terrain", "") if isinstance(runtime_region, dict) else "",
+                }
+            )
+        if geography_items:
+            sections.append({"key": "geography", "label": "地区投影", "items": geography_items})
+
+        faction_items: list[dict[str, str]] = []
+        for faction in sandbox.factions:
+            runtime_faction = world.factions.get(faction.id)
+            runtime_territory_list = list(runtime_faction.territory) if runtime_faction is not None else []
+            sandbox_territory = "、".join(faction.territory_region_ids) if faction.territory_region_ids else "无"
+            runtime_territory = "、".join(runtime_territory_list) if runtime_territory_list else "无"
+            effect = "势力领地与敌意映射已编译到运行态"
+            if set(runtime_territory_list) != set(faction.territory_region_ids):
+                effect = "编译时根据地区反向声明补全了势力领地"
+                auto_fix_notes.append(
+                    f"势力 '{faction.name}' 的运行态领地已自动补全为：{runtime_territory}"
+                )
+            hostility_count = len(runtime_faction.hostility_map) if runtime_faction is not None else 0
+            faction_items.append(
+                {
+                    "target_id": faction.id,
+                    "target_name": faction.name,
+                    "change_type": "faction_projection",
+                    "before": f"沙盘领地：{sandbox_territory}",
+                    "after": f"运行态领地：{runtime_territory}",
+                    "effect": effect,
+                    "note": f"敌意关系 {hostility_count} 条",
+                }
+            )
+        if faction_items:
+            sections.append({"key": "factions", "label": "势力投影", "items": faction_items})
+
+        power_items: list[dict[str, str]] = []
+        runtime_power_name = world.power_system.name if world.power_system is not None else "无"
+        for index, power_system in enumerate(sandbox.power_systems):
+            effect = "已映射为当前运行态主力量体系"
+            if power_system.name != runtime_power_name:
+                effect = "当前运行态仅保留单一主力量体系，沙盘条目未直接生效"
+            power_items.append(
+                {
+                    "target_id": power_system.id,
+                    "target_name": power_system.name,
+                    "change_type": "power_projection",
+                    "before": f"沙盘等级 {len(power_system.levels)} 层",
+                    "after": f"运行态主体系：{runtime_power_name}",
+                    "effect": effect,
+                    "note": f"排序位置 {index + 1}",
+                }
+            )
+        if power_items:
+            sections.append({"key": "power", "label": "力量体系", "items": power_items})
+
+        timeline_items: list[dict[str, str]] = []
+        for event in sandbox.timeline_events:
+            compiled = next(
+                (
+                    timeline_event.description
+                    for timeline_event in world.timeline
+                    if event.title and event.title in timeline_event.description
+                ),
+                "",
+            )
+            timeline_items.append(
+                {
+                    "target_id": event.id,
+                    "target_name": event.title,
+                    "change_type": "timeline_projection",
+                    "before": f"沙盘事件：{event.year} {event.title}",
+                    "after": compiled or "运行态描述待生成",
+                    "effect": "时间线事件已折叠为运行态描述",
+                    "note": event.event_type,
+                }
+            )
+        if timeline_items:
+            sections.append({"key": "timeline", "label": "时间线投影", "items": timeline_items})
+
+        rule_items = [
+            {
+                "target_id": f"rule-{index}",
+                "target_name": f"规则 {index + 1}",
+                "change_type": "world_rule",
+                "before": rule,
+                "after": rule,
+                "effect": "规则已同步到运行态",
+                "note": "",
+            }
+            for index, rule in enumerate(sandbox.world_rules)
+        ]
+        if rule_items:
+            sections.append({"key": "rules", "label": "世界规则", "items": rule_items})
+
+        deduped_notes = list(dict.fromkeys(auto_fix_notes))
+        return {"sections": sections, "auto_fix_notes": deduped_notes}
+
     # ---------------------------------------------------------------- #
     # 私有编译方法                                                        #
     # ---------------------------------------------------------------- #

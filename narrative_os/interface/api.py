@@ -31,6 +31,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
+from narrative_os import __version__
 from narrative_os.infra.database import init_db
 
 # ------------------------------------------------------------------ #
@@ -44,8 +45,10 @@ from narrative_os.interface.services.trpg_service import (  # noqa: F401
     SESSION_TTL_SECONDS,
     _cleanup_stale_sessions,
     _get_session,
-    _interactive_agent,
+    get_interactive_agent,
 )
+
+_interactive_agent = get_interactive_agent()
 
 # WorldBuilder + 插件注册表存储（来自 routers/traces.py）
 from narrative_os.interface.routers.traces import (  # noqa: F401
@@ -114,7 +117,7 @@ async def _lifespan(app: FastAPI):  # type: ignore[type-arg]
 app = FastAPI(
     title="Narrative OS API",
     description="可编程叙事操作系统 REST API",
-    version="2.1.0",
+    version=__version__,
     lifespan=_lifespan,
 )
 
@@ -144,6 +147,7 @@ from narrative_os.interface.routers import (  # noqa: E402
     trpg,
     chapters,
     projects,
+    benchmark,
     memory,
     settings,
     governance,
@@ -155,6 +159,7 @@ app.include_router(characters.router)
 app.include_router(trpg.router)
 app.include_router(chapters.router)
 app.include_router(projects.router)
+app.include_router(benchmark.router)
 app.include_router(memory.router)
 app.include_router(settings.router)
 app.include_router(governance.router)

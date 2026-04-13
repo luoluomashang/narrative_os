@@ -40,12 +40,21 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from narrative_os.core.interactive_modes import ControlMode, ControlModeConfig
+from narrative_os.core.memory import MemoryPool, MemorySystem
 from narrative_os.execution.llm_router import (
     get_default_routing_strategy,
     LLMRequest,
     LLMRouter,
     ModelTier,
     RoutingStrategy,
+)
+from narrative_os.execution.prompt_utils import (
+    assemble_interactive_system_prompt,
+    build_interactive_character_layer,
+    build_interactive_control_layer,
+    build_interactive_safety_layer,
+    build_interactive_scene_layer,
+    build_interactive_world_layer,
 )
 from narrative_os.infra.config import load_yaml
 from narrative_os.infra.logging import logger
@@ -295,6 +304,34 @@ class InteractiveAgent:
         if session.phase not in {SessionPhase.ENDED, SessionPhase.MAINTENANCE}:
             session.phase = SessionPhase.LANDING
 
+        archive_payload = self.preview_archives(session)
+        self._persist_trpg_memory(session, archive_payload)
+
+        # 提取所有 DM 叙事文本（按 turn_id 排序）
+        chapter_text = archive_payload["chapter_text"]
+        hook = archive_payload["hook"]
+        character_deltas = archive_payload["character_deltas"]
+        history_summary = archive_payload["history_summary"]
+        dm_fragments = archive_payload["dm_fragments"]
+
+        session.phase = SessionPhase.ENDED
+        logger.info("trpg_session_ended", session_id=session.session_id, turns=session.turn)
+
+        return {
+            **archive_payload,
+            "session_id": session.session_id,
+            "word_count": len(chapter_text),
+            "hook": hook,
+            "character_deltas": character_deltas,
+            "user_actions": character_deltas,
+            "turns": session.turn,
+            "final_pressure": session.scene_pressure,
+            "history_summary": history_summary,
+            "dm_fragments": dm_fragments,
+        }
+
+    def preview_archives(self, session: InteractiveSession) -> dict[str, Any]:
+        """构建三种归档模式的预览数据，不改变会话生命周期。"""
         # 提取所有 DM 叙事文本（按 turn_id 排序）
         dm_turns = sorted(
             [t for t in session.history if t.who == "dm" and not getattr(t, "rolled_back", False)],
@@ -305,7 +342,7 @@ class InteractiveAgent:
         chapter_parts: list[str] = []
         for turn in dm_turns:
             if turn.content and turn.content.strip():
-                chapter_parts.append(turn.content.strip())
+                chapter_parts.append(self._strip_decision_options(turn.content))
 
         chapter_text = "\n\n".join(chapter_parts) if chapter_parts else ""
 
@@ -332,21 +369,133 @@ class InteractiveAgent:
             summary_sentences.append(first_sent)
         history_summary = "；".join(summary_sentences)
 
-        session.phase = SessionPhase.ENDED
-        logger.info("trpg_session_ended", session_id=session.session_id, turns=session.turn)
-
         return {
-            "session_id": session.session_id,
             "chapter_text": chapter_text,
-            "word_count": len(chapter_text),
             "hook": hook,
             "character_deltas": character_deltas,
-            "user_actions": character_deltas,  # 向后兼容旧字段名
-            "turns": session.turn,
-            "final_pressure": session.scene_pressure,
             "history_summary": history_summary,
             "dm_fragments": len(dm_turns),
+            "preview_session_only": {
+                "summary": history_summary or hook,
+                "memory_anchors": self._build_memory_anchors(session, hook, history_summary),
+                "character_changes": self._build_character_changes(character_deltas),
+                "projected_changeset_status": "runtime_only",
+            },
+            "preview_draft_chapter": {
+                "chapter_text": chapter_text,
+                "excerpt": chapter_text[:180],
+                "word_count": len(chapter_text),
+                "quality_estimate": self._estimate_preview_quality(chapter_text, len(dm_turns)),
+            },
+            "preview_canon_chapter": {
+                "draft_content": chapter_text,
+                "pending_changes": self._build_canon_pending_changes(session, character_deltas, hook),
+                "approval_required_fields": [
+                    "章节正文",
+                    "角色状态变化",
+                    "世界状态变更",
+                    "正史挂载确认",
+                ],
+                "requires_confirmation": True,
+                "projected_changeset_status": "canon_pending",
+            },
         }
+
+    def _strip_decision_options(self, content: str) -> str:
+        cleaned = re.split(r"(?:\*\*)?\[选项\s*[A-Z]\](?:\*\*)?\s*[：:]", content, maxsplit=1)[0]
+        cleaned = cleaned.replace("**", "")
+        cleaned = re.sub(r"\s*\|\s*$", "", cleaned)
+        cleaned = cleaned.strip()
+        return cleaned or content.strip()
+
+    def _build_memory_anchors(
+        self,
+        session: InteractiveSession,
+        hook: str,
+        history_summary: str,
+    ) -> list[dict[str, Any]]:
+        anchors: list[dict[str, Any]] = []
+        candidates = [
+            (session.memory_summary_cache or "").strip(),
+            history_summary.strip(),
+            hook.strip(),
+        ]
+        seen: set[str] = set()
+        for index, value in enumerate(candidates, start=1):
+            if not value:
+                continue
+            label = value[:120]
+            if label in seen:
+                continue
+            seen.add(label)
+            anchors.append(
+                {
+                    "label": label,
+                    "source": "session",
+                    "importance": max(0.1, 1.0 - ((index - 1) * 0.2)),
+                }
+            )
+        return anchors
+
+    def _build_character_changes(self, character_deltas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        changes: list[dict[str, Any]] = []
+        for delta in character_deltas:
+            name = str(delta.get("name") or "角色")
+            actions_count = int(delta.get("actions_count") or 0)
+            final_pressure = delta.get("final_pressure")
+            change = f"完成 {actions_count} 次有效行动"
+            if isinstance(final_pressure, (int, float)):
+                change += f"，场景压力落点 {float(final_pressure):.1f}"
+            changes.append(
+                {
+                    "name": name,
+                    "change": change,
+                    "actions_count": actions_count,
+                    "final_pressure": final_pressure,
+                }
+            )
+        return changes
+
+    def _estimate_preview_quality(self, chapter_text: str, dm_fragments: int) -> str:
+        word_count = len(chapter_text)
+        if word_count >= 1200 and dm_fragments >= 5:
+            return "可直接进入人工精修"
+        if word_count >= 500:
+            return "结构完整，建议补充细节后转草稿"
+        if word_count > 0:
+            return "篇幅偏短，建议延展后再转草稿"
+        return "暂无可归档正文"
+
+    def _build_canon_pending_changes(
+        self,
+        session: InteractiveSession,
+        character_deltas: list[dict[str, Any]],
+        hook: str,
+    ) -> list[dict[str, Any]]:
+        pending_changes: list[dict[str, Any]] = []
+        for delta in character_deltas:
+            pending_changes.append(
+                {
+                    "change_type": "character_runtime",
+                    "description": f"{delta.get('name', '角色')} 的互动会话状态发生变化",
+                    "tag": "canon_pending",
+                    "chapter": max(session.turn, 0),
+                    "before_snapshot": None,
+                    "after_value": delta,
+                }
+            )
+        if hook:
+            pending_changes.append(
+                {
+                    "change_type": "story_hook",
+                    "description": "本次互动生成新的章节钩子",
+                    "tag": "canon_pending",
+                    "chapter": max(session.turn, 0),
+                    "before_snapshot": None,
+                    "after_value": {"hook": hook},
+                }
+            )
+        return pending_changes
 
     # ---------------------------------------------------------------- #
     # DM 生成核心                                                         #
@@ -358,7 +507,7 @@ class InteractiveAgent:
         context_hint: str = "",
         bangui_mode: str | None = None,
     ) -> TurnRecord:
-        system = self._build_system_prompt(session, bangui_mode)
+        system = self._build_system_prompt(session, bangui_mode, context_hint)
         history_ctx = self._build_history_context(session)
         bangui_params = self._bangui_llm_params(bangui_mode)
 
@@ -472,7 +621,10 @@ class InteractiveAgent:
     # ---------------------------------------------------------------- #
 
     def _build_system_prompt(
-        self, session: InteractiveSession, bangui_mode: str | None
+        self,
+        session: InteractiveSession,
+        bangui_mode: str | None,
+        context_hint: str = "",
     ) -> str:
         """
         五层分层 Prompt 结构（Phase 3.5）：
@@ -496,26 +648,25 @@ class InteractiveAgent:
         if session.world_summary:
             world_rules_text = session.world_summary[:400] if len(session.world_summary) > 400 else session.world_summary
 
-        layer1 = [
-            "## 【第1层：世界层】",
-            f"世界背景摘要：{world_rules_text}",
-            f"关键势力：{factions_text}",
-            f"近期世界事件：{world_events_text}",
-            f"关键禁忌：任何违反 rules_of_world 的行动须先经裁定层过滤，不得直接执行。",
-        ]
+        layer1 = build_interactive_world_layer(
+            world_rules_text=world_rules_text,
+            factions_text=factions_text,
+            world_events_text=world_events_text,
+        )
 
         # ── 第2层：场景层 ────────────────────────────────────────────────
         recent_3_turns = [
             t.content[:60] for t in session.history[-6:] if t.who == "dm"
         ][-3:]
         recent_summary = "；".join(recent_3_turns) or "（会话刚开始，暂无事件摘要）"
+        memory_context = self._build_memory_context(session, context_hint)
 
-        layer2 = [
-            "## 【第2层：场景层】",
-            f"当前场景压力：{session.scene_pressure:.1f}/10  密度模式：{session.density}",
-            f"最近3轮DM事件摘要：{recent_summary}",
-            f"可交互对象：（由世界状态注入，当前默认开放）",
-        ]
+        layer2 = build_interactive_scene_layer(
+            scene_pressure=session.scene_pressure,
+            density=session.density,
+            recent_summary=recent_summary,
+            memory_context=memory_context,
+        )
 
         # ── 第3层：角色层 ────────────────────────────────────────────────
         agenda_text = "（无 Agenda 推演数据）"
@@ -529,42 +680,31 @@ class InteractiveAgent:
             if agenda_lines:
                 agenda_text = "\n".join(agenda_lines)
 
-        layer3 = [
-            "## 【第3层：角色层】",
-            f"主角名称：{session.character_name}",
-            f"非玩家角色本轮 Agenda：\n{agenda_text}",
-            "角色行为约束：角色不得做出与 behavior_constraints 矛盾的行为。",
-        ]
+        layer3 = build_interactive_character_layer(
+            character_name=session.character_name,
+            agenda_text=agenda_text,
+        )
 
         # ── 第4层：控制层 ────────────────────────────────────────────────
         mode_hint = session.mode_config.prompt_hint if hasattr(session, 'mode_config') else ""
         ai_chars = getattr(session.mode_config, 'ai_controlled_characters', []) if hasattr(session, 'mode_config') else []
         proxy_allowed = getattr(session.mode_config, 'allow_protagonist_proxy', False) if hasattr(session, 'mode_config') else False
 
-        layer4 = [
-            "## 【第4层：控制层】",
-            f"当前控制模式：{session.control_mode.value if hasattr(session, 'control_mode') else 'user_driven'}",
-            mode_hint,
-            f"AI 接管角色：{', '.join(ai_chars) if ai_chars else '无（全部由用户控制）'}",
-            f"允许AI代主角补全动作：{'是' if proxy_allowed else '否'}",
-            f"DM叙事密度：{session.density}（每片段上限 {length_limit} 字）",
-            density_desc,
-            "",
-            "## 决策选项格式",
-            "[选项 A]：{行动描述}",
-            "[选项 B]：{行动描述}",
-        ]
+        layer4 = build_interactive_control_layer(
+            control_mode=session.control_mode.value if hasattr(session, 'control_mode') else 'user_driven',
+            mode_hint=mode_hint,
+            ai_controlled_characters=ai_chars,
+            proxy_allowed=proxy_allowed,
+            density=session.density,
+            length_limit=length_limit,
+            density_desc=density_desc,
+        )
 
         # ── 第5层：安全/收束层 ───────────────────────────────────────────
-        layer5 = [
-            "## 【第5层：安全/收束层】",
-            anti_proxy,
-            trunc_rule,
-            "死锁检测：若玩家连续3次输入重复或无效，系统将自动注入解套事件，DM 协助推进。",
-            "失控保护：若角色行动与 non_negotiable 底线冲突，DM 须延迟或提示后果，不得直接替玩家解决。",
-            "节奏纠偏：连续3轮 scene_pressure >= 8 时，触发 PACING_ALERT；需在后续叙事中主动下压。",
-            "SL 建议时机：角色面临死亡/极端后果时，DM 可在叙事末尾加注 [📎存档建议]。",
-        ]
+        layer5 = build_interactive_safety_layer(
+            anti_proxy=anti_proxy,
+            trunc_rule=trunc_rule,
+        )
 
         # ── 帮回附加层（可选） ───────────────────────────────────────────
         bangui_parts: list[str] = []
@@ -579,16 +719,84 @@ class InteractiveAgent:
                     ]
                     break
 
-        all_parts = (
-            [f"你是一位专业的 TRPG 地下城主（DM），正在主持一场中文网文风格的桌游推演。", ""]
-            + layer1 + [""]
-            + layer2 + [""]
-            + layer3 + [""]
-            + layer4 + [""]
-            + layer5
-            + ([""] + bangui_parts if bangui_parts else [])
+        return assemble_interactive_system_prompt(
+            intro="你是一位专业的 TRPG 地下城主（DM），正在主持一场中文网文风格的桌游推演。",
+            layers=[layer1, layer2, layer3, layer4, layer5],
+            bangui_parts=bangui_parts,
         )
-        return "\n".join(all_parts)
+
+    def _build_memory_context(
+        self,
+        session: InteractiveSession,
+        context_hint: str,
+    ) -> str:
+        query_parts = [
+            context_hint.strip(),
+            session.memory_summary_cache.strip(),
+            session.world_summary[:120].strip(),
+        ]
+        query = " ".join(part for part in query_parts if part).strip() or session.character_name
+        try:
+            memory = MemorySystem(project_id=session.project_id)
+            retrieved = memory.retrieve_memory(
+                query,
+                top_k=4,
+                pools=[MemoryPool.TRPG, MemoryPool.CANON],
+            )
+        except Exception:
+            retrieved = []
+
+        snippets = [item.content[:120] for item in retrieved if item.content]
+        cached_summary = session.memory_summary_cache.strip()
+        if cached_summary and cached_summary not in snippets:
+            snippets.insert(0, cached_summary[:120])
+        if not snippets:
+            return "（暂无已归档互动记忆，仅依据当前场景与规则叙事）"
+        return " | ".join(snippets[:4])
+
+    def _persist_trpg_memory(
+        self,
+        session: InteractiveSession,
+        archive_payload: dict[str, Any],
+    ) -> None:
+        history_summary = str(archive_payload.get("history_summary", "")).strip()
+        hook = str(archive_payload.get("hook", "")).strip()
+        if history_summary:
+            session.memory_summary_cache = history_summary
+
+        if not history_summary and not hook:
+            return
+
+        try:
+            memory = MemorySystem(project_id=session.project_id)
+            chapter_marker = max(session.turn, 0)
+            if history_summary:
+                memory.write_memory(
+                    history_summary,
+                    memory_type="event",
+                    layer="mid",
+                    chapter=chapter_marker,
+                    importance=0.85,
+                    tags=["trpg", "session_summary"],
+                    pool=MemoryPool.TRPG,
+                )
+            if hook:
+                memory.write_memory(
+                    f"[TRPG-HOOK] {hook}",
+                    memory_type="event",
+                    layer="short",
+                    chapter=chapter_marker,
+                    importance=0.95,
+                    tags=["trpg", "hook"],
+                    pool=MemoryPool.TRPG,
+                )
+        except Exception as exc:
+            logger.warn(
+                "trpg_memory_persist_failed",
+                project_id=session.project_id,
+                session_id=session.session_id,
+                error=str(exc),
+            )
 
     def _build_history_context(
         self, session: InteractiveSession

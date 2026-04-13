@@ -5,9 +5,9 @@ import json
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from narrative_os.core.trace_repository import TraceRepository, get_trace_repository
 from narrative_os.infra.models import (
     ApprovalCheckpointRecord,
     ArtifactRecord,
@@ -18,9 +18,11 @@ from narrative_os.schemas.traces import (
     ApprovalCheckpoint,
     Artifact,
     ArtifactType,
+    FailureRootCauseType,
     Run,
     RunApprovalResponse,
     RunListResponse,
+    RunRootCause,
     RunStatus,
     RunStep,
     RunType,
@@ -32,17 +34,16 @@ def _iso(value: datetime | None) -> str | None:
 
 
 class TraceService:
+    def __init__(self, repository: TraceRepository | None = None) -> None:
+        self._repository = repository or get_trace_repository()
+
     async def list_runs(self, db: AsyncSession, project_id: str) -> RunListResponse:
-        result = await db.execute(
-            select(RunRecord)
-            .where(RunRecord.project_id == project_id)
-            .order_by(RunRecord.started_at.desc())
-        )
-        runs = [self._serialize_run_record(record) for record in result.scalars().all()]
+        records = await self._repository.list_runs(db, project_id)
+        runs = [self._serialize_run_record(record) for record in records]
         return RunListResponse(items=runs)
 
     async def get_run(self, db: AsyncSession, run_id: str, include_steps: bool = True) -> Run:
-        run = await db.get(RunRecord, run_id)
+        run = await self._repository.get_run(db, run_id)
         if run is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -51,20 +52,12 @@ class TraceService:
 
         steps: list[RunStep] = []
         if include_steps:
-            step_result = await db.execute(
-                select(RunStepRecord)
-                .where(RunStepRecord.run_id == run_id)
-                .order_by(RunStepRecord.step_index.asc())
-            )
-            artifact_result = await db.execute(
-                select(ArtifactRecord)
-                .where(ArtifactRecord.run_id == run_id)
-                .order_by(ArtifactRecord.created_at.asc())
-            )
+            step_records = await self._repository.list_steps(db, run_id)
+            artifact_records = await self._repository.list_artifacts(db, run_id)
             latest_artifact_by_step: dict[str, ArtifactRecord] = {}
-            for artifact in artifact_result.scalars().all():
+            for artifact in artifact_records:
                 latest_artifact_by_step[artifact.step_id] = artifact
-            for step in step_result.scalars().all():
+            for step in step_records:
                 steps.append(self._serialize_step_record(step, latest_artifact_by_step.get(step.id)))
 
         checkpoint = await self._get_latest_checkpoint(db, run_id)
@@ -85,20 +78,7 @@ class TraceService:
                 detail={"detail": f"Run '{run_id}' 没有待审批检查点。", "code": "NOT_FOUND"},
             )
 
-        checkpoint_record.decision = decision
-        checkpoint_record.resolved_at = datetime.now(timezone.utc)
-        if decision == "approve":
-            run.status = RunStatus.COMPLETED.value
-            run.ended_at = datetime.now(timezone.utc)
-        elif decision == "retry":
-            run.status = RunStatus.RUNNING.value
-            run.ended_at = None
-        else:
-            run.status = RunStatus.FAILED.value
-            run.ended_at = datetime.now(timezone.utc)
-        await db.commit()
-        await db.refresh(run)
-        await db.refresh(checkpoint_record)
+        run, checkpoint_record = await self._repository.apply_approval(db, run, checkpoint_record, decision)
         return RunApprovalResponse(
             run_id=run.id,
             status=RunStatus(run.status),
@@ -116,12 +96,7 @@ class TraceService:
         db: AsyncSession,
         run_id: str,
     ) -> ApprovalCheckpointRecord | None:
-        result = await db.execute(
-            select(ApprovalCheckpointRecord)
-            .where(ApprovalCheckpointRecord.run_id == run_id)
-            .order_by(ApprovalCheckpointRecord.created_at.desc())
-        )
-        return result.scalars().first()
+        return await self._repository.get_latest_checkpoint(db, run_id)
 
     def _serialize_run_record(
         self,
@@ -130,14 +105,17 @@ class TraceService:
         steps: list[RunStep] | None = None,
         checkpoint: ApprovalCheckpoint | None = None,
     ) -> Run:
+        resolved_steps = steps or []
         return Run(
             run_id=record.id,
             project_id=record.project_id,
             run_type=RunType(record.run_type),
             status=RunStatus(record.status),
+            correlation_id=record.correlation_id or "",
+            root_cause=self._serialize_root_cause(record, resolved_steps, checkpoint),
             chapter_num=record.chapter_num,
             session_id=record.session_id,
-            steps=steps or [],
+            steps=resolved_steps,
             started_at=_iso(record.started_at) or "",
             ended_at=_iso(record.ended_at),
             total_cost_usd=record.total_cost_usd,
@@ -155,6 +133,9 @@ class TraceService:
             step_index=record.step_index,
             agent_name=record.agent_name,
             status=RunStatus(record.status),
+            correlation_id=record.correlation_id or "",
+            failure_type=self._parse_failure_type(record.failure_type),
+            failure_message=record.failure_message,
             artifact=self._serialize_artifact_record(artifact) if artifact is not None else None,
             started_at=_iso(record.started_at) or "",
             ended_at=_iso(record.ended_at),
@@ -174,6 +155,7 @@ class TraceService:
             agent_name=record.agent_name,
             input_summary=record.input_summary,
             output_content=record.output_content,
+            correlation_id=record.correlation_id or "",
             quality_scores=quality_scores,
             token_in=record.token_in,
             token_out=record.token_out,
@@ -186,12 +168,62 @@ class TraceService:
         return ApprovalCheckpoint(
             checkpoint_id=record.id,
             run_id=record.run_id,
+            correlation_id=record.correlation_id or "",
             reason=record.reason,
             context=record.context,
             created_at=_iso(record.created_at) or "",
             resolved_at=_iso(record.resolved_at),
             decision=record.decision,
         )
+
+    def _serialize_root_cause(
+        self,
+        record: RunRecord,
+        steps: list[RunStep],
+        checkpoint: ApprovalCheckpoint | None,
+    ) -> RunRootCause | None:
+        if checkpoint is not None and record.status == RunStatus.PAUSED.value:
+            return RunRootCause(
+                type=FailureRootCauseType.APPROVAL_PAUSED,
+                message=checkpoint.reason,
+                step_id=record.root_cause_step_id,
+                correlation_id=record.correlation_id or checkpoint.correlation_id,
+            )
+
+        failure_type = self._parse_failure_type(record.failure_type)
+        if failure_type is not None:
+            return RunRootCause(
+                type=failure_type,
+                message=record.failure_message or "",
+                step_id=record.root_cause_step_id,
+                correlation_id=record.correlation_id or "",
+            )
+
+        failed_step = next(
+            (
+                step
+                for step in steps
+                if step.failure_type is not None or step.status == RunStatus.FAILED
+            ),
+            None,
+        )
+        if failed_step is None:
+            return None
+
+        return RunRootCause(
+            type=failed_step.failure_type or FailureRootCauseType.UNKNOWN,
+            message=failed_step.failure_message or "",
+            step_id=failed_step.step_id,
+            correlation_id=failed_step.correlation_id or record.correlation_id or "",
+        )
+
+    def _parse_failure_type(self, value: str | None) -> FailureRootCauseType | None:
+        if not value:
+            return None
+        try:
+            return FailureRootCauseType(value)
+        except ValueError:
+            return FailureRootCauseType.UNKNOWN
 
 
 _trace_service: TraceService | None = None

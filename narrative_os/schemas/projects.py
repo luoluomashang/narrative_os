@@ -82,6 +82,8 @@ class MetricsHistoryItem(BaseModel):
     hook_score: float = 0.0
     word_count: int = 0
     timestamp: str = ""
+    benchmark_adherence_score: float = 0.0
+    benchmark_humanness_score: float = 0.0
     qd_01: float = 0.0
     qd_02: float = 0.0
     qd_03: float = 0.0

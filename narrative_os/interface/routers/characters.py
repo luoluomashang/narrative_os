@@ -5,7 +5,11 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 
-from narrative_os.core.state import StateManager
+from narrative_os.core.character_repository import get_character_repository
+from narrative_os.execution.prompt_utils import build_character_voice_block, plain_text_contract
+from narrative_os.core.plot import NodeStatus, NodeType, PlotGraph
+from narrative_os.core.plot_repository import get_plot_repository
+from narrative_os.core.project_repository import ProjectHandle
 from narrative_os.schemas.characters import (
     CharacterCreateRequest,
     CharacterDetail,
@@ -46,6 +50,23 @@ def _plot_graph_response(plot_graph: Any, project_id: str) -> PlotGraphData:
     )
 
 
+def _compat_mgr(project_id: str, svc: ProjectService):
+    import sys
+
+    from narrative_os.core.state import StateManager as RuntimeStateManager
+
+    _api = sys.modules.get("narrative_os.interface.api")
+    _try = getattr(_api, "_try_load_project", None) if _api else None
+    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
+    if mgr is None:
+        return None
+    if isinstance(mgr, ProjectHandle):
+        if isinstance(mgr.manager, RuntimeStateManager):
+            return None
+        return mgr.manager
+    return mgr
+
+
 # ------------------------------------------------------------------ #
 # C2: 角色列表 + 详情（基于 KB）                                         #
 # ------------------------------------------------------------------ #
@@ -55,11 +76,7 @@ def _plot_graph_response(plot_graph: Any, project_id: str) -> PlotGraphData:
 async def get_project_plot(
     project_id: str, svc: ProjectService = Depends(_svc)
 ) -> PlotGraphData:
-    import sys
-    from narrative_os.core.plot import PlotGraph
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
+    mgr = _compat_mgr(project_id, svc)
     if mgr is not None:
         kb = mgr.load_kb()
         plot_data = kb.get("plot_graph")
@@ -69,6 +86,10 @@ async def get_project_plot(
                 return _plot_graph_response(plot_graph, project_id)
             except Exception:
                 pass
+        return PlotGraphData(**PlotGraph().to_dict(), current_volume_goal="")
+    plot_graph = get_plot_repository().get_plot_graph(project_id)
+    if plot_graph is not None:
+        return _plot_graph_response(plot_graph, project_id)
     return PlotGraphData(**PlotGraph().to_dict(), current_volume_goal="")
 
 
@@ -78,21 +99,20 @@ async def update_project_plot_volume_goal(
     req: PlotVolumeGoalUpdateRequest,
     svc: ProjectService = Depends(_svc),
 ) -> PlotGraphData:
-    import sys
-    from narrative_os.core.plot import NodeStatus, NodeType, PlotGraph
-
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
-    if mgr is None:
+    mgr = _compat_mgr(project_id, svc)
+    handle = svc.try_load_project(project_id)
+    if mgr is None and handle is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"detail": f"项目 '{project_id}' 不存在。", "code": "NOT_FOUND"},
         )
 
-    kb = mgr.load_kb() or {}
-    plot_data = kb.get("plot_graph") if isinstance(kb, dict) else None
-    plot_graph = PlotGraph.from_dict(plot_data) if isinstance(plot_data, dict) and plot_data else PlotGraph()
+    if mgr is not None:
+        kb = mgr.load_kb() or {}
+        plot_data = kb.get("plot_graph") if isinstance(kb, dict) else None
+        plot_graph = PlotGraph.from_dict(plot_data) if isinstance(plot_data, dict) and plot_data else PlotGraph()
+    else:
+        plot_graph = get_plot_repository().get_plot_graph(project_id) or PlotGraph()
     plot_payload = plot_graph.to_dict()
     nodes = plot_payload.setdefault("nodes", [])
     current_goal = req.current_volume_goal.strip()
@@ -115,8 +135,11 @@ async def update_project_plot_volume_goal(
         })
 
     updated_graph = PlotGraph.from_dict(plot_payload)
-    kb["plot_graph"] = updated_graph.to_dict()
-    mgr.save_kb(kb)
+    if mgr is not None:
+        kb["plot_graph"] = updated_graph.to_dict()
+        mgr.save_kb(kb)
+    else:
+        get_plot_repository().save_plot_graph(project_id, updated_graph)
     return _plot_graph_response(updated_graph, project_id)
 
 
@@ -124,16 +147,14 @@ async def update_project_plot_volume_goal(
 async def get_project_characters(
     project_id: str, svc: ProjectService = Depends(_svc)
 ) -> list[CharacterSummary]:
-    import sys
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
-    if mgr is None:
-        return []
-    kb = mgr.load_kb()
-    characters = kb.get("characters", [])
-    if not isinstance(characters, list):
-        return []
+    mgr = _compat_mgr(project_id, svc)
+    if mgr is not None:
+        kb = mgr.load_kb()
+        characters = kb.get("characters", [])
+        if not isinstance(characters, list):
+            return []
+    else:
+        characters = get_character_repository().list_character_payloads(project_id)
     return [
         {
             "name": c.get("name", ""),
@@ -152,29 +173,21 @@ async def get_project_characters(
 async def get_character_detail(
     project_id: str, name: str, svc: ProjectService = Depends(_svc)
 ) -> CharacterDetail:
-    import sys
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
-    if mgr is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"detail": f"角色 '{name}' 不存在。", "code": "NOT_FOUND"},
-        )
-    kb = mgr.load_kb()
-    characters = kb.get("characters", [])
-    for c in characters if isinstance(characters, list) else []:
-        if isinstance(c, dict) and c.get("name") == name:
-            return c
+    mgr = _compat_mgr(project_id, svc)
+    if mgr is not None:
+        kb = mgr.load_kb()
+        characters = kb.get("characters", [])
+        for c in characters if isinstance(characters, list) else []:
+            if isinstance(c, dict) and c.get("name") == name:
+                return c
+    else:
+        payload = get_character_repository().get_character_payload(project_id, name)
+        if payload is not None:
+            return payload
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail={"detail": f"角色 '{name}' 不存在。", "code": "NOT_FOUND"},
     )
-
-
-# ------------------------------------------------------------------ #
-# Character CRUD                                                        #
-# ------------------------------------------------------------------ #
 
 
 @router.post("/projects/{project_id}/characters", response_model=CharacterDetail, summary="创建角色")
@@ -183,16 +196,20 @@ async def create_character(
     req: CharacterCreateRequest,
     svc: ProjectService = Depends(_svc),
 ) -> CharacterDetail:
-    import sys
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
-    if mgr is None:
-        raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
-    kb = mgr.load_kb()
-    characters = kb.get("characters", [])
-    if not isinstance(characters, list):
-        characters = []
+    mgr = _compat_mgr(project_id, svc)
+    if mgr is None and svc.try_load_project(project_id) is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "项目不存在", "code": "NOT_FOUND"},
+        )
+    repo = get_character_repository()
+    if mgr is not None:
+        kb = mgr.load_kb()
+        characters = kb.get("characters", [])
+        if not isinstance(characters, list):
+            characters = []
+    else:
+        characters = repo.list_character_payloads(project_id)
     if any(isinstance(c, dict) and c.get("name") == req.name for c in characters):
         raise HTTPException(status_code=409, detail={"detail": f"角色「{req.name}」已存在", "code": "CONFLICT"})
     new_char = req.model_dump()
@@ -202,8 +219,11 @@ async def create_character(
         "snapshot_history": [], "is_alive": True, "chapter_introduced": 1,
     })
     characters.append(new_char)
-    kb["characters"] = characters
-    mgr.save_kb(kb)
+    if mgr is not None:
+        kb["characters"] = characters
+        mgr.save_kb(kb)
+    else:
+        repo.save_character_payloads(project_id, characters)
     return new_char
 
 
@@ -214,14 +234,15 @@ async def update_character(
     req: dict = Body(...),
     svc: ProjectService = Depends(_svc),
 ) -> CharacterDetail:
-    import sys
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
-    if mgr is None:
+    mgr = _compat_mgr(project_id, svc)
+    if mgr is None and svc.try_load_project(project_id) is None:
         raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
-    kb = mgr.load_kb()
-    characters = kb.get("characters", [])
+    repo = get_character_repository()
+    if mgr is not None:
+        kb = mgr.load_kb()
+        characters = kb.get("characters", [])
+    else:
+        characters = repo.list_character_payloads(project_id)
     if not isinstance(characters, list):
         raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
     for i, c in enumerate(characters):
@@ -229,8 +250,11 @@ async def update_character(
             merged = {**c, **req}
             merged["name"] = name
             characters[i] = merged
-            kb["characters"] = characters
-            mgr.save_kb(kb)
+            if mgr is not None:
+                kb["characters"] = characters
+                mgr.save_kb(kb)
+            else:
+                repo.save_character_payloads(project_id, characters)
             return merged
     raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
 
@@ -239,22 +263,26 @@ async def update_character(
 async def delete_character(
     project_id: str, name: str, svc: ProjectService = Depends(_svc)
 ) -> DeleteCharacterResponse:
-    import sys
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
-    if mgr is None:
+    mgr = _compat_mgr(project_id, svc)
+    if mgr is None and svc.try_load_project(project_id) is None:
         raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
-    kb = mgr.load_kb()
-    characters = kb.get("characters", [])
+    repo = get_character_repository()
+    if mgr is not None:
+        kb = mgr.load_kb()
+        characters = kb.get("characters", [])
+    else:
+        characters = repo.list_character_payloads(project_id)
     if not isinstance(characters, list):
         raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
     original_count = len(characters)
     characters = [c for c in characters if not (isinstance(c, dict) and c.get("name") == name)]
     if len(characters) == original_count:
         raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
-    kb["characters"] = characters
-    mgr.save_kb(kb)
+    if mgr is not None:
+        kb["characters"] = characters
+        mgr.save_kb(kb)
+    else:
+        repo.save_character_payloads(project_id, characters)
     return DeleteCharacterResponse(deleted=name)
 
 
@@ -265,35 +293,37 @@ async def test_character_voice(
     req: TestVoiceRequest,
     svc: ProjectService = Depends(_svc),
 ) -> TestVoiceResponse:
-    import sys
-    _api = sys.modules.get("narrative_os.interface.api")
-    _try = getattr(_api, "_try_load_project", None) if _api else None
-    mgr = _try(project_id) if _try else svc.try_load_project(project_id)
-    if mgr is None:
+    mgr = _compat_mgr(project_id, svc)
+    if mgr is None and svc.try_load_project(project_id) is None:
         raise HTTPException(status_code=404, detail={"detail": "项目不存在", "code": "NOT_FOUND"})
-    kb = mgr.load_kb()
-    characters = kb.get("characters", [])
-    char = next(
-        (c for c in characters if isinstance(c, dict) and c.get("name") == name), None
-    )
+    if mgr is not None:
+        kb = mgr.load_kb()
+        characters = kb.get("characters", [])
+        char = next(
+            (c for c in characters if isinstance(c, dict) and c.get("name") == name), None
+        )
+    else:
+        char = get_character_repository().get_character_payload(project_id, name)
     if char is None:
         raise HTTPException(status_code=404, detail={"detail": f"角色「{name}」不存在", "code": "NOT_FOUND"})
 
     vf = char.get("voice_fingerprint", {})
-    examples = char.get("dialogue_examples", [])
-    examples_text = "\n".join(
-        f'[{e.get("context", "")}] {e.get("dialogue", "")}' for e in examples[:3]
-    ) if examples else "（无示例）"
-
-    prompt = (
-        f"你是角色「{char.get('name', name)}」。\n"
-        f"性格：{char.get('personality', char.get('backstory', ''))}\n"
-        f"语言风格：{char.get('speech_style', '自然')}\n"
-        f"口头禅：{'、'.join(char.get('catchphrases', [])) or '无'}\n"
-        f"高压时的说话方式：{vf.get('under_pressure', '') or '无特殊表现'}\n"
-        f"历史对话示例：\n{examples_text}\n\n"
-        f"当前场景：{req.scenario}\n"
-        f"请以该角色的口吻，用 1-2 句话（可含动作描写）回应当前场景。直接输出对话，无需前缀。"
+    prompt = "\n\n".join(
+        [
+            f"你是角色「{char.get('name', name)}」。",
+            build_character_voice_block(
+                personality=str(char.get("personality", char.get("backstory", ""))),
+                speech_style=str(char.get("speech_style", "")),
+                catchphrases=char.get("catchphrases", []),
+                under_pressure=str(vf.get("under_pressure", "")),
+                dialogue_examples=char.get("dialogue_examples", [])[:3],
+            ),
+            f"当前场景：{req.scenario}",
+            plain_text_contract(
+                "请以该角色的口吻，用 1-2 句话（可含动作描写）回应当前场景。",
+                "直接输出对话，不要前缀。",
+            ),
+        ]
     )
 
     from narrative_os.execution.llm_router import LLMRequest, LLMRouter

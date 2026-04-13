@@ -47,7 +47,7 @@ console = Console()
 
 def _run_async(coro):
     """在同步 CLI 中运行 async 协程。"""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def _print_success(msg: str) -> None:
@@ -55,7 +55,7 @@ def _print_success(msg: str) -> None:
 
 
 def _print_error(msg: str) -> None:
-    console.print(f"[bold red]✗[/bold red] {msg}", file=sys.stderr)
+    Console(stderr=True).print(f"[bold red]✗[/bold red] {msg}")
 
 
 # ------------------------------------------------------------------ #
@@ -75,7 +75,8 @@ def run_chapter(
     project: str = typer.Option("default", "--project", "-p", help="项目 ID"),
 ) -> None:
     """完整生成一章：Planner → Writer → Critic → Editor → Memory。"""
-    from narrative_os.orchestrator.graph import run_chapter as _run
+    from narrative_os.interface.services.chapter_service import get_chapter_service
+    from narrative_os.schemas.chapters import RunChapterRequest
 
     console.print(Panel(
         f"[bold]卷{volume} 第{chapter}章[/bold]\n{summary}",
@@ -90,7 +91,7 @@ def run_chapter(
     ) as progress:
         task = progress.add_task("正在生成章节...", total=None)
         try:
-            result = _run_async(_run(
+            req = RunChapterRequest(
                 chapter=chapter,
                 volume=volume,
                 target_summary=summary,
@@ -98,8 +99,8 @@ def run_chapter(
                 strategy=strategy,
                 previous_hook=hook,
                 project_id=project,
-                thread_id=f"{project}-ch{chapter:04d}",
-            ))
+            )
+            _, result = _run_async(get_chapter_service().run_chapter(req))
             progress.update(task, description="生成完成 ✓")
         except Exception as exc:
             _print_error(f"生成失败：{exc}")
@@ -137,19 +138,22 @@ def plan_chapter(
     output_json: Optional[Path] = typer.Option(None, "--json", help="将规划输出为 JSON 文件"),
 ) -> None:
     """仅生成章节剧情骨架（不写正文）。"""
-    from narrative_os.agents.planner import PlannerAgent, PlannerInput
-
-    agent = PlannerAgent()
-    inp = PlannerInput(
-        chapter=chapter, volume=volume, target_summary=summary,
-        word_count_target=words, previous_hook=hook,
-    )
+    from narrative_os.interface.services.chapter_service import get_chapter_service
+    from narrative_os.schemas.chapters import PlanChapterRequest
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
                   transient=True) as progress:
         t = progress.add_task("正在规划剧情...", total=None)
         try:
-            plan = _run_async(agent.plan(inp))
+            req = PlanChapterRequest(
+                chapter=chapter,
+                volume=volume,
+                target_summary=summary,
+                word_count_target=words,
+                previous_hook=hook,
+                project_id="default",
+            )
+            plan = _run_async(get_chapter_service().plan_chapter(req))
             progress.update(t, description="规划完成 ✓")
         except Exception as exc:
             _print_error(f"规划失败：{exc}")
@@ -188,18 +192,14 @@ def show_status(
     base_dir: Optional[Path] = typer.Option(None, "--dir", help="项目目录（default: .narrative_state）"),
 ) -> None:
     """查看项目章节提交历史与状态。"""
-    from narrative_os.core.state import StateManager
-    from narrative_os.infra.config import settings
+    from narrative_os.interface.services.project_service import get_project_service
 
-    dir_ = str(base_dir) if base_dir else ".narrative_state"
-    mgr = StateManager(project_id=project, base_dir=dir_)
-    try:
-        mgr.load_state()
-    except Exception:
+    mgr = get_project_service().try_load_project(project)
+    if mgr is None:
         console.print(f"[yellow]项目 '{project}' 尚无已保存状态。[/yellow]")
         return
 
-    state = mgr._state  # type: ignore[attr-defined]
+    state = mgr.state
     console.print(Panel(
         f"项目：{project}\n"
         f"当前章节：第{state.current_chapter}章 卷{state.current_volume}\n"
@@ -209,9 +209,9 @@ def show_status(
 
     versions = mgr.list_versions()
     if versions:
-        table = Table("章节", "时间", title="已提交版本")
+        table = Table("章节", title="已提交版本")
         for v in versions:
-            table.add_row(str(v.get("chapter", "?")), str(v.get("ts", "?")))
+            table.add_row(str(v))
         console.print(table)
     else:
         console.print("[dim]暂无已提交章节。[/dim]")
@@ -348,38 +348,20 @@ def write_chapter(
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="输出文件"),
 ) -> None:
     """直接生成章节草稿（跳过 Planner，快速写作模式）。"""
-    from narrative_os.agents.planner import PlannerOutput, PlannedNode
-    from narrative_os.agents.writer import WriterAgent
-    from narrative_os.execution.context_builder import WriteContext, ChapterTarget
+    from narrative_os.interface.services.chapter_service import get_chapter_service
 
-    # 构造最小化 PlannerOutput（单节点，不调用 PlannerAgent）
-    minimal_plan = PlannerOutput(
-        chapter_outline=summary,
-        planned_nodes=[
-            PlannedNode(
-                id=f"ch{chapter:04d}_n1",
-                type="scene",
-                summary=summary,
-                tension=0.6,
-            )
-        ],
-        hook_suggestion="",
-    )
-    ctx = WriteContext(
-        chapter_target=ChapterTarget(
-            chapter=chapter,
-            volume=volume,
-            word_count_target=words,
-            target_summary=summary,
-        )
-    )
-
-    agent = WriterAgent()
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
                   transient=True) as progress:
         t = progress.add_task("正在生成章节草稿...", total=None)
         try:
-            draft = _run_async(agent.write(minimal_plan, ctx))
+            draft = _run_async(
+                get_chapter_service().write_quick_draft(
+                    chapter=chapter,
+                    summary=summary,
+                    volume=volume,
+                    words=words,
+                )
+            )
             progress.update(t, description="草稿生成完成 ✓")
         except Exception as exc:
             _print_error(f"写作失败：{exc}")
@@ -408,14 +390,14 @@ def run_interactive(
 ) -> None:
     """启动 TRPG 互动模式（终端界面）。"""
     import time as _time
-    from narrative_os.agents.interactive import (
-        InteractiveAgent, SessionConfig, SessionPhase,
-    )
+    from narrative_os.agents.interactive import InteractiveAgent, SessionConfig, SessionPhase
+    from narrative_os.interface.services.trpg_service import get_trpg_service
 
     if density not in {"dense", "normal", "sparse"}:
         _print_error(f"density 必须为 dense|normal|sparse，当前：{density}")
         raise typer.Exit(code=1)
 
+    trpg_service = get_trpg_service()
     agent = InteractiveAgent()
     cfg = SessionConfig(
         project_id=project,
@@ -423,6 +405,7 @@ def run_interactive(
         density_override=density,  # type: ignore[arg-type]
     )
     session = agent.create_session(cfg)
+    trpg_service.put_session(session)
 
     console.print(Panel(
         f"项目：{project}  |  密度：{density}\n"
@@ -596,15 +579,15 @@ def rollback_project(
     yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
 ) -> None:
     """回滚项目到最近 N 章之前的状态。"""
-    from narrative_os.core.state import StateManager
-    from narrative_os.infra.config import settings
+    from narrative_os.interface.services.project_service import get_project_service
 
-    mgr = StateManager(project_id=project)
-    try:
-        state = mgr.load_state()
-    except FileNotFoundError:
+    project_svc = get_project_service()
+    mgr = project_svc.try_load_project(project)
+    if mgr is None:
         _print_error(f"项目 '{project}' 尚无已保存状态。")
         raise typer.Exit(code=1)
+
+    state = mgr.state
 
     target_chapter = max(0, state.current_chapter - steps)
 
@@ -968,15 +951,9 @@ def canon_list(
     project: str = typer.Argument(..., help="项目 ID"),
 ) -> None:
     """列出项目所有待审变更集。"""
-    import httpx
-    api_base = "http://127.0.0.1:8000"
-    try:
-        resp = httpx.get(f"{api_base}/projects/{project}/changesets", timeout=30)
-    except httpx.ConnectError:
-        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
-        raise typer.Exit(code=1)
+    from narrative_os.interface.services.governance_service import get_governance_service
 
-    changesets = resp.json() if isinstance(resp.json(), list) else []
+    changesets = get_governance_service().list_changesets(project)
     table = Table("变更集 ID", "来源", "提交方式", "待审数", "已确认数", "创建时间",
                   title=f"变更集列表（{project}）")
     for cs in changesets:
@@ -997,20 +974,16 @@ def canon_review(
     cs_id: str = typer.Argument(..., help="变更集 ID"),
 ) -> None:
     """查看变更集详情（含每条变更的 before/after）。"""
-    import httpx
     import json as _json
-    api_base = "http://127.0.0.1:8000"
+    from fastapi import HTTPException
+    from narrative_os.interface.services.governance_service import get_governance_service
+
     try:
-        resp = httpx.get(f"{api_base}/projects/{project}/changesets/{cs_id}", timeout=30)
-    except httpx.ConnectError:
-        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        data = get_governance_service().get_changeset(project, cs_id)
+    except HTTPException as exc:
+        _print_error(str(exc.detail))
         raise typer.Exit(code=1)
 
-    if resp.status_code == 404:
-        _print_error(f"变更集 '{cs_id}' 不存在。")
-        raise typer.Exit(code=1)
-
-    data = resp.json()
     console.print(Panel(
         _json.dumps(data, ensure_ascii=False, indent=2),
         title=f"变更集详情：{cs_id[:18]}...",
@@ -1025,32 +998,25 @@ def canon_approve(
     yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
 ) -> None:
     """批准变更集并提交正史。"""
-    import httpx
+    from fastapi import HTTPException
+    from narrative_os.interface.services.governance_service import get_governance_service
+
     if not yes:
         confirmed = typer.confirm(f"确认批准变更集 '{cs_id[:18]}...' 并提交正史？")
         if not confirmed:
             console.print("[yellow]已取消。[/yellow]")
             raise typer.Exit()
 
-    api_base = "http://127.0.0.1:8000"
     try:
-        resp = httpx.post(
-            f"{api_base}/projects/{project}/changesets/{cs_id}/approve",
-            timeout=30,
-        )
-    except httpx.ConnectError:
-        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        data = get_governance_service().approve_changeset(project, cs_id)
+    except HTTPException as exc:
+        _print_error(str(exc.detail))
         raise typer.Exit(code=1)
 
-    if resp.status_code == 200:
-        data = resp.json()
-        _print_success(
-            f"批准成功：{data.get('approved_count', 0)} 条已审批，"
-            f"{data.get('committed_count', 0)} 条已提交正史。"
-        )
-    else:
-        _print_error(f"批准失败（{resp.status_code}）：{resp.text[:200]}")
-        raise typer.Exit(code=1)
+    _print_success(
+        f"批准成功：{data.get('approved_count', 0)} 条已审批，"
+        f"{data.get('committed_count', 0)} 条已提交正史。"
+    )
 
 
 @canon_app.command("reject")
@@ -1060,29 +1026,22 @@ def canon_reject(
     yes: bool = typer.Option(False, "--yes", "-y", help="跳过确认提示"),
 ) -> None:
     """驳回整个变更集。"""
-    import httpx
+    from fastapi import HTTPException
+    from narrative_os.interface.services.governance_service import get_governance_service
+
     if not yes:
         confirmed = typer.confirm(f"确认驳回变更集 '{cs_id[:18]}...'？")
         if not confirmed:
             console.print("[yellow]已取消。[/yellow]")
             raise typer.Exit()
 
-    api_base = "http://127.0.0.1:8000"
     try:
-        resp = httpx.post(
-            f"{api_base}/projects/{project}/changesets/{cs_id}/reject",
-            timeout=30,
-        )
-    except httpx.ConnectError:
-        _print_error("无法连接到 API 服务，请先运行 `narrative dev`。")
+        data = get_governance_service().reject_changeset(project, cs_id)
+    except HTTPException as exc:
+        _print_error(str(exc.detail))
         raise typer.Exit(code=1)
 
-    if resp.status_code == 200:
-        data = resp.json()
-        _print_success(f"驳回成功：{data.get('rejected_count', 0)} 条已驳回。")
-    else:
-        _print_error(f"驳回失败（{resp.status_code}）：{resp.text[:200]}")
-        raise typer.Exit(code=1)
+    _print_success(f"驳回成功：{data.get('rejected_count', 0)} 条已驳回。")
 
 
 if __name__ == "__main__":

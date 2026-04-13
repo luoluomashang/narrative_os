@@ -1,0 +1,52 @@
+{
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "cb39426d-b20a-4426-8740-31df3d00e84e",
+        "chapter": 1,
+        "description": "获得剑意",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T08:17:34.511941+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "cb39426d-b20a-4426-8740-31df3d00e84e",
+        "chapter": 1,
+        "description": "获得剑意",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T08:17:34.511941+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

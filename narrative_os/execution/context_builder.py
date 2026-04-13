@@ -28,7 +28,7 @@ from narrative_os.infra.config import load_yaml
 
 if TYPE_CHECKING:
     from narrative_os.core.character import CharacterState
-    from narrative_os.core.memory import MemorySystem
+    from narrative_os.core.memory import MemoryPool, MemorySystem
     from narrative_os.core.plot import PlotGraph
     from narrative_os.core.world import WorldState
 
@@ -71,6 +71,16 @@ class ConstraintPack(BaseModel):
     human_touch_hints: list[str] = Field(default_factory=list)
 
 
+class BenchmarkWriteSummary(BaseModel):
+    profile_id: str = ""
+    profile_name: str = ""
+    mode: str = "project_benchmark"
+    top_rules: list[str] = Field(default_factory=list)
+    anti_rules: list[str] = Field(default_factory=list)
+    scene_hints: list[str] = Field(default_factory=list)
+    active_scene_anchor_count: int = 0
+
+
 class WriteContext(BaseModel):
     """Gate 1-9 组装完成的完整写前上下文。传给 Writer skill 作为 system prompt 原材料。"""
     # Gate 1
@@ -91,6 +101,7 @@ class WriteContext(BaseModel):
     # Gate 8 (merged into chapter_target.tension_target / hook_type)
     # Gate 9
     style_summary: str = ""
+    benchmark_summary: BenchmarkWriteSummary | None = None
     # Gate 10: 角色口吻 & 动机注入（Author's Note 风格，紧贴 user message 末尾）
     character_voice_notes: str = ""
 
@@ -171,6 +182,23 @@ class WriteContext(BaseModel):
         if self.style_summary:
             lines.append(f"## 风格摘要\n{self.style_summary}\n")
 
+        if self.benchmark_summary is not None:
+            lines.append("## Benchmark 对标约束")
+            lines.append(f"当前激活 Profile：{self.benchmark_summary.profile_name}")
+            if self.benchmark_summary.top_rules:
+                lines.append("优先遵守：")
+                for item in self.benchmark_summary.top_rules[:5]:
+                    lines.append(f"- {item}")
+            if self.benchmark_summary.anti_rules:
+                lines.append("重点规避：")
+                for item in self.benchmark_summary.anti_rules[:5]:
+                    lines.append(f"- {item}")
+            if self.benchmark_summary.scene_hints:
+                lines.append("场景提示：")
+                for item in self.benchmark_summary.scene_hints[:3]:
+                    lines.append(f"- {item}")
+            lines.append("")
+
         return "\n".join(lines)
 
 
@@ -233,6 +261,7 @@ class ContextBuilder:
         characters: "list[CharacterState] | None" = None,
         world: "WorldState | None" = None,
         memory: "MemorySystem | None" = None,
+        memory_pools: "list[MemoryPool] | None" = None,
         project_id: str | None = None,
     ) -> WriteContext:
         self._ensure_loaded()
@@ -263,7 +292,7 @@ class ContextBuilder:
         # Gate 5+6: 记忆检索
         if memory is not None:
             ctx.short_term_memory, ctx.long_term_anchors = self._gate5_6_memory(
-                memory, chapter_target
+                memory, chapter_target, pools=memory_pools
             )
 
         # Gate 7: 约束包
@@ -366,17 +395,43 @@ class ContextBuilder:
         )
 
     def _gate5_6_memory(
-        self, memory: "MemorySystem", ct: ChapterTarget
+        self,
+        memory: "MemorySystem",
+        ct: ChapterTarget,
+        *,
+        pools: "list[MemoryPool] | None" = None,
     ) -> tuple[list[str], list[str]]:
+        from narrative_os.core.memory import MemoryPool
+
         query = ct.target_summary or f"第{ct.chapter}章"
+        pools_to_search = pools if pools is not None else [
+            MemoryPool.AUTHOR,
+            MemoryPool.CANON,
+        ]
 
         # 短期：近章内容
-        short_results = memory.retrieve(query, layer="short_term", top_k=3)
+        short_results = memory.retrieve_memory(
+            query,
+            layer="short",
+            top_k=3,
+            pools=pools_to_search,
+        )
         short = [r.content[:200] for r in short_results]
 
-        # 长期：锚点
-        anchor_results = memory.get_recent_anchors(n=5)
+        # 长期：锚点与设定摘要
+        anchor_results = memory.retrieve_memory(
+            query,
+            layer="long",
+            top_k=5,
+            pools=pools_to_search,
+        )
         anchors = [r.content[:200] for r in anchor_results]
+
+        if MemoryPool.AUTHOR in pools_to_search:
+            for record in memory.get_recent_anchors(n=5):
+                anchor_text = record.content[:200]
+                if anchor_text not in anchors:
+                    anchors.append(anchor_text)
 
         return short, anchors
 

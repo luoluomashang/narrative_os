@@ -29,8 +29,6 @@ UI 映射：左侧剧情结构面板 → "规划" 按钮触发此 Agent
 
 from __future__ import annotations
 
-import json
-import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -44,6 +42,7 @@ from narrative_os.execution.llm_router import (
     get_default_routing_strategy,
     router as default_router,
 )
+from narrative_os.execution.prompt_utils import build_planner_system_prompt, parse_json_response
 from narrative_os.infra.logging import logger
 from narrative_os.schemas.traces import Artifact, ArtifactType
 
@@ -116,33 +115,7 @@ class PlannerAgent:
         output.apply_to_graph(existing_graph)
     """
 
-    SYSTEM_PROMPT = """\
-你是一位专业的中文网文策划编辑，专注于长篇网文（番茄/起点风格）的剧情结构设计。
-你的任务是为指定章节生成结构化剧情骨架，输出 JSON 格式。
-
-## 输出格式（严格遵守）
-```json
-{
-  "outline": "章节大纲文本（2-4句话概括主要事件）",
-  "nodes": [
-    {"id": "ch{章号}_01", "type": "setup|conflict|climax|resolution|branch", "summary": "节点摘要（20字内）", "tension": 0.5, "characters": ["角色名"]},
-    ...
-  ],
-  "edges": [
-    {"from": "节点id", "to": "节点id", "relation": "causal|temporal|conditional"},
-    ...
-  ],
-  "dialogue_goals": ["对话目标1", "对话目标2"],
-  "hook": {"description": "结尾钩子描述", "type": "suspense|revelation|cliffhanger|emotional"}
-}
-```
-
-## 规则
-- 每章生成 3~6 个情节节点
-- tension 值：setup≈0.2, conflict≈0.6, climax≈0.9, resolution≈0.3
-- 最后一个节点必须对应 hook.description
-- 节点 id 格式：ch{章号}_{序号:02d}，如 ch3_01
-"""
+        SYSTEM_PROMPT = build_planner_system_prompt()
 
     def __init__(self, router: LLMRouter | None = None) -> None:
         self._router = router or default_router
@@ -281,21 +254,8 @@ class PlannerAgent:
 
 def _extract_json(text: str) -> dict[str, Any] | None:
     """从 LLM 输出中提取第一个 JSON 对象。"""
-    # 先尝试 ```json ... ``` 代码块
-    block = re.search(r"```(?:json)?\s*([\s\S]+?)```", text)
-    candidate = block.group(1).strip() if block else text.strip()
-    try:
-        return json.loads(candidate)
-    except json.JSONDecodeError:
-        pass
-    # 再找最外层 { ... }
-    m = re.search(r"\{[\s\S]+\}", candidate)
-    if m:
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
-            pass
-    return None
+    parsed = parse_json_response(text, expect="object")
+    return parsed if isinstance(parsed, dict) else None
 
 
 # ------------------------------------------------------------------ #

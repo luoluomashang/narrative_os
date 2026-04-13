@@ -1,122 +1,177 @@
+import type { AxiosResponse } from 'axios'
+
 import client from './client'
+import type {
+  ConceptData as ApiConceptData,
+  Faction as ApiFaction,
+  PowerSystem as ApiPowerSystem,
+  PowerTemplateSummary as ApiPowerTemplateSummary,
+  Region as ApiRegion,
+  RegionCivilization as ApiRegionCivilization,
+  RegionGeography as ApiRegionGeography,
+  RegionPowerAccess as ApiRegionPowerAccess,
+  RegionRace as ApiRegionRace,
+  TimelineSandboxEvent as ApiTimelineSandboxEvent,
+  WorldRelation as ApiWorldRelation,
+  WorldSandboxData as ApiWorldSandboxData,
+} from '../types/api.gen'
 
-export interface ConceptData {
-  one_sentence: string
-  one_paragraph: string
-  genre_tags: string[]
-  world_type: string
+export type ConceptData = Omit<ApiConceptData, 'genre_tags'> & {
+  genre_tags: NonNullable<ApiConceptData['genre_tags']>
 }
-
-export interface RegionGeography {
-  terrain: string
-  climate: string
-  special_features: string[]
-  landmarks: string[]
+export type RegionGeography = Omit<ApiRegionGeography, 'special_features' | 'landmarks'> & {
+  special_features: NonNullable<ApiRegionGeography['special_features']>
+  landmarks: NonNullable<ApiRegionGeography['landmarks']>
 }
-
-export interface RegionRace {
-  primary_race: string
-  secondary_races: string[]
-  is_mixed: boolean
-  race_notes: string
+export type RegionRace = Omit<ApiRegionRace, 'secondary_races'> & {
+  secondary_races: NonNullable<ApiRegionRace['secondary_races']>
 }
-
-export interface RegionCivilization {
-  name: string
-  belief_system: string
-  culture_tags: string[]
-  govt_type: string
+export type RegionCivilization = Omit<ApiRegionCivilization, 'culture_tags'> & {
+  culture_tags: NonNullable<ApiRegionCivilization['culture_tags']>
 }
-
-export interface RegionPowerAccess {
-  inherits_global: boolean
-  custom_system_id: string | null
-  power_notes: string
+export type RegionPowerAccess = Omit<ApiRegionPowerAccess, 'custom_system_id'> & {
+  custom_system_id: Exclude<ApiRegionPowerAccess['custom_system_id'], undefined>
 }
-
-export interface Region {
+export type Region = Omit<ApiRegion, 'id' | 'geography' | 'race' | 'civilization' | 'power_access' | 'faction_ids' | 'tags'> & {
   id: string
-  name: string
-  region_type: string
-  x: number
-  y: number
   geography: RegionGeography
   race: RegionRace
   civilization: RegionCivilization
   power_access: RegionPowerAccess
-  faction_ids: string[]
-  alignment: string
-  tags: string[]
-  notes: string
+  faction_ids: NonNullable<ApiRegion['faction_ids']>
+  tags: NonNullable<ApiRegion['tags']>
 }
-
-export interface Faction {
+export type Faction = Omit<ApiFaction, 'id' | 'territory_region_ids' | 'relation_map' | 'power_system_id'> & {
   id: string
-  name: string
-  scope: string
-  description: string
-  territory_region_ids: string[]
-  alignment: string
-  relation_map: Record<string, number>
-  power_system_id: string | null
-  color?: string | null
-  x?: number
-  y?: number
-  notes: string
+  territory_region_ids: NonNullable<ApiFaction['territory_region_ids']>
+  relation_map: NonNullable<ApiFaction['relation_map']>
+  power_system_id: Exclude<ApiFaction['power_system_id'], undefined>
 }
-
-export interface PowerLevel {
-  name: string
-  description: string
-  requirements: string
-}
-
-export interface PowerSystem {
+export type PowerSystem = Omit<ApiPowerSystem, 'id' | 'levels' | 'rules' | 'resources'> & {
   id: string
-  name: string
-  template: string
-  levels: PowerLevel[]
-  rules: string[]
-  resources: string[]
-  notes: string
+  levels: NonNullable<ApiPowerSystem['levels']>
+  rules: NonNullable<ApiPowerSystem['rules']>
+  resources: NonNullable<ApiPowerSystem['resources']>
 }
-
-export interface WorldRelation {
+export type PowerTemplateSummary = Omit<ApiPowerTemplateSummary, 'preview_levels'> & {
+  preview_levels: NonNullable<ApiPowerTemplateSummary['preview_levels']>
+}
+export type WorldRelation = Omit<ApiWorldRelation, 'id'> & {
   id: string
-  source_id: string
-  target_id: string
-  relation_type: string
-  label: string
-  description: string
 }
-
-export interface TimelineSandboxEvent {
+export type TimelineSandboxEvent = Omit<ApiTimelineSandboxEvent, 'id' | 'linked_entity_id'> & {
   id: string
-  year: string
-  title: string
-  description: string
-  linked_entity_id: string | null
-  event_type: string
+  linked_entity_id: Exclude<ApiTimelineSandboxEvent['linked_entity_id'], undefined>
 }
-
-export interface WorldSandboxData {
-  world_name: string
-  world_type: string
-  world_description: string
+export type WorldSandboxData = Omit<ApiWorldSandboxData, 'regions' | 'factions' | 'power_systems' | 'world_rules' | 'relations' | 'timeline_events'> & {
   regions: Region[]
   factions: Faction[]
   power_systems: PowerSystem[]
+  world_rules: NonNullable<ApiWorldSandboxData['world_rules']>
   relations: WorldRelation[]
-  timeline_events?: TimelineSandboxEvent[]
-  world_rules: string[]
+  timeline_events: TimelineSandboxEvent[]
 }
 
-export interface PowerTemplateSummary {
-  template: string
-  name: string
-  preview_levels: string[]
-  level_count: number
+const requireId = (value: string | undefined, entity: string): string => {
+  if (value) {
+    return value
+  }
+  throw new Error(`${entity} is missing required id`)
 }
+
+const mapResponse = <TIn, TOut>(
+  request: Promise<AxiosResponse<TIn>>,
+  normalize: (data: TIn) => TOut,
+): Promise<AxiosResponse<TOut>> =>
+  request.then((response) => ({
+    ...response,
+    data: normalize(response.data),
+  }) as AxiosResponse<TOut>)
+
+const normalizeConceptData = (data: ApiConceptData): ConceptData => ({
+  ...data,
+  genre_tags: data.genre_tags ?? [],
+})
+
+const normalizeRegionGeography = (data?: ApiRegionGeography): RegionGeography => ({
+  terrain: data?.terrain ?? '',
+  climate: data?.climate ?? '',
+  special_features: data?.special_features ?? [],
+  landmarks: data?.landmarks ?? [],
+})
+
+const normalizeRegionRace = (data?: ApiRegionRace): RegionRace => ({
+  primary_race: data?.primary_race ?? '',
+  secondary_races: data?.secondary_races ?? [],
+  is_mixed: data?.is_mixed ?? false,
+  race_notes: data?.race_notes ?? '',
+})
+
+const normalizeRegionCivilization = (data?: ApiRegionCivilization): RegionCivilization => ({
+  name: data?.name ?? '',
+  belief_system: data?.belief_system ?? '',
+  culture_tags: data?.culture_tags ?? [],
+  govt_type: data?.govt_type ?? '',
+})
+
+const normalizeRegionPowerAccess = (data?: ApiRegionPowerAccess): RegionPowerAccess => ({
+  inherits_global: data?.inherits_global ?? true,
+  custom_system_id: data?.custom_system_id ?? null,
+  power_notes: data?.power_notes ?? '',
+})
+
+const normalizeRegion = (data: ApiRegion): Region => ({
+  ...data,
+  id: requireId(data.id, 'Region'),
+  geography: normalizeRegionGeography(data.geography),
+  race: normalizeRegionRace(data.race),
+  civilization: normalizeRegionCivilization(data.civilization),
+  power_access: normalizeRegionPowerAccess(data.power_access),
+  faction_ids: data.faction_ids ?? [],
+  tags: data.tags ?? [],
+})
+
+const normalizeFaction = (data: ApiFaction): Faction => ({
+  ...data,
+  id: requireId(data.id, 'Faction'),
+  territory_region_ids: data.territory_region_ids ?? [],
+  relation_map: data.relation_map ?? {},
+  power_system_id: data.power_system_id ?? null,
+})
+
+const normalizePowerSystem = (data: ApiPowerSystem): PowerSystem => ({
+  ...data,
+  id: requireId(data.id, 'PowerSystem'),
+  levels: data.levels ?? [],
+  rules: data.rules ?? [],
+  resources: data.resources ?? [],
+})
+
+const normalizePowerTemplateSummary = (data: ApiPowerTemplateSummary): PowerTemplateSummary => ({
+  ...data,
+  preview_levels: data.preview_levels ?? [],
+})
+
+const normalizeWorldRelation = (data: ApiWorldRelation): WorldRelation => ({
+  ...data,
+  id: requireId(data.id, 'WorldRelation'),
+})
+
+const normalizeTimelineSandboxEvent = (data: ApiTimelineSandboxEvent): TimelineSandboxEvent => ({
+  ...data,
+  id: requireId(data.id, 'TimelineSandboxEvent'),
+  linked_entity_id: data.linked_entity_id ?? null,
+})
+
+const normalizeWorldSandboxData = (data: ApiWorldSandboxData): WorldSandboxData => ({
+  ...data,
+  regions: (data.regions ?? []).map(normalizeRegion),
+  factions: (data.factions ?? []).map(normalizeFaction),
+  power_systems: (data.power_systems ?? []).map(normalizePowerSystem),
+  world_rules: data.world_rules ?? [],
+  relations: (data.relations ?? []).map(normalizeWorldRelation),
+  timeline_events: (data.timeline_events ?? []).map(normalizeTimelineSandboxEvent),
+})
 
 export interface WorldPublishResponse {
   status: 'published' | 'validation_failed'
@@ -124,6 +179,7 @@ export interface WorldPublishResponse {
   warnings: string[]
   suggestions: string[]
   errors?: string[]
+  runtime_diff?: WorldRuntimeDiff | null
   publish_report?: {
     factions_compiled: number
     regions_compiled: number
@@ -134,68 +190,100 @@ export interface WorldPublishResponse {
   } | null
 }
 
+export interface WorldRuntimeDiffEntry {
+  target_id: string
+  target_name: string
+  change_type: string
+  before: string
+  after: string
+  effect: string
+  note: string
+}
+
+export interface WorldRuntimeDiffSection {
+  key: string
+  label: string
+  items: WorldRuntimeDiffEntry[]
+}
+
+export interface WorldRuntimeDiff {
+  sections: WorldRuntimeDiffSection[]
+  auto_fix_notes: string[]
+}
+
+export interface WorldPublishPreviewResponse {
+  status: 'ready' | 'validation_failed'
+  warnings: string[]
+  suggestions: string[]
+  errors?: string[]
+  runtime_diff?: WorldRuntimeDiff | null
+  publish_report?: WorldPublishResponse['publish_report']
+}
+
 // --- 故事概念 ---
 export const concept = {
   get: (projectId: string) =>
-    client.get<ConceptData>(`/projects/${projectId}/concept`),
+    mapResponse(client.get<ApiConceptData>(`/projects/${projectId}/concept`), normalizeConceptData),
   update: (projectId: string, data: Partial<ConceptData>) =>
-    client.put<ConceptData>(`/projects/${projectId}/concept`, data),
+    mapResponse(client.put<ApiConceptData>(`/projects/${projectId}/concept`, data), normalizeConceptData),
 }
 
 // --- 世界观沙盘 ---
 export const world = {
   get: (projectId: string) =>
-    client.get<WorldSandboxData>(`/projects/${projectId}/world`),
+    mapResponse(client.get<ApiWorldSandboxData>(`/projects/${projectId}/world`), normalizeWorldSandboxData),
   updateMeta: (projectId: string, data: { world_name?: string; world_type?: string; world_description?: string }) =>
-    client.put<WorldSandboxData>(`/projects/${projectId}/world/meta`, data),
+    mapResponse(client.put<ApiWorldSandboxData>(`/projects/${projectId}/world/meta`, data), normalizeWorldSandboxData),
 
   // Regions
   createRegion: (projectId: string, data: { name: string; region_type?: string; x?: number; y?: number }) =>
-    client.post<Region>(`/projects/${projectId}/world/regions`, data),
+    mapResponse(client.post<ApiRegion>(`/projects/${projectId}/world/regions`, data), normalizeRegion),
   getRegion: (projectId: string, regionId: string) =>
-    client.get<Region>(`/projects/${projectId}/world/regions/${regionId}`),
+    mapResponse(client.get<ApiRegion>(`/projects/${projectId}/world/regions/${regionId}`), normalizeRegion),
   updateRegion: (projectId: string, regionId: string, data: Partial<Region>) =>
-    client.put<Region>(`/projects/${projectId}/world/regions/${regionId}`, data),
+    mapResponse(client.put<ApiRegion>(`/projects/${projectId}/world/regions/${regionId}`, data), normalizeRegion),
   deleteRegion: (projectId: string, regionId: string) =>
     client.delete(`/projects/${projectId}/world/regions/${regionId}`),
 
   // Factions
   createFaction: (projectId: string, data: { name: string; scope?: string; description?: string }) =>
-    client.post<Faction>(`/projects/${projectId}/world/factions`, data),
+    mapResponse(client.post<ApiFaction>(`/projects/${projectId}/world/factions`, data), normalizeFaction),
   getFaction: (projectId: string, factionId: string) =>
-    client.get<Faction>(`/projects/${projectId}/world/factions/${factionId}`),
+    mapResponse(client.get<ApiFaction>(`/projects/${projectId}/world/factions/${factionId}`), normalizeFaction),
   updateFaction: (projectId: string, factionId: string, data: Partial<Faction>) =>
-    client.put<Faction>(`/projects/${projectId}/world/factions/${factionId}`, data),
+    mapResponse(client.put<ApiFaction>(`/projects/${projectId}/world/factions/${factionId}`, data), normalizeFaction),
   deleteFaction: (projectId: string, factionId: string) =>
     client.delete(`/projects/${projectId}/world/factions/${factionId}`),
 
   // Power Systems
   createPowerSystem: (projectId: string, data: { name: string; template?: string }) =>
-    client.post<PowerSystem>(`/projects/${projectId}/world/power-systems`, data),
+    mapResponse(client.post<ApiPowerSystem>(`/projects/${projectId}/world/power-systems`, data), normalizePowerSystem),
   getPowerSystem: (projectId: string, psId: string) =>
-    client.get<PowerSystem>(`/projects/${projectId}/world/power-systems/${psId}`),
+    mapResponse(client.get<ApiPowerSystem>(`/projects/${projectId}/world/power-systems/${psId}`), normalizePowerSystem),
   updatePowerSystem: (projectId: string, psId: string, data: Partial<PowerSystem>) =>
-    client.put<PowerSystem>(`/projects/${projectId}/world/power-systems/${psId}`, data),
+    mapResponse(client.put<ApiPowerSystem>(`/projects/${projectId}/world/power-systems/${psId}`, data), normalizePowerSystem),
   deletePowerSystem: (projectId: string, psId: string) =>
     client.delete(`/projects/${projectId}/world/power-systems/${psId}`),
 
   // Relations
   listRelations: (projectId: string) =>
-    client.get<WorldRelation[]>(`/projects/${projectId}/world/relations`),
+    mapResponse(client.get<ApiWorldRelation[]>(`/projects/${projectId}/world/relations`), (data) => data.map(normalizeWorldRelation)),
   getRelation: (projectId: string, relationId: string) =>
-    client.get<WorldRelation>(`/projects/${projectId}/world/relations/${relationId}`),
+    mapResponse(client.get<ApiWorldRelation>(`/projects/${projectId}/world/relations/${relationId}`), normalizeWorldRelation),
   createRelation: (projectId: string, data: { source_id: string; target_id: string; relation_type?: string; label?: string; description?: string }) =>
-    client.post<WorldRelation>(`/projects/${projectId}/world/relations`, data),
+    mapResponse(client.post<ApiWorldRelation>(`/projects/${projectId}/world/relations`, data), normalizeWorldRelation),
   updateRelation: (projectId: string, relationId: string, data: Partial<WorldRelation>) =>
-    client.put<WorldRelation>(`/projects/${projectId}/world/relations/${relationId}`, data),
+    mapResponse(client.put<ApiWorldRelation>(`/projects/${projectId}/world/relations/${relationId}`, data), normalizeWorldRelation),
   deleteRelation: (projectId: string, relationId: string) =>
     client.delete(`/projects/${projectId}/world/relations/${relationId}`),
 
   // Tools
   powerTemplates: (projectId: string) =>
-    client.get<PowerTemplateSummary[]>(`/projects/${projectId}/world/power-templates`),
+    mapResponse(client.get<ApiPowerTemplateSummary[]>(`/projects/${projectId}/world/power-templates`), (data) => data.map(normalizePowerTemplateSummary)),
   finalize: (projectId: string) =>
     client.post<{ success: boolean; summary: Record<string, number> }>(`/projects/${projectId}/world/finalize`),
+  previewPublish: (projectId: string) =>
+    client.post<WorldPublishPreviewResponse>(`/projects/${projectId}/world/publish-preview`),
   publish: (projectId: string) =>
     client.post<WorldPublishResponse>(`/projects/${projectId}/world/publish`),
 
@@ -219,13 +307,13 @@ export const world = {
 
   // Timeline
   listTimeline: (projectId: string) =>
-    client.get<TimelineSandboxEvent[]>(`/projects/${projectId}/world/timeline`),
+    mapResponse(client.get<ApiTimelineSandboxEvent[]>(`/projects/${projectId}/world/timeline`), (data) => data.map(normalizeTimelineSandboxEvent)),
   createTimelineEvent: (projectId: string, data: { year?: string; title: string; description?: string; linked_entity_id?: string | null; event_type?: string }) =>
-    client.post<TimelineSandboxEvent>(`/projects/${projectId}/world/timeline`, data),
+    mapResponse(client.post<ApiTimelineSandboxEvent>(`/projects/${projectId}/world/timeline`, data), normalizeTimelineSandboxEvent),
   getTimelineEvent: (projectId: string, eventId: string) =>
-    client.get<TimelineSandboxEvent>(`/projects/${projectId}/world/timeline/${eventId}`),
+    mapResponse(client.get<ApiTimelineSandboxEvent>(`/projects/${projectId}/world/timeline/${eventId}`), normalizeTimelineSandboxEvent),
   updateTimelineEvent: (projectId: string, eventId: string, data: Partial<TimelineSandboxEvent>) =>
-    client.put<TimelineSandboxEvent>(`/projects/${projectId}/world/timeline/${eventId}`, data),
+    mapResponse(client.put<ApiTimelineSandboxEvent>(`/projects/${projectId}/world/timeline/${eventId}`, data), normalizeTimelineSandboxEvent),
   deleteTimelineEvent: (projectId: string, eventId: string) =>
     client.delete(`/projects/${projectId}/world/timeline/${eventId}`),
 

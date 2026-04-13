@@ -28,13 +28,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import OperationalError
 
 from narrative_os.infra.database import AsyncSessionLocal, ensure_database_runtime
+from narrative_os.infra.logging import get_correlation_id
 from narrative_os.infra.models import (
     ApprovalCheckpointRecord,
     ArtifactRecord,
     RunRecord,
     RunStepRecord,
 )
-from narrative_os.schemas.traces import Artifact, RunStatus, RunType
+from narrative_os.schemas.traces import Artifact, FailureRootCauseType, RunStatus, RunType
 
 
 _SQLITE_LOCK_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
@@ -297,6 +298,7 @@ class RunContext:
         self._current_step_by_agent: dict[str, str] = {}
         self._approval_checkpoint_id: str | None = None
         self._pending_tasks: list[asyncio.Task[None]] = []
+        self.correlation_id = get_correlation_id()
 
         # 时间
         self._started_at: float = time.time()
@@ -318,6 +320,7 @@ class RunContext:
                         chapter_num=self.chapter or None,
                         session_id=self.session_id,
                         total_cost_usd=self.actual_cost_usd,
+                        correlation_id=self.correlation_id,
                     )
                 )
             await session.commit()
@@ -341,6 +344,7 @@ class RunContext:
                         step_index=step_index,
                         agent_name=agent_name,
                         status=RunStatus.RUNNING.value,
+                        correlation_id=self.correlation_id,
                         started_at=now,
                     )
                 )
@@ -348,6 +352,9 @@ class RunContext:
                 record = await session.get(RunStepRecord, step_id)
                 if record is not None:
                     record.status = RunStatus.RUNNING.value
+                    record.correlation_id = self.correlation_id
+                    record.failure_type = None
+                    record.failure_message = None
                     record.started_at = now
                     record.ended_at = None
             await session.commit()
@@ -387,6 +394,60 @@ class RunContext:
 
         await _run_db_operation(_op)
 
+    async def record_run_issue(
+        self,
+        failure_type: FailureRootCauseType | str,
+        message: str,
+        *,
+        step_id: str | None = None,
+    ) -> None:
+        normalized_type = failure_type.value if isinstance(failure_type, FailureRootCauseType) else str(failure_type)
+
+        async def _op(session) -> None:
+            record = await session.get(RunRecord, self.run_id)
+            if record is None:
+                return
+            record.failure_type = normalized_type
+            record.failure_message = message
+            if step_id is not None:
+                record.root_cause_step_id = step_id
+            if not record.correlation_id:
+                record.correlation_id = self.correlation_id
+            await session.commit()
+
+        await _run_db_operation(_op)
+
+    async def record_step_failure(
+        self,
+        agent_name: str,
+        failure_type: FailureRootCauseType | str,
+        message: str,
+    ) -> None:
+        step_id = self._step_ids.get(agent_name)
+        normalized_type = failure_type.value if isinstance(failure_type, FailureRootCauseType) else str(failure_type)
+
+        async def _op(session) -> None:
+            if step_id:
+                record = await session.get(RunStepRecord, step_id)
+                if record is not None:
+                    record.status = RunStatus.FAILED.value
+                    record.failure_type = normalized_type
+                    record.failure_message = message
+                    record.correlation_id = self.correlation_id
+                    record.ended_at = _utcnow()
+
+            run_record = await session.get(RunRecord, self.run_id)
+            if run_record is not None:
+                run_record.failure_type = normalized_type
+                run_record.failure_message = message
+                if step_id is not None:
+                    run_record.root_cause_step_id = step_id
+                if not run_record.correlation_id:
+                    run_record.correlation_id = self.correlation_id
+            await session.commit()
+
+        await _run_db_operation(_op)
+
     async def pause_for_hitl(self, reason: str, context: str) -> str:
         await self.flush()
         checkpoint_id = f"checkpoint_{uuid.uuid4().hex}"
@@ -397,6 +458,7 @@ class RunContext:
                 ApprovalCheckpointRecord(
                     id=checkpoint_id,
                     run_id=self.run_id,
+                    correlation_id=self.correlation_id,
                     reason=reason,
                     context=context,
                 )
@@ -404,6 +466,8 @@ class RunContext:
             record = await session.get(RunRecord, self.run_id)
             if record is not None:
                 record.status = RunStatus.PAUSED.value
+                record.failure_type = FailureRootCauseType.APPROVAL_PAUSED.value
+                record.failure_message = reason
             await session.commit()
             return checkpoint_id
 
@@ -421,14 +485,20 @@ class RunContext:
             checkpoint.resolved_at = _utcnow()
             record = await session.get(RunRecord, self.run_id)
             if record is not None:
-                record.status = (
-                    RunStatus.COMPLETED.value if decision == "approve" else RunStatus.FAILED.value
-                )
-                if decision != "retry":
+                if decision == "retry":
+                    record.status = RunStatus.RUNNING.value
+                    record.ended_at = None
+                    record.failure_type = None
+                    record.failure_message = None
+                    record.root_cause_step_id = None
+                else:
+                    record.status = (
+                        RunStatus.COMPLETED.value if decision == "approve" else RunStatus.FAILED.value
+                    )
                     record.ended_at = _utcnow()
             await session.commit()
 
-            await _run_db_operation(_op)
+        await _run_db_operation(_op)
 
     async def flush(self) -> None:
         if not self._pending_tasks:
@@ -465,6 +535,8 @@ class RunContext:
             if not payload.step_id:
                 step_id = self._current_step_by_agent.get(payload.agent_name) or self._step_ids.get(payload.agent_name, "")
                 payload = payload.model_copy(update={"step_id": step_id})
+            if not payload.correlation_id:
+                payload = payload.model_copy(update={"correlation_id": self.correlation_id})
 
             data = payload.model_dump(mode="json")
             self._artifacts.append(data)
@@ -491,6 +563,7 @@ class RunContext:
                     agent_name=artifact.agent_name,
                     input_summary=artifact.input_summary,
                     output_content=artifact.output_content,
+                    correlation_id=artifact.correlation_id,
                     quality_scores=json.dumps(artifact.quality_scores, ensure_ascii=False),
                     token_in=artifact.token_in,
                     token_out=artifact.token_out,

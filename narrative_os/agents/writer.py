@@ -223,6 +223,7 @@ def _fallback_scene(
     plot_summary = context.plot_summary.strip()
 
     sentences = []
+    sentences.append("【待补充】当前场景由兜底文案生成，后续可由作者或重试流程替换为正式正文。")
     if hook:
         sentences.append(f"承接上一章的余波，{hook[:80]}。")
 

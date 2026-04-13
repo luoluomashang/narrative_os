@@ -1,4 +1,5 @@
 export { default as client } from './client'
+export { benchmark } from './benchmark'
 export { chapters } from './chapters'
 export { sessions } from './sessions'
 export { projects } from './projects'

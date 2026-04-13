@@ -10,6 +10,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from narrative_os.execution.prompt_utils import (
+    build_world_consistency_prompt,
+    build_world_expand_prompt,
+    build_world_import_prompt,
+    build_world_relations_prompt,
+    parse_json_response,
+)
 from narrative_os.core.world import WorldState
 from narrative_os.core.world_sandbox import (
     WorldSandboxData,
@@ -41,6 +48,9 @@ from narrative_os.schemas.world import (
     WorldMapLayoutResponse,
     WorldMapNode,
     WorldOverviewResponse,
+    WorldPublishPreviewResponse,
+    WorldPublishReport,
+    WorldPublishResponse,
     RegionCreateRequest,
     FactionCreateRequest,
     PowerTemplateSummary,
@@ -71,6 +81,79 @@ def _svc() -> WorldService:
 def _get_world_svc() -> WorldService:
     """向 api.py 暴露的 WorldService 工厂（用于 _get_sandbox/_get_concept 委托）。"""
     return get_world_service()
+
+
+async def _load_publish_inputs(project_id: str, svc: WorldService) -> tuple[WorldSandboxData, ConceptData]:
+    import sys
+
+    _api = sys.modules.get("narrative_os.interface.api")
+    _sandbox_fn = getattr(_api, "_get_sandbox", None) if _api else None
+    _concept_fn = getattr(_api, "_get_concept", None) if _api else None
+
+    async with AsyncSessionLocal() as db:
+        if _sandbox_fn:
+            sandbox = await _sandbox_fn(project_id, db)
+        else:
+            sandbox = await svc.get_sandbox(project_id, db)
+        if _concept_fn:
+            concept = await _concept_fn(project_id, db)
+        else:
+            concept = await svc.get_concept(project_id, db)
+    return sandbox, concept
+
+
+def _serialize_publish_report(report: Any) -> WorldPublishReport:
+    return WorldPublishReport(
+        factions_compiled=report.factions_compiled,
+        regions_compiled=report.regions_compiled,
+        power_systems_compiled=report.power_systems_compiled,
+        rules_compiled=report.rules_compiled,
+        timeline_events_compiled=report.timeline_events_compiled,
+        relations_compiled=report.relations_compiled,
+    )
+
+
+def _build_world_publish_preview(
+    sandbox: WorldSandboxData,
+    concept: ConceptData,
+) -> tuple[WorldPublishPreviewResponse, WorldState | None, str | None]:
+    from narrative_os.core.world_compiler import WorldCompiler
+    from narrative_os.core.world_validator import WorldValidator
+
+    validator = WorldValidator()
+    validation_report = validator.validate(sandbox=sandbox, concept=concept)
+
+    if not validation_report.is_valid:
+        return (
+            WorldPublishPreviewResponse(
+                status="validation_failed",
+                errors=validation_report.errors,
+                warnings=validation_report.warnings,
+                suggestions=validation_report.suggestions,
+                publish_report=None,
+                runtime_diff=None,
+            ),
+            None,
+            None,
+        )
+
+    compiler = WorldCompiler()
+    world, publish_report = compiler.compile(concept=concept, sandbox=sandbox)
+    world_version = f"v{int(_time.time())}"
+    publish_report.world_version = world_version
+    runtime_diff = compiler.build_runtime_diff(sandbox, world)
+    return (
+        WorldPublishPreviewResponse(
+            status="ready",
+            errors=[],
+            warnings=publish_report.warnings + validation_report.warnings,
+            suggestions=validation_report.suggestions,
+            publish_report=_serialize_publish_report(publish_report),
+            runtime_diff=runtime_diff,
+        ),
+        world,
+        world_version,
+    )
 
 
 # ------------------------------------------------------------------ #
@@ -616,64 +699,54 @@ async def get_world_overview(
     )
 
 
-@router.post("/projects/{project_id}/world/publish", summary="发布世界：沙盘 → 运行态 WorldState")
+@router.post(
+    "/projects/{project_id}/world/publish-preview",
+    response_model=WorldPublishPreviewResponse,
+    summary="预览世界发布：校验 + sandbox → runtime 结构化 diff",
+)
+async def preview_world_publish(
+    project_id: str, svc: WorldService = Depends(_svc)
+) -> WorldPublishPreviewResponse:
+    sandbox, concept = await _load_publish_inputs(project_id, svc)
+    preview, _, _ = _build_world_publish_preview(sandbox, concept)
+    return preview
+
+
+@router.post(
+    "/projects/{project_id}/world/publish",
+    response_model=WorldPublishResponse,
+    summary="发布世界：沙盘 → 运行态 WorldState",
+)
 async def publish_world(
     project_id: str, svc: WorldService = Depends(_svc)
-) -> dict[str, Any]:
-    import sys
-    from narrative_os.core.world_validator import WorldValidator
-    from narrative_os.core.world_compiler import WorldCompiler
+) -> WorldPublishResponse:
     from narrative_os.core.world_repository import WorldRepository
 
-    _api = sys.modules.get("narrative_os.interface.api")
-    _sandbox_fn = getattr(_api, "_get_sandbox", None) if _api else None
-    _concept_fn = getattr(_api, "_get_concept", None) if _api else None
+    sandbox, concept = await _load_publish_inputs(project_id, svc)
+    preview, world, world_version = _build_world_publish_preview(sandbox, concept)
 
-    async with AsyncSessionLocal() as db:
-        if _sandbox_fn:
-            sandbox = await _sandbox_fn(project_id, db)
-        else:
-            sandbox = await svc.get_sandbox(project_id, db)
-        if _concept_fn:
-            concept = await _concept_fn(project_id, db)
-        else:
-            concept = await svc.get_concept(project_id, db)
-
-    validator = WorldValidator()
-    validation_report = validator.validate(sandbox=sandbox, concept=concept)
-
-    if not validation_report.is_valid:
-        return {
-            "status": "validation_failed",
-            "errors": validation_report.errors,
-            "warnings": validation_report.warnings,
-            "suggestions": validation_report.suggestions,
-            "publish_report": None,
-        }
-
-    compiler = WorldCompiler()
-    world, publish_report = compiler.compile(concept=concept, sandbox=sandbox)
-
-    world_version = f"v{int(_time.time())}"
-    publish_report.world_version = world_version
+    if preview.status == "validation_failed" or world is None or world_version is None:
+        return WorldPublishResponse(
+            status="validation_failed",
+            errors=preview.errors,
+            warnings=preview.warnings,
+            suggestions=preview.suggestions,
+            publish_report=None,
+            runtime_diff=None,
+        )
 
     repo = WorldRepository()
     await repo.asave_runtime_world_state(project_id, world)
 
-    return {
-        "status": "published",
-        "world_version": world_version,
-        "warnings": publish_report.warnings + validation_report.warnings,
-        "suggestions": validation_report.suggestions,
-        "publish_report": {
-            "factions_compiled": publish_report.factions_compiled,
-            "regions_compiled": publish_report.regions_compiled,
-            "power_systems_compiled": publish_report.power_systems_compiled,
-            "rules_compiled": publish_report.rules_compiled,
-            "timeline_events_compiled": publish_report.timeline_events_compiled,
-            "relations_compiled": publish_report.relations_compiled,
-        },
-    }
+    return WorldPublishResponse(
+        status="published",
+        world_version=world_version,
+        errors=[],
+        warnings=preview.warnings,
+        suggestions=preview.suggestions,
+        publish_report=preview.publish_report,
+        runtime_diff=preview.runtime_diff,
+    )
 
 
 @router.get("/projects/{project_id}/world/runtime-state", response_model=WorldState, summary="获取运行态 WorldState")
@@ -840,13 +913,7 @@ async def ai_suggest_relations(
             f"领地:{','.join(territory_names) or '无'} 描述:{f.description}"
         )
 
-    prompt = (
-        "你是一位世界观设计助手。根据以下势力信息，建议它们之间可能存在的关系。\n\n"
-        "势力列表：\n" + "\n".join(faction_descs) + "\n\n"
-        "请以 JSON 数组格式返回建议，每项包含 source_id、target_id、"
-        "relation_type（alliance/conflict/trade/rivalry/vassal）、reason。"
-        "只返回 JSON 数组，不要其他文字。"
-    )
+    prompt = build_world_relations_prompt(faction_descs)
 
     llm_req = LLMRequest(
         task_type="world_building",
@@ -858,10 +925,9 @@ async def ai_suggest_relations(
     tmp_router = LLMRouter()
     try:
         resp = await tmp_router.call(llm_req)
-        content = resp.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        suggestions = _json.loads(content)
+        suggestions = parse_json_response(resp.content, expect="array")
+        if not isinstance(suggestions, list):
+            raise ValueError("invalid suggestions payload")
         return AISuggestRelationsResponse(suggestions=suggestions)
     except Exception as exc:
         return AISuggestRelationsResponse(suggestions=[], error=str(exc))
@@ -903,13 +969,13 @@ async def ai_expand_field(
             neighbors_desc.append(f"势力:{f.name}({f.scope})")
 
     entity_dump = entity.model_dump() if hasattr(entity, "model_dump") else str(entity)
-    prompt = (
-        f"你是一位世界观设计助手。请根据以下实体信息和其关联实体，为字段「{req.field}」生成丰富的内容。\n\n"
-        f"实体类型：{req.entity_type}\n"
-        f"实体数据：{_json.dumps(entity_dump, ensure_ascii=False)}\n"
-        f"关联实体：{', '.join(neighbors_desc) or '无'}\n"
-        f"世界背景：{sandbox.world_name} ({sandbox.world_type})\n\n"
-        f"请只返回「{req.field}」字段的内容文本，不要 JSON 包装，不要解释。"
+    prompt = build_world_expand_prompt(
+        field=req.field,
+        entity_type=req.entity_type,
+        entity_json=_json.dumps(entity_dump, ensure_ascii=False),
+        neighbors=neighbors_desc,
+        world_name=sandbox.world_name,
+        world_type=sandbox.world_type,
     )
 
     llm_req = LLMRequest(
@@ -933,16 +999,7 @@ async def ai_import_text(
 ) -> AIImportTextResponse:
     from narrative_os.execution.llm_router import LLMRequest, LLMRouter
 
-    prompt = (
-        "你是一位世界观解析助手。请从下面的设定文本中提取地区、势力和它们之间的关系。\n\n"
-        f"文本：\n{req.text}\n\n"
-        "请以 JSON 格式返回，结构如下：\n"
-        '{"regions": [{"name": "...", "region_type": "...", "notes": "..."}], '
-        '"factions": [{"name": "...", "scope": "internal/external", "description": "..."}], '
-        '"relations": [{"source_name": "...", "target_name": "...", '
-        '"relation_type": "alliance/conflict/connection", "label": "..."}]}\n'
-        "只返回 JSON，不要其他文字。"
-    )
+    prompt = build_world_import_prompt(req.text)
 
     llm_req = LLMRequest(
         task_type="world_building",
@@ -954,10 +1011,9 @@ async def ai_import_text(
     tmp_router = LLMRouter()
     try:
         resp = await tmp_router.call(llm_req)
-        content = resp.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        parsed = _json.loads(content)
+        parsed = parse_json_response(resp.content, expect="object")
+        if not isinstance(parsed, dict):
+            raise ValueError("invalid import payload")
         return AIImportTextResponse(
             regions=parsed.get("regions", []),
             factions=parsed.get("factions", []),
@@ -991,13 +1047,7 @@ async def ai_consistency_check(
         summary_parts.append(f"关系: {rel.source_id}→{rel.target_id} 类型:{rel.relation_type}")
 
     world_summary = "\n".join(summary_parts)
-    prompt = (
-        "你是一位世界观一致性分析师。请分析以下世界设定中可能存在的逻辑冲突、不一致或不合理之处。\n\n"
-        f"{world_summary}\n\n"
-        "请以 JSON 数组格式返回问题列表，每项包含：\n"
-        '{"severity": "warning/error", "node_ref": "涉及的实体名", "message": "问题描述"}\n'
-        "如果没有发现问题，返回空数组 []。只返回 JSON 数组。"
-    )
+    prompt = build_world_consistency_prompt(world_summary)
 
     llm_req = LLMRequest(
         task_type="consistency_check",
@@ -1009,10 +1059,9 @@ async def ai_consistency_check(
     tmp_router = LLMRouter()
     try:
         resp = await tmp_router.call(llm_req)
-        content = resp.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        issues = _json.loads(content)
+        issues = parse_json_response(resp.content, expect="array")
+        if not isinstance(issues, list):
+            raise ValueError("invalid consistency payload")
         return AIConsistencyResponse(issues=issues, passed=len(issues) == 0)
     except Exception as exc:
         return AIConsistencyResponse(issues=[], passed=True, error=str(exc))

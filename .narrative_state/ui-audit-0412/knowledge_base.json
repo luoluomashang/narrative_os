@@ -1,0 +1,133 @@
+{
+  "one_sentence": "被篡改的王朝档案里，唯一记得真相的抄写员必须在世界崩坏前找回失落疆域。",
+  "one_paragraph": "在一座以档案和地图维系现实稳定的大陆王朝，年轻抄写员意外发现疆域记录正在被神秘势力一点点抹除，随之消失的还有城镇、家族和历史记忆。他必须联合边境势力与被放逐的学者，在政治追杀和世界规则失稳之间抢回真相，阻止整片大陆被重写成伪造的秩序。",
+  "genre_tags": [
+    "悬疑",
+    "热血"
+  ],
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "3e88fad0-099e-4e99-9146-49657a762e56": {
+        "id": "3e88fad0-099e-4e99-9146-49657a762e56",
+        "name": "失落北境",
+        "region_type": "区域",
+        "terrain": "冻原与裂谷",
+        "climate": "长冬极夜",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [
+          "档案崇拜",
+          "边境要塞"
+        ],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "plot_nodes": [],
+  "characters": [
+    {
+      "name": "沈砚",
+      "traits": [
+        "记忆力过目不忘",
+        "谨慎"
+      ],
+      "goal": "找回被篡改的疆域真相",
+      "backstory": "王朝档案署的年轻抄写员，唯一保留失落北境记忆的人。",
+      "description": "",
+      "personality": "",
+      "alias": [],
+      "speech_style": "",
+      "catchphrases": [],
+      "dialogue_examples": [],
+      "motivations": [],
+      "scenario_context": "",
+      "system_instructions": "",
+      "faction": "档案署",
+      "emotion": "平静",
+      "health": 1.0,
+      "relationships": {},
+      "arc_stage": "防御",
+      "memory": [],
+      "behavior_constraints": [],
+      "voice_fingerprint": {},
+      "snapshot_history": [],
+      "is_alive": true,
+      "chapter_introduced": 1
+    }
+  ],
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "3e88fad0-099e-4e99-9146-49657a762e56": {
+        "id": "3e88fad0-099e-4e99-9146-49657a762e56",
+        "name": "失落北境",
+        "region_type": "区域",
+        "terrain": "冻原与裂谷",
+        "climate": "长冬极夜",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [
+          "档案崇拜",
+          "边境要塞"
+        ],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "plot_graph": {
+    "nodes": [
+      {
+        "id": "volume-goal-1",
+        "type": "setup",
+        "summary": "追查失落北境为何从王朝档案中被系统性抹除，并抢在冬祭前找回第一份原始疆图。",
+        "tension": 0.5,
+        "pacing_type": "rising",
+        "key_beat": "正面冲突",
+        "characters": [],
+        "location": "",
+        "status": "active",
+        "side_effects": [],
+        "branch_probability": {},
+        "chapter_ref": 1,
+        "notes": ""
+      }
+    ],
+    "edges": []
+  },
+  "chapter_1_hook": "、还有像你这样……来历不明的，都爱在这儿歇口气。”\n\n他上下打量了你几眼：“至于你怎么昏的，老汉我可不知道。三天前，在‘老鸦坡’那片乱石滩边上捡着你，就剩一口气了。身上没伤，也没见着行李，就…\n[选项 A]：追问老汉关于“东边”和“黑虎帮”的更多信息。**\n**[选项 B]：不再多问，向老汉再次道谢，准备下车进入镇子。**\n**[选项 C]：摸了摸身上，看除了这身衣服，是否还有别的物品或线索。**",
+  "last_hook": "好。再往前三十里，就是‘歇马驿’，到了那儿，你就能找口热乎饭吃，寻个地方落脚了。”\n\n他顿了顿，声音压低了些：“这世道不太平，尤其是‘老鸦坡’往西这一片。你……还是少打听，少沾惹为妙。”\n\n前方道路拐过一个弯…\n[选项 A]：询问老汉关于“老鸦坡”和“歇马驿”的更多细节**\n**[选项 B]：尝试坐起身，仔细观察路旁那堆可疑的东西**\n**[选项 C]：保持沉默，积蓄体力，先观察老汉和周围环境**",
+  "chapter_2_hook": "好。再往前三十里，就是‘歇马驿’，到了那儿，你就能找口热乎饭吃，寻个地方落脚了。”\n\n他顿了顿，声音压低了些：“这世道不太平，尤其是‘老鸦坡’往西这一片。你……还是少打听，少沾惹为妙。”\n\n前方道路拐过一个弯…\n[选项 A]：询问老汉关于“老鸦坡”和“歇马驿”的更多细节**\n**[选项 B]：尝试坐起身，仔细观察路旁那堆可疑的东西**\n**[选项 C]：保持沉默，积蓄体力，先观察老汉和周围环境**"
+}

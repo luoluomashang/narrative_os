@@ -1,0 +1,52 @@
+{
+  "runtime_world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "d7b70dea-170a-4dd0-8a33-d6f433d217c7",
+        "chapter": 1,
+        "description": "血魔尊现身",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T07:20:39.319439+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  },
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {},
+    "timeline": [
+      {
+        "id": "d7b70dea-170a-4dd0-8a33-d6f433d217c7",
+        "chapter": 1,
+        "description": "血魔尊现身",
+        "affected_factions": [],
+        "affected_characters": [],
+        "timestamp": "2026-04-12T07:20:39.319439+00:00"
+      }
+    ],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 1,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

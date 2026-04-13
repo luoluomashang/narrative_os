@@ -11,6 +11,12 @@
       <div class="hero-meta">
         <span class="meta-pill">项目 {{ projectId }}</span>
         <span class="meta-pill">待确认变更 {{ writingContext.pending_changes_count }}</span>
+        <span v-if="activeBenchmark" class="meta-pill meta-pill-benchmark">
+          对标 {{ activeBenchmark.profile_name }}
+        </span>
+        <span v-if="activeAuthorSkill" class="meta-pill meta-pill-skill">
+          Skill {{ activeAuthorSkill.profile_name }} · {{ activeAuthorSkill.application_mode || activeAuthorSkill.mode }}
+        </span>
       </div>
     </section>
 
@@ -104,6 +110,42 @@
             </div>
           </div>
 
+          <div v-if="activeBenchmark" class="benchmark-ribbon">
+            <div>
+              <span class="ribbon-label">当前对标</span>
+              <p>
+                {{ activeBenchmark.profile_name }}
+                <span class="benchmark-anchor-count">
+                  共 {{ activeBenchmark.active_scene_anchor_count }} 个场景锚点
+                </span>
+              </p>
+            </div>
+            <div>
+              <span class="ribbon-label">Top Rules</span>
+              <p>{{ joinOrFallback(activeBenchmark.top_rules, '当前对标尚未生成稳定规则摘要。') }}</p>
+            </div>
+          </div>
+
+          <div v-if="activeAuthorSkill" class="skill-ribbon">
+            <div>
+              <span class="ribbon-label">当前 Skill</span>
+              <p>
+                {{ activeAuthorSkill.profile_name }}
+                <span class="benchmark-anchor-count">
+                  {{ activeAuthorSkill.application_mode || activeAuthorSkill.mode }}
+                </span>
+              </p>
+            </div>
+            <div>
+              <span class="ribbon-label">Scene Hints</span>
+              <p>{{ joinOrFallback(activeAuthorSkill.scene_hints, '当前 Skill 尚未生成场景提示。') }}</p>
+            </div>
+            <div>
+              <span class="ribbon-label">Anti Rules</span>
+              <p>{{ joinOrFallback(activeAuthorSkill.anti_rules, '当前 Skill 尚未生成反向约束。') }}</p>
+            </div>
+          </div>
+
           <label class="field">
             <span>本章摘要</span>
             <textarea
@@ -119,14 +161,17 @@
               <span>强制生成（忽略 warning 类前置检查）</span>
             </label>
             <div class="action-row">
-              <button class="ghost-btn" :disabled="busy" @click="planOnly">
+              <button class="ghost-btn" :disabled="busy || !hasTargetSummary" @click="planOnly">
                 {{ planning ? '规划中…' : '仅规划' }}
               </button>
-              <button class="primary-btn" :disabled="busy" @click="generate">
+              <button class="primary-btn" :disabled="busy || !canGenerate" @click="generate">
                 {{ generating ? '生成中…' : '开始生成' }}
               </button>
             </div>
           </div>
+          <p v-if="generationBlockReason" class="precheck-hint">
+            当前不可生成：{{ generationBlockReason }}
+          </p>
         </section>
 
         <section class="output-shell panel-shell">
@@ -135,9 +180,19 @@
             <div class="hero-meta">
               <span class="meta-pill">run {{ currentRunId || '未建立' }}</span>
               <span class="meta-pill">{{ runStatusLabel }}</span>
+              <span v-if="hasBenchmarkScore" class="meta-pill meta-pill-score">
+                对标贴合 {{ formatPercent(benchmarkAdherenceScore) }}
+              </span>
+              <span v-if="hasBenchmarkScore" class="meta-pill meta-pill-score">
+                人味 {{ formatPercent(benchmarkHumannessScore) }}
+              </span>
             </div>
           </div>
           <p v-if="errorMessage" class="error-banner">{{ errorMessage }}</p>
+          <div v-if="benchmarkViolations.length" class="benchmark-warning">
+            <strong>对标回归提示</strong>
+            <p>{{ benchmarkViolations.join(' / ') }}</p>
+          </div>
           <pre v-else class="output-text">{{ generatedText || '生成结果会显示在这里。' }}</pre>
         </section>
 
@@ -185,6 +240,26 @@ type WritingContextPayload = {
   previous_hook: string
   current_volume_goal: string
   pending_changes_count: number
+  active_benchmark?: {
+    profile_id: string
+    profile_name: string
+    mode: string
+    top_rules: string[]
+    active_scene_anchor_count: number
+    anti_rules?: string[]
+    scene_hints?: string[]
+    application_mode?: string | null
+  } | null
+  active_author_skill?: {
+    profile_id: string
+    profile_name: string
+    mode: string
+    top_rules: string[]
+    anti_rules?: string[]
+    scene_hints?: string[]
+    active_scene_anchor_count: number
+    application_mode?: string | null
+  } | null
   world: {
     published: boolean
     factions: string[]
@@ -212,6 +287,31 @@ type RunStepView = {
   tokenLabel: string
 }
 
+type PlanNodeView = {
+  id?: string
+  type?: string
+  summary?: string
+  tension?: number
+  characters?: string[]
+}
+
+type PlanResponseView = {
+  chapter_outline: string
+  planned_nodes: PlanNodeView[]
+  dialogue_goals: string[]
+  hook_suggestion: string
+  hook_type: string
+  tension_curve: number[]
+}
+
+type RunChapterResult = {
+  text: string
+  run_id?: string
+  benchmark_adherence_score?: number | null
+  benchmark_humanness_score?: number | null
+  benchmark_violations?: string[]
+}
+
 const route = useRoute()
 const router = useRouter()
 const projectId = computed(() => route.params.id as string)
@@ -229,6 +329,9 @@ const runStatus = ref('idle')
 const runSteps = ref<RunStepView[]>([])
 const tokenInTotal = ref(0)
 const tokenOutTotal = ref(0)
+const benchmarkAdherenceScore = ref<number | null>(null)
+const benchmarkHumannessScore = ref<number | null>(null)
+const benchmarkViolations = ref<string[]>([])
 
 const writingContext = ref<WritingContextPayload>({
   project_id: '',
@@ -236,6 +339,8 @@ const writingContext = ref<WritingContextPayload>({
   previous_hook: '',
   current_volume_goal: '',
   pending_changes_count: 0,
+  active_benchmark: null,
+  active_author_skill: null,
   world: {
     published: false,
     factions: [],
@@ -249,6 +354,28 @@ const writingContext = ref<WritingContextPayload>({
 let pollTimer: number | null = null
 
 const busy = computed(() => generating.value || planning.value)
+const hasTargetSummary = computed(() => Boolean(targetSummary.value.trim()))
+const activeBenchmark = computed(() => writingContext.value.active_benchmark ?? null)
+const activeAuthorSkill = computed(() => writingContext.value.active_author_skill ?? null)
+const failedErrorPrechecks = computed(() =>
+  writingContext.value.prechecks.filter((item) => !item.passed && item.severity === 'error'),
+)
+const failedWarningPrechecks = computed(() =>
+  writingContext.value.prechecks.filter((item) => !item.passed && item.severity !== 'error'),
+)
+const generationBlockReason = computed(() => {
+  if (failedErrorPrechecks.value.length) {
+    return failedErrorPrechecks.value[0]?.message ?? '存在未处理的错误级前置检查'
+  }
+  if (!forceGenerate.value && failedWarningPrechecks.value.length) {
+    return failedWarningPrechecks.value[0]?.message ?? '存在未处理的 warning 级前置检查'
+  }
+  return ''
+})
+const canGenerate = computed(() => hasTargetSummary.value && !generationBlockReason.value)
+const hasBenchmarkScore = computed(
+  () => benchmarkAdherenceScore.value !== null || benchmarkHumannessScore.value !== null,
+)
 
 const runStatusLabel = computed(() => {
   if (runStatus.value === 'planning') return '规划中'
@@ -269,8 +396,102 @@ function pressureLabel(pressure: number) {
   return '低压'
 }
 
+function formatPercent(value: number | null) {
+  if (value === null || Number.isNaN(value)) {
+    return '--'
+  }
+  return `${Math.round(value * 100)}%`
+}
+
 function goTo(path: string) {
   router.push(path)
+}
+
+function resolveTargetSummary() {
+  const summary = targetSummary.value.trim()
+  if (summary) {
+    return summary
+  }
+  errorMessage.value = '请先填写本章摘要'
+  generatedText.value = ''
+  runStatus.value = 'idle'
+  return null
+}
+
+function decodeQuotedJsonString(value: string) {
+  try {
+    return JSON.parse(`"${value}"`) as string
+  } catch {
+    return value
+  }
+}
+
+function extractOutlineText(outline: string) {
+  const trimmed = outline.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  const unfenced = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  const candidates = [unfenced, trimmed]
+
+  for (const candidate of candidates) {
+    if (candidate.startsWith('{') && candidate.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(candidate) as { outline?: unknown }
+        if (typeof parsed.outline === 'string' && parsed.outline.trim()) {
+          return parsed.outline.trim()
+        }
+      } catch {
+        // Fall through to regex extraction below.
+      }
+    }
+  }
+
+  const outlineMatch = unfenced.match(/"outline"\s*:\s*"((?:\\.|[^\"])*)"/s)
+  if (outlineMatch) {
+    return decodeQuotedJsonString(outlineMatch[1]).trim()
+  }
+
+  return trimmed
+}
+
+function formatPlanNode(node: PlanNodeView, index: number) {
+  const title = typeof node.summary === 'string' && node.summary.trim()
+    ? node.summary.trim()
+    : `节点 ${index + 1}`
+  const type = typeof node.type === 'string' && node.type.trim() ? node.type.trim() : 'unknown'
+  const tension = typeof node.tension === 'number' ? `${node.tension}/10` : '未标注'
+  const characters = Array.isArray(node.characters) && node.characters.length
+    ? node.characters.join('、')
+    : '未指定'
+  return `${index + 1}. [${type}] ${title} | 张力 ${tension} | 角色 ${characters}`
+}
+
+function formatPlanResponse(plan: PlanResponseView) {
+  const lines: string[] = []
+  const outline = extractOutlineText(plan.chapter_outline)
+
+  if (outline) {
+    lines.push('剧情骨架')
+    lines.push(outline)
+  }
+
+  lines.push('')
+  lines.push('规划节点')
+  if (plan.planned_nodes.length) {
+    lines.push(...plan.planned_nodes.map((node, index) => formatPlanNode(node, index)))
+  } else {
+    lines.push('暂无节点')
+  }
+
+  lines.push('')
+  lines.push(`Hook 建议: ${plan.hook_suggestion || '暂无'}`)
+  lines.push(`Hook 类型: ${plan.hook_type || '未知'}`)
+  lines.push(`对话目标: ${plan.dialogue_goals.length ? plan.dialogue_goals.join(' / ') : '暂无'}`)
+  lines.push(`张力曲线: ${plan.tension_curve.length ? plan.tension_curve.join(' → ') : '暂无'}`)
+
+  return lines.join('\n').trim()
 }
 
 async function refreshWorkbench() {
@@ -359,12 +580,23 @@ function startPolling() {
 }
 
 async function generate() {
+  const summary = resolveTargetSummary()
+  if (!summary) return
+  if (generationBlockReason.value) {
+    errorMessage.value = `无法开始生成：${generationBlockReason.value}`
+    runStatus.value = 'failed'
+    return
+  }
+
   errorMessage.value = ''
   generatedText.value = ''
   currentRunId.value = ''
   runSteps.value = []
   tokenInTotal.value = 0
   tokenOutTotal.value = 0
+  benchmarkAdherenceScore.value = null
+  benchmarkHumannessScore.value = null
+  benchmarkViolations.value = []
   generating.value = true
   runStatus.value = 'running'
   startPolling()
@@ -373,7 +605,7 @@ async function generate() {
     const response = await chapters.run({
       chapter: currentChapter.value,
       volume: 1,
-      target_summary: targetSummary.value || `第 ${currentChapter.value} 章`,
+      target_summary: summary,
       word_count_target: wordCountTarget.value,
       strategy: 'COST_OPTIMIZED',
       previous_hook: writingContext.value.previous_hook || '',
@@ -381,15 +613,22 @@ async function generate() {
       project_id: projectId.value,
       force_generate: forceGenerate.value,
     })
-    generatedText.value = response.data.text
-    if (response.data.run_id) {
-      await hydrateRunTrace(response.data.run_id)
+    const result = response.data as RunChapterResult
+    generatedText.value = result.text
+    benchmarkAdherenceScore.value = result.benchmark_adherence_score ?? null
+    benchmarkHumannessScore.value = result.benchmark_humanness_score ?? null
+    benchmarkViolations.value = result.benchmark_violations ?? []
+    if (result.run_id) {
+      await hydrateRunTrace(result.run_id)
     }
     await refreshWorkbench()
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string } }; message?: string }
     errorMessage.value = err.response?.data?.detail ?? err.message ?? '章节生成失败'
     runStatus.value = 'failed'
+    benchmarkAdherenceScore.value = null
+    benchmarkHumannessScore.value = null
+    benchmarkViolations.value = []
   } finally {
     generating.value = false
     if (currentRunId.value) {
@@ -400,20 +639,26 @@ async function generate() {
 }
 
 async function planOnly() {
+  const summary = resolveTargetSummary()
+  if (!summary) return
+
   errorMessage.value = ''
   generatedText.value = '规划中…'
+  benchmarkAdherenceScore.value = null
+  benchmarkHumannessScore.value = null
+  benchmarkViolations.value = []
   planning.value = true
   runStatus.value = 'planning'
   try {
     const response = await chapters.plan({
       chapter: currentChapter.value,
       volume: 1,
-      target_summary: targetSummary.value || `第 ${currentChapter.value} 章`,
+      target_summary: summary,
       word_count_target: wordCountTarget.value,
       previous_hook: writingContext.value.previous_hook || '',
       project_id: projectId.value,
     })
-    generatedText.value = JSON.stringify(response.data, null, 2)
+    generatedText.value = formatPlanResponse(response.data as PlanResponseView)
     runStatus.value = 'completed'
   } catch (error: unknown) {
     const err = error as { response?: { data?: { detail?: string } }; message?: string }
@@ -500,6 +745,21 @@ onBeforeUnmount(() => {
   color: #0f172a;
 }
 
+.meta-pill-benchmark {
+  background: rgba(14, 116, 144, 0.12);
+  color: #0f766e;
+}
+
+.meta-pill-skill {
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+}
+
+.meta-pill-score {
+  background: rgba(234, 88, 12, 0.12);
+  color: #c2410c;
+}
+
 .status-chip.ok {
   background: rgba(16, 185, 129, 0.12);
   color: #047857;
@@ -573,6 +833,13 @@ onBeforeUnmount(() => {
 .ghost-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.precheck-hint {
+  margin: 12px 0 0;
+  color: #b45309;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .precheck-stack,
@@ -680,15 +947,77 @@ onBeforeUnmount(() => {
   margin-bottom: 18px;
 }
 
+.benchmark-ribbon {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
+.skill-ribbon {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
 .prompt-ribbon > div {
   padding: 14px 16px;
   border-radius: 18px;
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(234, 88, 12, 0.05));
 }
 
+.benchmark-ribbon > div {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.08), rgba(245, 158, 11, 0.08));
+}
+
+.skill-ribbon > div {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(236, 72, 153, 0.08));
+}
+
 .prompt-ribbon p {
   margin: 8px 0 0;
   color: #334155;
+  line-height: 1.6;
+}
+
+.benchmark-ribbon p {
+  margin: 8px 0 0;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.skill-ribbon p {
+  margin: 8px 0 0;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.benchmark-anchor-count {
+  margin-left: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.benchmark-warning {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #9a3412;
+}
+
+.benchmark-warning strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.benchmark-warning p {
+  margin: 0;
   line-height: 1.6;
 }
 
@@ -759,7 +1088,9 @@ onBeforeUnmount(() => {
 
   .writing-hero,
   .control-row,
-  .prompt-ribbon {
+  .prompt-ribbon,
+  .benchmark-ribbon,
+  .skill-ribbon {
     grid-template-columns: 1fr;
     display: grid;
   }

@@ -464,6 +464,7 @@ class TestWorldPublishAPI:
         assert "publish_report" in data
         assert data["publish_report"]["factions_compiled"] == 1
         assert data["publish_report"]["regions_compiled"] == 1
+        assert data["runtime_diff"]["sections"]
 
     def test_publish_invalid_world_missing_name(self, client: TestClient):
         """世界名称为空时，发布失败并返回 validation_failed 状态。"""
@@ -516,6 +517,51 @@ class TestWorldPublishAPI:
             assert "regions_compiled" in report
             assert "rules_compiled" in report
             assert "world_version" in data
+            assert "runtime_diff" in data
+
+    def test_publish_preview_returns_structured_diff(
+        self, client: TestClient, simple_sandbox: WorldSandboxData
+    ):
+        project_id = "test-publish-preview"
+
+        with (
+            patch(
+                "narrative_os.interface.api._get_sandbox",
+                new=AsyncMock(return_value=simple_sandbox),
+            ),
+            patch(
+                "narrative_os.interface.api._get_concept",
+                new=AsyncMock(return_value=ConceptData()),
+            ),
+        ):
+            response = client.post(f"/projects/{project_id}/world/publish-preview")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ready"
+        assert data["publish_report"]["regions_compiled"] == 1
+        assert any(section["key"] == "geography" for section in data["runtime_diff"]["sections"])
+
+    def test_publish_invalid_world_with_duplicate_power_levels(self, client: TestClient, simple_sandbox: WorldSandboxData):
+        project_id = "test-publish-invalid-power"
+        simple_sandbox.power_systems[0].levels[1].name = simple_sandbox.power_systems[0].levels[0].name
+
+        with (
+            patch(
+                "narrative_os.interface.api._get_sandbox",
+                new=AsyncMock(return_value=simple_sandbox),
+            ),
+            patch(
+                "narrative_os.interface.api._get_concept",
+                new=AsyncMock(return_value=ConceptData()),
+            ),
+        ):
+            response = client.post(f"/projects/{project_id}/world/publish-preview")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "validation_failed"
+        assert any("重复等级名称" in item for item in data["errors"])
 
 
 # ------------------------------------------------------------------ #

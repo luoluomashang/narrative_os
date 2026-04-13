@@ -1,0 +1,155 @@
+{
+  "version": 4,
+  "timestamp": "2026-04-12T13:57:05.436273+00:00",
+  "project_id": "default",
+  "plot_graph": {
+    "nodes": [
+      {
+        "id": "volume-goal-1",
+        "type": "setup",
+        "summary": "进入黑石镇并查明铁牌来源，建立第一阶段冲突主线。",
+        "tension": 0.5,
+        "pacing_type": "rising",
+        "key_beat": "正面冲突",
+        "characters": [],
+        "location": "",
+        "status": "active",
+        "side_effects": [],
+        "branch_probability": {},
+        "chapter_ref": 1,
+        "notes": ""
+      }
+    ],
+    "edges": []
+  },
+  "characters": [
+    {
+      "name": "林枫",
+      "traits": [],
+      "goal": "",
+      "backstory": "",
+      "emotion": "平静",
+      "health": 1.0,
+      "relationships": {},
+      "arc_stage": "裂缝",
+      "memory": [],
+      "behavior_constraints": [],
+      "voice_fingerprint": {
+        "under_pressure": "",
+        "when_lying": "",
+        "deflection": "",
+        "emotional_peak": "",
+        "default_length": "medium"
+      },
+      "snapshot_history": [],
+      "faction": "",
+      "is_alive": true,
+      "chapter_introduced": 1,
+      "description": "",
+      "personality": "",
+      "alias": [],
+      "speech_style": "",
+      "catchphrases": [],
+      "dialogue_examples": [],
+      "motivations": [],
+      "scenario_context": "",
+      "system_instructions": "",
+      "worldview": "",
+      "character_tags": [],
+      "drive": null,
+      "social_matrix": {},
+      "runtime": {
+        "current_location": "",
+        "current_companions": [],
+        "current_agenda": "",
+        "current_pressure": 0.0,
+        "emotion_trigger_source": "",
+        "recent_key_events": [
+          "第3章文本，主角击败了反派，完成了核心任务。情节推进顺利。下一章将面临更大危机。"
+        ],
+        "can_advance_plot": true,
+        "stance_mode": "normal"
+      }
+    },
+    {
+      "name": "陈伟",
+      "traits": [],
+      "goal": "",
+      "backstory": "",
+      "emotion": "平静",
+      "health": 1.0,
+      "relationships": {},
+      "arc_stage": "裂缝",
+      "memory": [],
+      "behavior_constraints": [],
+      "voice_fingerprint": {
+        "under_pressure": "",
+        "when_lying": "",
+        "deflection": "",
+        "emotional_peak": "",
+        "default_length": "medium"
+      },
+      "snapshot_history": [],
+      "faction": "",
+      "is_alive": true,
+      "chapter_introduced": 1,
+      "description": "",
+      "personality": "",
+      "alias": [],
+      "speech_style": "",
+      "catchphrases": [],
+      "dialogue_examples": [],
+      "motivations": [],
+      "scenario_context": "",
+      "system_instructions": "",
+      "worldview": "",
+      "character_tags": [],
+      "drive": null,
+      "social_matrix": {},
+      "runtime": {
+        "current_location": "",
+        "current_companions": [],
+        "current_agenda": "",
+        "current_pressure": 0.0,
+        "emotion_trigger_source": "",
+        "recent_key_events": [
+          "第3章文本，主角击败了反派，完成了核心任务。情节推进顺利。下一章将面临更大危机。"
+        ],
+        "can_advance_plot": true,
+        "stance_mode": "normal"
+      }
+    }
+  ],
+  "world": {
+    "factions": {},
+    "power_system": {
+      "name": "",
+      "levels": [],
+      "rules": [],
+      "resources": []
+    },
+    "geography": {
+      "bdddaeb3-176a-4dcc-ad74-859a5f0c6888": {
+        "id": "bdddaeb3-176a-4dcc-ad74-859a5f0c6888",
+        "name": "新地区",
+        "region_type": "区域",
+        "terrain": "",
+        "climate": "",
+        "special_features": [],
+        "landmarks": [],
+        "primary_race": "",
+        "culture": [],
+        "faction_ids": [],
+        "alignment": "true_neutral",
+        "tags": [],
+        "notes": ""
+      }
+    },
+    "timeline": [],
+    "resources": {},
+    "rules_of_world": [],
+    "current_chapter": 0,
+    "current_volume": 1,
+    "snapshot_history": []
+  }
+}

@@ -115,7 +115,7 @@ class PlannerAgent:
         output.apply_to_graph(existing_graph)
     """
 
-        SYSTEM_PROMPT = build_planner_system_prompt()
+    SYSTEM_PROMPT = build_planner_system_prompt()
 
     def __init__(self, router: LLMRouter | None = None) -> None:
         self._router = router or default_router

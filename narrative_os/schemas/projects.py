@@ -16,7 +16,7 @@ class ProjectListItem(BaseModel):
 
 
 class ProjectInitRequest(BaseModel):
-    project_id: str = Field(..., min_length=1, max_length=100)
+    project_id: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_\-]+$")
     title: str = ""
     genre: str = ""
     description: str = ""

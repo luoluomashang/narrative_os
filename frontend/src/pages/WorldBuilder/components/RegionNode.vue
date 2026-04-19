@@ -61,7 +61,7 @@ const terrainIcon = computed(() => {
     calc(100% - 12px) 100%, 12px 100%,
     0% calc(100% - 12px), 0% 12px
   );
-  background: rgba(0, 40, 80, 0.85);
+  background: var(--wb-region-shell);
   padding: 2px;
   animation: wb-glow-pulse var(--wb-anim-pulse, 2s) ease-in-out infinite alternate;
   cursor: pointer;
@@ -81,14 +81,14 @@ const terrainIcon = computed(() => {
     calc(100% - 12px) 100%, 12px 100%,
     0% calc(100% - 12px), 0% 12px
   );
-  background: rgba(0, 30, 60, 0.95);
+  background: var(--wb-region-core);
   padding: 10px 14px;
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1.5px solid var(--wb-neon-cyan, #2ef2ff);
+  border: 1.5px solid var(--wb-neon-cyan);
   border-radius: 2px;
-  box-shadow: var(--wb-glow-cyan, 0 0 8px #2ef2ff80);
+  box-shadow: var(--wb-glow-cyan);
 }
 
 .terrain-icon {
@@ -104,7 +104,7 @@ const terrainIcon = computed(() => {
 .node-title {
   font-size: 13px;
   font-weight: 600;
-  color: #e0f0ff;
+  color: var(--wb-text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -113,11 +113,11 @@ const terrainIcon = computed(() => {
 .node-sub {
   margin-top: 2px;
   font-size: 11px;
-  color: rgba(46, 242, 255, 0.6);
+  color: color-mix(in srgb, var(--wb-neon-cyan) 60%, transparent);
 }
 
 @keyframes wb-glow-pulse {
-  0%   { box-shadow: 0 0 4px rgba(46, 242, 255, 0.2), 0 0 12px rgba(46, 242, 255, 0.1); }
-  100% { box-shadow: 0 0 10px rgba(46, 242, 255, 0.5), 0 0 28px rgba(46, 242, 255, 0.25); }
+  0%   { box-shadow: var(--wb-glow-cyan-rest); }
+  100% { box-shadow: var(--wb-glow-cyan-active); }
 }
 </style>

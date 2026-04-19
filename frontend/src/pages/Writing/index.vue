@@ -1,88 +1,52 @@
 <template>
-  <div class="writing-page">
-    <section class="writing-hero panel-shell">
-      <div>
-        <p class="eyebrow">Writing Workbench</p>
-        <h1>创作主工作台</h1>
-        <p class="hero-copy">
-          把世界、角色、Plot、Hook 和运行链路放在同一个界面里，减少章节生成前的上下文断裂。
-        </p>
-      </div>
-      <div class="hero-meta">
+  <div class="writing-page app-page-surface">
+    <SystemPageHeader
+      eyebrow="Writing Workbench"
+      title="创作主工作台"
+      description="把世界、角色、Hook 和运行链路收进单主任务界面，减少章节生成前的上下文断裂。"
+    >
+      <template #meta>
         <span class="meta-pill">项目 {{ projectId }}</span>
         <span class="meta-pill">待确认变更 {{ writingContext.pending_changes_count }}</span>
-        <span v-if="activeBenchmark" class="meta-pill meta-pill-benchmark">
-          对标 {{ activeBenchmark.profile_name }}
-        </span>
-        <span v-if="activeAuthorSkill" class="meta-pill meta-pill-skill">
-          Skill {{ activeAuthorSkill.profile_name }} · {{ activeAuthorSkill.application_mode || activeAuthorSkill.mode }}
-        </span>
-      </div>
-    </section>
+        <span class="meta-pill">章节 {{ currentChapter }}</span>
+        <span class="meta-pill">目标 {{ wordCountTarget }} 字</span>
+      </template>
+      <template #actions>
+        <SystemButton variant="ghost" @click="refreshWorkbench">刷新</SystemButton>
+        <SystemButton variant="secondary" @click="contextDrawerOpen = true">上下文</SystemButton>
+        <SystemButton variant="quiet" @click="operationsTrayOpen = true">
+          运行托盘
+        </SystemButton>
+      </template>
+    </SystemPageHeader>
+
+    <SystemStatusBanner
+      v-if="failedErrorPrechecks.length"
+      status="blocking"
+      title="生成前存在阻塞项"
+      :message="generationBlockReason || '请先处理错误级前置检查后再开始生成。'"
+      description="阻塞项会直接拦截主流程，已把跳转入口收敛到这里。"
+    >
+      <template #actions>
+        <SystemButton v-if="primaryPrecheckActionPath" variant="primary" @click="goTo(primaryPrecheckActionPath)">处理阻塞项</SystemButton>
+        <SystemButton variant="ghost" @click="contextDrawerOpen = true">查看全部前置检查</SystemButton>
+      </template>
+    </SystemStatusBanner>
+
+    <SystemStatusBanner
+      v-else-if="failedWarningPrechecks.length && !forceGenerate"
+      status="partial-failure"
+      title="生成前仍有待确认项"
+      :message="generationBlockReason || '当前有 warning 级前置检查，确认后才建议继续生成。'"
+      description="你仍可切换为强制生成，但建议先确认上下文和依赖是否齐备。"
+    >
+      <template #actions>
+        <SystemButton v-if="primaryPrecheckActionPath" variant="ghost" @click="goTo(primaryPrecheckActionPath)">前往处理</SystemButton>
+        <SystemButton variant="quiet" @click="contextDrawerOpen = true">查看详情</SystemButton>
+      </template>
+    </SystemStatusBanner>
 
     <div class="writing-layout">
-      <aside class="context-column panel-shell">
-        <div class="section-head">
-          <h2>前置检查</h2>
-          <button class="ghost-btn" @click="refreshWorkbench">刷新</button>
-        </div>
-
-        <div class="precheck-stack">
-          <article
-            v-for="item in writingContext.prechecks"
-            :key="item.key"
-            class="precheck-card"
-            :class="item.passed ? 'precheck-pass' : `precheck-${item.severity}`"
-          >
-            <div>
-              <strong>{{ item.passed ? '已满足' : '需处理' }}</strong>
-              <p>{{ item.message }}</p>
-            </div>
-            <button v-if="item.action_path" class="link-btn" @click="goTo(item.action_path)">
-              前往
-            </button>
-          </article>
-        </div>
-
-        <div class="section-head compact">
-          <h2>WorldState</h2>
-          <span class="status-chip" :class="writingContext.world.published ? 'ok' : 'warn'">
-            {{ writingContext.world.published ? '已发布' : '未发布' }}
-          </span>
-        </div>
-        <div class="summary-grid">
-          <div class="summary-card">
-            <h3>势力 Top 5</h3>
-            <p>{{ joinOrFallback(writingContext.world.factions, '暂无势力摘要') }}</p>
-          </div>
-          <div class="summary-card">
-            <h3>地区 Top 5</h3>
-            <p>{{ joinOrFallback(writingContext.world.regions, '暂无地区摘要') }}</p>
-          </div>
-          <div class="summary-card">
-            <h3>规则 Top 5</h3>
-            <p>{{ joinOrFallback(writingContext.world.rules, '暂无规则摘要') }}</p>
-          </div>
-        </div>
-
-        <div class="section-head compact">
-          <h2>角色 Runtime</h2>
-          <span>{{ writingContext.characters.length }} 人</span>
-        </div>
-        <div class="character-stack">
-          <article v-for="character in writingContext.characters" :key="character.name" class="character-card">
-            <div class="character-topline">
-              <h3>{{ character.name }}</h3>
-              <span>{{ pressureLabel(character.current_pressure) }}</span>
-            </div>
-            <p><strong>位置：</strong>{{ character.current_location || '未标注' }}</p>
-            <p><strong>Agenda：</strong>{{ character.current_agenda || '未标注' }}</p>
-            <p><strong>最近事件：</strong>{{ joinOrFallback(character.recent_key_events, '暂无关键事件') }}</p>
-          </article>
-          <p v-if="writingContext.characters.length === 0" class="empty-copy">当前没有可展示的角色 Runtime 信息。</p>
-        </div>
-      </aside>
-
       <main class="main-column">
         <section class="composer panel-shell">
           <div class="section-head">
@@ -96,53 +60,6 @@
                 <span>目标字数</span>
                 <input v-model.number="wordCountTarget" type="number" min="500" max="20000" step="100" />
               </label>
-            </div>
-          </div>
-
-          <div class="prompt-ribbon">
-            <div>
-              <span class="ribbon-label">上一章 Hook</span>
-              <p>{{ writingContext.previous_hook || '当前暂无上章 Hook。' }}</p>
-            </div>
-            <div>
-              <span class="ribbon-label">当前卷目标</span>
-              <p>{{ writingContext.current_volume_goal || '当前暂无卷目标。' }}</p>
-            </div>
-          </div>
-
-          <div v-if="activeBenchmark" class="benchmark-ribbon">
-            <div>
-              <span class="ribbon-label">当前对标</span>
-              <p>
-                {{ activeBenchmark.profile_name }}
-                <span class="benchmark-anchor-count">
-                  共 {{ activeBenchmark.active_scene_anchor_count }} 个场景锚点
-                </span>
-              </p>
-            </div>
-            <div>
-              <span class="ribbon-label">Top Rules</span>
-              <p>{{ joinOrFallback(activeBenchmark.top_rules, '当前对标尚未生成稳定规则摘要。') }}</p>
-            </div>
-          </div>
-
-          <div v-if="activeAuthorSkill" class="skill-ribbon">
-            <div>
-              <span class="ribbon-label">当前 Skill</span>
-              <p>
-                {{ activeAuthorSkill.profile_name }}
-                <span class="benchmark-anchor-count">
-                  {{ activeAuthorSkill.application_mode || activeAuthorSkill.mode }}
-                </span>
-              </p>
-            </div>
-            <div>
-              <span class="ribbon-label">Scene Hints</span>
-              <p>{{ joinOrFallback(activeAuthorSkill.scene_hints, '当前 Skill 尚未生成场景提示。') }}</p>
-            </div>
-            <div>
-              <span class="ribbon-label">Anti Rules</span>
-              <p>{{ joinOrFallback(activeAuthorSkill.anti_rules, '当前 Skill 尚未生成反向约束。') }}</p>
             </div>
           </div>
 
@@ -161,12 +78,12 @@
               <span>强制生成（忽略 warning 类前置检查）</span>
             </label>
             <div class="action-row">
-              <button class="ghost-btn" :disabled="busy || !hasTargetSummary" @click="planOnly">
+              <SystemButton variant="secondary" :disabled="busy || !hasTargetSummary" @click="planOnly">
                 {{ planning ? '规划中…' : '仅规划' }}
-              </button>
-              <button class="primary-btn" :disabled="busy || !canGenerate" @click="generate">
+              </SystemButton>
+              <SystemButton variant="primary" :disabled="busy || !canGenerate" @click="generate">
                 {{ generating ? '生成中…' : '开始生成' }}
-              </button>
+              </SystemButton>
             </div>
           </div>
           <p v-if="generationBlockReason" class="precheck-hint">
@@ -196,25 +113,168 @@
           <pre v-else class="output-text">{{ generatedText || '生成结果会显示在这里。' }}</pre>
         </section>
 
-        <section class="run-bar panel-shell">
-          <div class="section-head compact">
-            <h2>AgentRun</h2>
-            <span>输入 {{ tokenInTotal }} / 输出 {{ tokenOutTotal }}</span>
-          </div>
-          <div class="step-grid">
-            <article v-for="step in runSteps" :key="step.step_id" class="step-card" :class="step.statusClass">
-              <div class="step-index">{{ step.step_index }}</div>
-              <div>
-                <h3>{{ step.agent_name }}</h3>
-                <p>{{ step.statusLabel }}</p>
-                <small>{{ step.tokenLabel }}</small>
-              </div>
-            </article>
-            <p v-if="runSteps.length === 0" class="empty-copy">当前暂无执行链路，生成章节后会显示 5 步 Agent 进度。</p>
-          </div>
-        </section>
       </main>
     </div>
+
+    <SystemDrawer
+      v-model="contextDrawerOpen"
+      title="写作上下文"
+      description="把前置检查、WorldState 和角色 Runtime 收进独立上下文抽屉，避免与主任务争抢首屏。"
+      size="420px"
+    >
+      <div class="section-head">
+        <h2>前置检查</h2>
+        <SystemButton variant="ghost" size="sm" @click="refreshWorkbench">刷新</SystemButton>
+      </div>
+
+      <div class="precheck-stack">
+        <article
+          v-for="item in writingContext.prechecks"
+          :key="item.key"
+          class="precheck-card"
+          :class="item.passed ? 'precheck-pass' : `precheck-${item.severity}`"
+        >
+          <div>
+            <strong>{{ item.passed ? '已满足' : '需处理' }}</strong>
+            <p>{{ item.message }}</p>
+          </div>
+          <SystemButton v-if="item.action_path" variant="ghost" size="sm" @click="goTo(item.action_path)">
+            前往
+          </SystemButton>
+        </article>
+      </div>
+
+      <div class="section-head compact context-section-head">
+        <h2>WorldState</h2>
+        <span class="status-chip" :class="writingContext.world.published ? 'ok' : 'warn'">
+          {{ writingContext.world.published ? '已发布' : '未发布' }}
+        </span>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <h3>势力 Top 5</h3>
+          <p>{{ joinOrFallback(writingContext.world.factions, '暂无势力摘要') }}</p>
+        </div>
+        <div class="summary-card">
+          <h3>地区 Top 5</h3>
+          <p>{{ joinOrFallback(writingContext.world.regions, '暂无地区摘要') }}</p>
+        </div>
+        <div class="summary-card">
+          <h3>规则 Top 5</h3>
+          <p>{{ joinOrFallback(writingContext.world.rules, '暂无规则摘要') }}</p>
+        </div>
+      </div>
+
+      <div class="section-head compact context-section-head">
+        <h2>角色 Runtime</h2>
+        <span>{{ writingContext.characters.length }} 人</span>
+      </div>
+      <div class="character-stack">
+        <article v-for="character in writingContext.characters" :key="character.name" class="character-card">
+          <div class="character-topline">
+            <h3>{{ character.name }}</h3>
+            <span>{{ pressureLabel(character.current_pressure) }}</span>
+          </div>
+          <p><strong>位置：</strong>{{ character.current_location || '未标注' }}</p>
+          <p><strong>Agenda：</strong>{{ character.current_agenda || '未标注' }}</p>
+          <p><strong>最近事件：</strong>{{ joinOrFallback(character.recent_key_events, '暂无关键事件') }}</p>
+        </article>
+        <p v-if="writingContext.characters.length === 0" class="empty-copy">当前没有可展示的角色 Runtime 信息。</p>
+      </div>
+    </SystemDrawer>
+
+    <SystemDrawer
+      v-model="operationsTrayOpen"
+      title="运行托盘"
+      description="把 Hook、Benchmark、Skill 与 AgentRun 收进辅助抽屉，避免和章节生成首屏争抢注意力。"
+      size="460px"
+    >
+      <div class="section-head compact">
+        <h2>运行摘要</h2>
+        <span>{{ runStatusLabel }}</span>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <h3>WorldState</h3>
+          <p>{{ writingContext.world.published ? '已发布，可直接参与生成。' : '仍是草稿态，建议先发布后再生成。' }}</p>
+        </div>
+        <div class="summary-card">
+          <h3>当前对标</h3>
+          <p>{{ activeBenchmark?.profile_name || '未挂载 Benchmark。' }}</p>
+        </div>
+        <div class="summary-card">
+          <h3>当前 Skill</h3>
+          <p>{{ activeAuthorSkill?.profile_name || '未挂载 Author Skill。' }}</p>
+        </div>
+        <div class="summary-card">
+          <h3>Token</h3>
+          <p>输入 {{ tokenInTotal }} / 输出 {{ tokenOutTotal }}</p>
+        </div>
+      </div>
+
+      <div class="prompt-ribbon">
+        <div>
+          <span class="ribbon-label">上一章 Hook</span>
+          <p>{{ writingContext.previous_hook || '当前暂无上章 Hook。' }}</p>
+        </div>
+        <div>
+          <span class="ribbon-label">当前卷目标</span>
+          <p>{{ writingContext.current_volume_goal || '当前暂无卷目标。' }}</p>
+        </div>
+      </div>
+
+      <div v-if="activeBenchmark" class="benchmark-ribbon">
+        <div>
+          <span class="ribbon-label">当前对标</span>
+          <p>
+            {{ activeBenchmark.profile_name }}
+            <span class="benchmark-anchor-count">
+              共 {{ activeBenchmark.active_scene_anchor_count }} 个场景锚点
+            </span>
+          </p>
+        </div>
+        <div>
+          <span class="ribbon-label">Top Rules</span>
+          <p>{{ joinOrFallback(activeBenchmark.top_rules, '当前对标尚未生成稳定规则摘要。') }}</p>
+        </div>
+      </div>
+
+      <div v-if="activeAuthorSkill" class="skill-ribbon">
+        <div>
+          <span class="ribbon-label">当前 Skill</span>
+          <p>
+            {{ activeAuthorSkill.profile_name }}
+            <span class="benchmark-anchor-count">
+              {{ activeAuthorSkill.application_mode || activeAuthorSkill.mode }}
+            </span>
+          </p>
+        </div>
+        <div>
+          <span class="ribbon-label">Scene Hints</span>
+          <p>{{ joinOrFallback(activeAuthorSkill.scene_hints, '当前 Skill 尚未生成场景提示。') }}</p>
+        </div>
+        <div>
+          <span class="ribbon-label">Anti Rules</span>
+          <p>{{ joinOrFallback(activeAuthorSkill.anti_rules, '当前 Skill 尚未生成反向约束。') }}</p>
+        </div>
+      </div>
+
+      <div class="section-head compact operation-tray-head">
+        <h2>AgentRun</h2>
+        <span>输入 {{ tokenInTotal }} / 输出 {{ tokenOutTotal }}</span>
+      </div>
+      <div class="step-grid">
+        <article v-for="step in runSteps" :key="step.step_id" class="step-card" :class="step.statusClass">
+          <div class="step-index">{{ step.step_index }}</div>
+          <div>
+            <h3>{{ step.agent_name }}</h3>
+            <p>{{ step.statusLabel }}</p>
+            <small>{{ step.tokenLabel }}</small>
+          </div>
+        </article>
+        <p v-if="runSteps.length === 0" class="empty-copy">当前暂无执行链路，生成章节后会显示 5 步 Agent 进度。</p>
+      </div>
+    </SystemDrawer>
   </div>
 </template>
 
@@ -225,6 +285,10 @@ import { useRoute, useRouter } from 'vue-router'
 import client from '@/api/client'
 import { chapters } from '@/api/chapters'
 import { projects } from '@/api/projects'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemDrawer from '@/components/system/SystemDrawer.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemStatusBanner from '@/components/system/SystemStatusBanner.vue'
 
 type PrecheckItem = {
   key: string
@@ -320,6 +384,8 @@ const currentChapter = ref(Number(route.query.chapter || 1) || 1)
 const wordCountTarget = ref(2000)
 const targetSummary = ref('')
 const forceGenerate = ref(false)
+const contextDrawerOpen = ref(false)
+const operationsTrayOpen = ref(false)
 const generating = ref(false)
 const planning = ref(false)
 const generatedText = ref('')
@@ -363,6 +429,11 @@ const failedErrorPrechecks = computed(() =>
 const failedWarningPrechecks = computed(() =>
   writingContext.value.prechecks.filter((item) => !item.passed && item.severity !== 'error'),
 )
+const primaryPrecheckActionPath = computed(() =>
+  failedErrorPrechecks.value.find((item) => item.action_path)?.action_path
+  ?? failedWarningPrechecks.value.find((item) => item.action_path)?.action_path
+  ?? null,
+)
 const generationBlockReason = computed(() => {
   if (failedErrorPrechecks.value.length) {
     return failedErrorPrechecks.value[0]?.message ?? '存在未处理的错误级前置检查'
@@ -386,8 +457,8 @@ const runStatusLabel = computed(() => {
   return '未启动'
 })
 
-function joinOrFallback(values: string[], fallback: string) {
-  return values.length ? values.join(' / ') : fallback
+function joinOrFallback(values: string[] | null | undefined, fallback: string) {
+  return values?.length ? values.join(' / ') : fallback
 }
 
 function pressureLabel(pressure: number) {
@@ -685,47 +756,17 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .writing-page {
-  padding: 24px;
-  background:
-    radial-gradient(circle at top left, rgba(251, 191, 36, 0.16), transparent 28%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0.06));
+  display: grid;
+  gap: var(--spacing-5);
   min-height: 100%;
+  align-content: start;
 }
 
 .panel-shell {
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
-}
-
-.writing-hero {
-  padding: 28px;
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
-}
-
-.eyebrow {
-  margin: 0 0 10px;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #b45309;
-}
-
-.writing-hero h1 {
-  margin: 0;
-  font-size: 30px;
-  color: #111827;
-}
-
-.hero-copy {
-  max-width: 760px;
-  margin: 12px 0 0;
-  color: #475569;
-  line-height: 1.7;
+  background: color-mix(in srgb, var(--color-surface-1) 92%, transparent);
+  box-shadow: var(--shadow-md);
 }
 
 .hero-meta {
@@ -741,51 +782,55 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--color-surface-2);
+  color: var(--color-text-1);
 }
 
 .meta-pill-benchmark {
-  background: rgba(14, 116, 144, 0.12);
-  color: #0f766e;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
 }
 
 .meta-pill-skill {
-  background: rgba(124, 58, 237, 0.12);
-  color: #6d28d9;
+  background: var(--color-info-soft);
+  color: var(--color-info);
 }
 
 .meta-pill-score {
-  background: rgba(234, 88, 12, 0.12);
-  color: #c2410c;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 .status-chip.ok {
-  background: rgba(16, 185, 129, 0.12);
-  color: #047857;
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 
 .status-chip.warn {
-  background: rgba(245, 158, 11, 0.16);
-  color: #b45309;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 .writing-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
 }
 
-.context-column,
 .composer,
-.output-shell,
-.run-bar {
+.output-shell {
   padding: 22px;
 }
 
 .main-column {
   display: grid;
   gap: 18px;
+}
+
+.operation-tray-head {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .section-head {
@@ -805,39 +850,12 @@ onBeforeUnmount(() => {
 .character-card h3,
 .step-card h3 {
   margin: 0;
-  color: #0f172a;
-}
-
-.ghost-btn,
-.primary-btn,
-.link-btn {
-  border: none;
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.ghost-btn,
-.link-btn {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.primary-btn {
-  background: linear-gradient(135deg, #ea580c, #f59e0b);
-  color: white;
-}
-
-.primary-btn:disabled,
-.ghost-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  color: var(--color-text-1);
 }
 
 .precheck-hint {
   margin: 12px 0 0;
-  color: #b45309;
+  color: var(--color-warning);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -854,19 +872,19 @@ onBeforeUnmount(() => {
 .step-card {
   border-radius: 18px;
   padding: 14px 16px;
-  background: #f8fafc;
+  background: var(--color-surface-2);
 }
 
 .precheck-pass {
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid color-mix(in srgb, var(--color-success) 28%, transparent);
 }
 
 .precheck-warning {
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 32%, transparent);
 }
 
 .precheck-error {
-  border: 1px solid rgba(239, 68, 68, 0.24);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
 }
 
 .precheck-card p,
@@ -875,7 +893,7 @@ onBeforeUnmount(() => {
 .step-card p,
 .empty-copy {
   margin: 6px 0 0;
-  color: #475569;
+  color: var(--color-text-2);
   line-height: 1.6;
 }
 
@@ -883,6 +901,10 @@ onBeforeUnmount(() => {
 .step-grid {
   display: grid;
   gap: 12px;
+}
+
+.context-section-head {
+  margin-top: var(--spacing-4);
 }
 
 .field {
@@ -897,18 +919,18 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--color-text-3);
 }
 
 .field input,
 .field textarea {
   width: 100%;
   border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  border: 1px solid var(--color-border-default);
   padding: 12px 14px;
   font: inherit;
-  color: #0f172a;
-  background: white;
+  color: var(--color-text-1);
+  background: var(--color-surface-1);
 }
 
 .control-row {
@@ -937,7 +959,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #334155;
+  color: var(--color-text-2);
 }
 
 .prompt-ribbon {
@@ -964,42 +986,42 @@ onBeforeUnmount(() => {
 .prompt-ribbon > div {
   padding: 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(234, 88, 12, 0.05));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-surface-3) 72%, transparent), color-mix(in srgb, var(--color-accent-soft) 72%, transparent));
 }
 
 .benchmark-ribbon > div {
   padding: 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(14, 116, 144, 0.08), rgba(245, 158, 11, 0.08));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent-soft) 72%, transparent), color-mix(in srgb, var(--color-warning-soft) 72%, transparent));
 }
 
 .skill-ribbon > div {
   padding: 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(236, 72, 153, 0.08));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-info-soft) 72%, transparent), color-mix(in srgb, var(--color-surface-3) 86%, transparent));
 }
 
 .prompt-ribbon p {
   margin: 8px 0 0;
-  color: #334155;
+  color: var(--color-text-2);
   line-height: 1.6;
 }
 
 .benchmark-ribbon p {
   margin: 8px 0 0;
-  color: #334155;
+  color: var(--color-text-2);
   line-height: 1.6;
 }
 
 .skill-ribbon p {
   margin: 8px 0 0;
-  color: #334155;
+  color: var(--color-text-2);
   line-height: 1.6;
 }
 
 .benchmark-anchor-count {
   margin-left: 8px;
-  color: #64748b;
+  color: var(--color-text-3);
   font-size: 12px;
 }
 
@@ -1007,8 +1029,8 @@ onBeforeUnmount(() => {
   margin: 0 0 16px;
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(245, 158, 11, 0.12);
-  color: #9a3412;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 .benchmark-warning strong {
@@ -1025,7 +1047,7 @@ onBeforeUnmount(() => {
   margin: 0;
   white-space: pre-wrap;
   line-height: 1.8;
-  color: #111827;
+  color: var(--color-text-1);
   min-height: 280px;
 }
 
@@ -1033,8 +1055,8 @@ onBeforeUnmount(() => {
   margin: 0 0 16px;
   padding: 14px 16px;
   border-radius: 16px;
-  background: rgba(239, 68, 68, 0.08);
-  color: #b91c1c;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .step-grid {
@@ -1055,38 +1077,33 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #e2e8f0;
+  background: var(--color-surface-3);
   font-weight: 700;
 }
 
 .step-running {
-  border-color: rgba(245, 158, 11, 0.4);
+  border-color: color-mix(in srgb, var(--color-warning) 42%, transparent);
 }
 
 .step-completed {
-  border-color: rgba(16, 185, 129, 0.35);
+  border-color: color-mix(in srgb, var(--color-success) 38%, transparent);
 }
 
 .step-failed {
-  border-color: rgba(239, 68, 68, 0.35);
+  border-color: color-mix(in srgb, var(--color-danger) 38%, transparent);
 }
 
 @media (max-width: 1080px) {
-  .writing-layout {
-    grid-template-columns: 1fr;
-  }
-
   .step-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
-  .writing-page {
-    padding: 16px;
+  .writing-status-strip :deep(.system-card__body) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .writing-hero,
   .control-row,
   .prompt-ribbon,
   .benchmark-ribbon,

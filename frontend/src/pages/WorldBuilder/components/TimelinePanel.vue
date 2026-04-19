@@ -195,9 +195,9 @@ async function removeEvent(id: string) {
   justify-content: center;
   padding: 6px 0;
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.7);
-  border-top: 1px solid var(--wb-glass-border, rgba(255,255,255,0.08));
-  color: var(--wb-neon-cyan, #2ef2ff);
+  background: var(--wb-panel-solid-strong);
+  border-top: 1px solid var(--wb-glass-border);
+  color: var(--wb-neon-cyan);
   font-size: 12px;
   backdrop-filter: blur(8px);
   pointer-events: auto;
@@ -205,12 +205,12 @@ async function removeEvent(id: string) {
 }
 
 .timeline-toggle:hover {
-  background: rgba(0, 0, 0, 0.85);
+  background: color-mix(in srgb, var(--wb-panel-solid-strong) 85%, black);
 }
 
 .timeline-content {
   height: 148px;
-  background: rgba(8, 8, 16, 0.9);
+  background: color-mix(in srgb, var(--wb-overlay) 88%, black);
   backdrop-filter: blur(10px);
   padding: 8px 16px;
   overflow: hidden;
@@ -239,7 +239,7 @@ async function removeEvent(id: string) {
   left: 0;
   right: 0;
   height: 2px;
-  background: rgba(46, 242, 255, 0.2);
+  background: color-mix(in srgb, var(--wb-neon-cyan) 20%, transparent);
   min-width: 720px;
 }
 
@@ -254,7 +254,7 @@ async function removeEvent(id: string) {
 
 .event-year {
   font-size: 10px;
-  color: #888;
+  color: var(--wb-text-soft);
   margin-bottom: 2px;
 }
 
@@ -270,27 +270,27 @@ async function removeEvent(id: string) {
 }
 
 .timeline-event.historical .event-card {
-  background: rgba(77, 124, 255, 0.2);
-  border: 1px solid rgba(77, 124, 255, 0.4);
-  color: #8ab4ff;
+  background: var(--wb-event-historical-bg);
+  border: 1px solid var(--wb-event-historical-border);
+  color: var(--wb-event-historical-text);
 }
 
 .timeline-event.conflict .event-card {
-  background: rgba(255, 64, 64, 0.2);
-  border: 1px solid rgba(255, 64, 64, 0.4);
-  color: #ff8080;
+  background: var(--wb-event-conflict-bg);
+  border: 1px solid var(--wb-event-conflict-border);
+  color: var(--wb-event-conflict-text);
 }
 
 .timeline-event.growth .event-card {
-  background: rgba(46, 255, 138, 0.2);
-  border: 1px solid rgba(46, 255, 138, 0.4);
-  color: #80ffb0;
+  background: var(--wb-event-growth-bg);
+  border: 1px solid var(--wb-event-growth-border);
+  color: var(--wb-event-growth-text);
 }
 
 .timeline-event.custom .event-card {
-  background: rgba(180, 80, 255, 0.2);
-  border: 1px solid rgba(180, 80, 255, 0.4);
-  color: #c090ff;
+  background: var(--wb-event-custom-bg);
+  border: 1px solid var(--wb-event-custom-border);
+  color: var(--wb-event-custom-text);
 }
 
 .event-title {
@@ -299,7 +299,7 @@ async function removeEvent(id: string) {
 
 .event-desc {
   font-size: 10px;
-  color: #777;
+  color: var(--wb-text-dim);
   margin-top: 2px;
 }
 
@@ -311,8 +311,8 @@ async function removeEvent(id: string) {
   height: 14px;
   border-radius: 50%;
   border: none;
-  background: rgba(255, 64, 64, 0.5);
-  color: white;
+  background: color-mix(in srgb, var(--wb-neon-red) 50%, transparent);
+  color: var(--wb-text-main);
   cursor: pointer;
   font-size: 10px;
   line-height: 14px;
@@ -330,34 +330,34 @@ async function removeEvent(id: string) {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: #555;
+  color: var(--wb-text-placeholder);
   font-size: 12px;
 }
 
 .tl-btn {
   padding: 4px 10px;
-  border: 1px solid var(--wb-glass-border, rgba(255,255,255,0.08));
+  border: 1px solid var(--wb-glass-border);
   border-radius: 5px;
-  background: rgba(0, 0, 0, 0.4);
-  color: #aaa;
+  background: var(--wb-panel-solid);
+  color: var(--wb-text-soft);
   cursor: pointer;
   font-size: 11px;
   transition: all 0.2s;
 }
 
 .tl-btn:hover {
-  color: var(--wb-neon-cyan, #2ef2ff);
-  border-color: var(--wb-neon-cyan, #2ef2ff);
+  color: var(--wb-neon-cyan);
+  border-color: var(--wb-neon-cyan);
 }
 
 .tl-btn.add {
-  color: var(--wb-neon-cyan, #2ef2ff);
+  color: var(--wb-neon-cyan);
 }
 
 .tl-btn.confirm {
-  background: rgba(46, 242, 255, 0.15);
-  color: var(--wb-neon-cyan, #2ef2ff);
-  border-color: var(--wb-neon-cyan, #2ef2ff);
+  background: color-mix(in srgb, var(--wb-neon-cyan) 15%, transparent);
+  color: var(--wb-neon-cyan);
+  border-color: var(--wb-neon-cyan);
 }
 
 /* Dialog */
@@ -365,25 +365,25 @@ async function removeEvent(id: string) {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.5);
+  background: color-mix(in srgb, var(--wb-overlay) 82%, black);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .tl-dialog {
-  background: #1a1a2e;
-  border: 1px solid var(--wb-glass-border, rgba(255,255,255,0.08));
+  background: color-mix(in srgb, var(--wb-panel-solid-strong) 78%, black);
+  border: 1px solid var(--wb-glass-border);
   border-radius: 12px;
   padding: 20px;
   min-width: 320px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--wb-glass-shadow);
 }
 
 .tl-dialog-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--wb-neon-cyan, #2ef2ff);
+  color: var(--wb-neon-cyan);
   margin-bottom: 16px;
 }
 
@@ -398,17 +398,17 @@ async function removeEvent(id: string) {
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
-  color: #aaa;
+  color: var(--wb-text-soft);
 }
 
 .tl-dialog-body input,
 .tl-dialog-body textarea,
 .tl-dialog-body select {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--wb-panel-solid);
+  border: 1px solid var(--wb-glass-border-strong);
   border-radius: 6px;
   padding: 6px 10px;
-  color: #e0e0e0;
+  color: var(--wb-text-main);
   font-size: 12px;
 }
 
@@ -416,7 +416,7 @@ async function removeEvent(id: string) {
 .tl-dialog-body textarea:focus,
 .tl-dialog-body select:focus {
   outline: none;
-  border-color: var(--wb-neon-cyan, #2ef2ff);
+  border-color: var(--wb-neon-cyan);
 }
 
 .tl-dialog-actions {

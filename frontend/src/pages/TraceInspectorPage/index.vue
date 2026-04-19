@@ -1,11 +1,14 @@
 <template>
   <div class="trace-page">
-    <header class="trace-header">
-      <div>
-        <h2 class="trace-title">执行链路检视器</h2>
-        <p class="trace-subtitle">查看项目内 Run 的五步 Agent 回放、评分、耗时与审批状态</p>
-      </div>
-      <div class="trace-actions">
+    <SystemPageHeader
+      eyebrow="Trace Inspector"
+      title="执行链路检视器"
+      description="查看项目内 Run 的五步 Agent 回放、评分、耗时与审批状态。"
+    >
+      <template #meta>
+        <span class="trace-meta-pill">项目 {{ projectId }}</span>
+      </template>
+      <template #actions>
         <el-select v-model="selectedRunId" style="width: 260px" :disabled="loadingRuns" @change="loadRunTrace">
           <el-option
             v-for="run in runs"
@@ -14,9 +17,9 @@
             :value="run.run_id"
           />
         </el-select>
-        <el-button :loading="loadingTrace" @click="refreshAll">刷新</el-button>
-      </div>
-    </header>
+        <SystemButton :loading="loadingTrace || loadingRuns" @click="refreshAll">刷新</SystemButton>
+      </template>
+    </SystemPageHeader>
 
     <el-alert
       v-if="error"
@@ -27,14 +30,14 @@
       class="trace-alert"
     />
 
-    <section class="trace-panel">
+    <SystemCard class="trace-panel" padding="none">
       <TraceInspector
         :data="traceData"
         @approve="submitApproval('approve')"
         @reject="submitApproval('reject')"
         @retry="submitApproval('retry')"
       />
-    </section>
+    </SystemCard>
   </div>
 </template>
 
@@ -42,6 +45,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
 import TraceInspector from '@/components/TraceInspector.vue'
 
 const route = useRoute()
@@ -142,36 +148,19 @@ onMounted(async () => {
 <style scoped>
 .trace-page {
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 12px;
 }
 
-.trace-header {
-  display: flex;
-  justify-content: space-between;
+.trace-meta-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 16px;
-  padding: 2px 2px 0;
-}
-
-.trace-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.trace-subtitle {
-  margin: 4px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-.trace-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: 0.9rem;
 }
 
 .trace-alert {
@@ -181,9 +170,6 @@ onMounted(async () => {
 .trace-panel {
   min-height: 0;
   flex: 1;
-  border: 1px solid var(--color-surface-l2);
-  border-radius: var(--radius-card);
   overflow: hidden;
-  background: var(--color-base);
 }
 </style>

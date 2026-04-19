@@ -45,7 +45,7 @@ const emit = defineEmits<{
   width: 100%;
   height: 4px;
   border-radius: 2px;
-  background: var(--slider-gradient, linear-gradient(to right, #2ef2ff, #f5a623));
+  background: var(--slider-gradient, linear-gradient(to right, var(--color-accent), var(--color-warning)));
   outline: none;
   cursor: pointer;
 }

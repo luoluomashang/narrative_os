@@ -614,7 +614,7 @@ const TraceNode: ReturnType<typeof defineComponent> = defineComponent({
 }
 .score-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1bb56b, #f7b500, #ff4d6d);
+  background: linear-gradient(90deg, var(--color-success), var(--color-warning), var(--color-danger));
 }
 .telemetry-grid {
   display: grid;

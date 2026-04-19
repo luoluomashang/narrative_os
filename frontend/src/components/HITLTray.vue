@@ -109,7 +109,7 @@ function rejectAll() {
   background: var(--color-surface-l1);
   border: 1px solid var(--color-surface-l2);
   border-radius: var(--radius-modal);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 

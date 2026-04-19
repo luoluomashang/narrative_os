@@ -1,17 +1,23 @@
 ﻿<template>
   <div class="sandbox-page" :data-theme="worldData.world_type || 'continental'" :data-wb-theme="currentTheme">
-    <header class="sandbox-header">
-      <div>
-        <h2 class="sandbox-title">世界观沙盘</h2>
-        <p class="sandbox-subtitle">可视化编辑地区、势力与关系网络</p>
-      </div>
-      <div class="header-actions">
-        <el-button :loading="loading" @click="loadWorld">刷新</el-button>
-        <el-button type="primary" :loading="savingMeta" @click="saveMeta">保存世界信息</el-button>
-        <el-button type="success" :loading="finalizing" @click="finalizeWorld">完成世界设定</el-button>
-        <el-button type="warning" :loading="publishing" @click="publishWorld">发布运行态</el-button>
-      </div>
-    </header>
+    <SystemPageHeader
+      eyebrow="World Builder"
+      title="世界观沙盘"
+      description="可视化编辑地区、势力与关系网络，并发布运行态世界知识。"
+    >
+      <template #meta>
+        <span class="sandbox-pill">项目 {{ projectId }}</span>
+        <span class="sandbox-pill">地区 {{ worldData.regions.length }}</span>
+        <span class="sandbox-pill">势力 {{ worldData.factions.length }}</span>
+        <span class="sandbox-pill">主题 {{ currentTheme }}</span>
+      </template>
+      <template #actions>
+        <SystemButton variant="ghost" :loading="loading" @click="loadWorld">刷新</SystemButton>
+        <SystemButton variant="primary" :loading="savingMeta" @click="saveMeta">保存世界信息</SystemButton>
+        <SystemButton :loading="finalizing" @click="finalizeWorld">完成世界设定</SystemButton>
+        <SystemButton variant="quiet" :loading="publishing" @click="publishWorld">发布运行态</SystemButton>
+      </template>
+    </SystemPageHeader>
 
     <el-alert
       v-if="finalizeSummary"
@@ -31,8 +37,7 @@
       :title="`RuntimeWorldState 已发布 ${publishSummary.world_version}：地区 ${publishSummary.regions} / 势力 ${publishSummary.factions} / 体系 ${publishSummary.power_systems} / 关系 ${publishSummary.relations}`"
     />
 
-    <el-card v-if="publishSummary?.runtime_diff?.sections.length" shadow="never" class="publish-diff-card">
-      <template #header>运行态结构化 Diff</template>
+    <SystemCard v-if="publishSummary?.runtime_diff?.sections.length" class="publish-diff-card" title="运行态结构化 Diff">
       <div
         v-for="section in publishSummary.runtime_diff.sections"
         :key="section.key"
@@ -60,13 +65,45 @@
           {{ note }}
         </div>
       </div>
-    </el-card>
+    </SystemCard>
+
+    <SystemStatusBanner
+      v-if="currentState === 'success' && worldReadinessIssues.length > 0"
+      status="blocking"
+      title="发布前仍有阻塞项"
+      :message="worldReadinessMessage"
+      description="当前仍可继续编辑，但完成世界设定和发布运行态前建议先处理这些约束。"
+    >
+      <template #actions>
+        <SystemButton variant="ghost" @click="openCreateDialog('region')">补充地区</SystemButton>
+        <SystemButton variant="quiet" @click="consistencyDrawerVisible = true">打开校验抽屉</SystemButton>
+      </template>
+    </SystemStatusBanner>
+
+    <SystemStatusBanner
+      v-if="currentState === 'success' && activeView === 'graph' && graphPerformanceMessage"
+      status="partial-failure"
+      title="已进入性能降级模式"
+      :message="graphPerformanceMessage"
+      description="这是局部降级，不影响节点编辑和关系维护。"
+    >
+      <template #actions>
+        <SystemButton variant="ghost" @click="autoLayout">重新布局</SystemButton>
+      </template>
+    </SystemStatusBanner>
 
     <div class="sandbox-layout">
       <aside class="left-panel">
-        <el-card shadow="never" class="panel-card">
-          <template #header>世界信息</template>
-          <el-form label-position="top" size="small">
+        <SystemCard class="panel-card panel-card--world-info" title="世界信息" description="把基础设定、完整度与编辑表单合并到同一张信息卡里，避免左栏只剩窄表单。">
+          <div class="world-meta-grid">
+            <div v-for="item in worldMetaSummaryItems" :key="item.label" class="world-meta-stat">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+          <p class="world-meta-copy">{{ worldDescriptionPreview }}</p>
+
+          <el-form label-position="top" size="small" class="world-meta-form">
             <el-form-item label="世界名称">
               <el-input v-model="worldData.world_name" placeholder="例如：九州天玄界" />
             </el-form-item>
@@ -79,134 +116,125 @@
               </el-select>
             </el-form-item>
             <el-form-item label="世界描述">
-              <el-input v-model="worldData.world_description" type="textarea" :rows="3" />
+              <el-input v-model="worldData.world_description" type="textarea" :rows="4" />
             </el-form-item>
           </el-form>
-        </el-card>
+        </SystemCard>
 
-        <el-card shadow="never" class="panel-card">
-          <template #header>节点操作</template>
+        <SystemCard class="panel-card" title="编辑工具" tone="subtle">
+          <p class="tool-summary">节点创建、关系批量编辑、逻辑校验与文本导入统一收纳到工具抽屉。</p>
           <div class="toolbar-actions">
-            <el-button type="primary" plain @click="openCreateDialog('region')">+ 地区</el-button>
-            <el-button type="warning" plain @click="openCreateDialog('faction')">+ 势力</el-button>
-            <el-button type="success" plain @click="powerDialogVisible = true">+ 力量体系</el-button>
+            <SystemButton size="sm" variant="primary" @click="toolDrawerVisible = true">打开编辑抽屉</SystemButton>
+            <SystemButton size="sm" variant="ghost" @click="consistencyDrawerVisible = true">逻辑校验</SystemButton>
+            <SystemButton size="sm" variant="ghost" @click="importTextDialogVisible = true">导入文本</SystemButton>
           </div>
-          <el-divider />
-          <div class="stats-grid">
-            <div class="stat-item">
-              <span>地区</span>
-              <strong>{{ worldData.regions.length }}</strong>
-            </div>
-            <div class="stat-item">
-              <span>势力</span>
-              <strong>{{ worldData.factions.length }}</strong>
-            </div>
-            <div class="stat-item">
-              <span>体系</span>
-              <strong>{{ worldData.power_systems.length }}</strong>
-            </div>
-            <div class="stat-item">
-              <span>关系</span>
-              <strong>{{ worldData.relations.length }}</strong>
-            </div>
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="panel-card">
-          <template #header>关系批量编辑</template>
-          <el-form label-position="top" size="small">
-            <el-form-item label="筛选关系类型（可选）">
-              <el-input v-model="batchRelationFilterType" placeholder="例如：connection / alliance / conflict" />
-            </el-form-item>
-            <el-form-item label="新关系类型">
-              <el-input v-model="batchRelationType" placeholder="例如：alliance" />
-            </el-form-item>
-            <el-form-item label="标签前缀（可选）">
-              <el-input v-model="batchRelationLabelPrefix" placeholder="例如：同盟-" />
-            </el-form-item>
-            <el-button type="primary" plain :loading="savingDetail" @click="applyBatchRelationUpdate">应用到匹配关系</el-button>
-          </el-form>
-        </el-card>
-
-        <el-button class="consistency-btn" plain @click="consistencyDrawerVisible = true">🔍 逻辑校验</el-button>
-        <el-button class="consistency-btn" plain @click="importTextDialogVisible = true">📥 导入文本</el-button>
+        </SystemCard>
       </aside>
 
       <main ref="canvasPanelRef" class="canvas-panel">
-        <div v-if="loading" class="wb-loading-overlay">⬡</div>
-
-        <div class="canvas-overlay-topright">
+        <div class="canvas-overlay-topright" v-if="currentState === 'success'">
           <ThemeSwitcher v-model="currentTheme" />
           <span class="overlay-divider"></span>
           <ViewSwitcher v-model="activeView" />
           <button v-if="activeView === 'graph'" class="wb-icon-btn" title="自动布局" @click="autoLayout">⚙ 自动</button>
         </div>
 
-        <div v-if="error" class="error-box">{{ error }}</div>
-
-        <VueFlow
-          id="wb-graph"
-          v-else-if="activeView === 'graph'"
-          class="world-flow"
-          :nodes="flowNodes"
-          :edges="flowEdges"
-          :node-types="nodeTypes"
-          :connection-mode="ConnectionMode.Loose"
-          fit-view-on-init
-          @node-click="onNodeClick"
-          @edge-click="onEdgeClick"
-          @connect="onConnect"
-          @node-drag-stop="onNodeDragStop"
-          @viewport-change="onViewportChange"
-        >
-          <Background :gap="22" :size="1" pattern-color="var(--wb-canvas-grid)" />
-          <Controls />
-          <MiniMap :width="150" :height="100" />
-        </VueFlow>
-
-        <WorldLegend
-          v-if="activeView === 'graph'"
-          :factions="worldData.factions"
-          :regions="worldData.regions"
-          @highlight="onLegendHighlight"
-          @select="onLegendSelect"
-        />
-
-        <MapViewCanvas
-          v-else-if="activeView === 'map'"
-          :regions="worldData.regions"
-          :factions="worldData.factions"
-          :relations="worldData.relations"
-          :project-id="projectId"
-          @node-click="onSubViewNodeClick"
-        />
-
-        <LayerViewCanvas
-          v-else-if="activeView === 'layer'"
-          :regions="worldData.regions"
-          @node-click="onSubViewNodeClick"
-        />
-
-        <div v-else-if="activeView === 'space'" class="view-placeholder">
-          <span class="placeholder-icon">✦</span>
-          <p>星图视图正在建设中...</p>
+        <div v-if="currentState === 'loading'" class="canvas-state-shell">
+          <SystemSkeleton :rows="10" show-header card />
         </div>
 
-        <TimelinePanel :project-id="projectId" />
+        <div v-else-if="currentState === 'blocking'" class="canvas-state-shell">
+          <SystemVisualizationFallback
+            title="世界沙盘暂时不可用"
+            :description="error || '当前无法加载世界数据，请先恢复连接后再继续编辑。'"
+            :items="worldSummaryItems"
+          >
+            <template #actions>
+              <SystemButton variant="primary" @click="loadWorld">重新加载</SystemButton>
+              <SystemButton variant="quiet" @click="consistencyDrawerVisible = true">打开校验抽屉</SystemButton>
+            </template>
+          </SystemVisualizationFallback>
+        </div>
+
+        <div v-else-if="currentState === 'empty'" class="canvas-state-shell">
+          <SystemEmpty
+            title="世界草稿还是空的"
+            description="先创建地区、势力或力量体系，主画布才会开始承载关系与运行态编辑。"
+          >
+            <template #action>
+              <div class="canvas-empty-actions">
+                <SystemButton variant="primary" @click="openCreateDialog('region')">创建地区</SystemButton>
+                <SystemButton variant="quiet" @click="openCreateDialog('faction')">创建势力</SystemButton>
+              </div>
+            </template>
+          </SystemEmpty>
+        </div>
+
+        <template v-else>
+          <VueFlow
+            id="wb-graph"
+            v-if="activeView === 'graph'"
+            class="world-flow"
+            :nodes="flowNodes"
+            :edges="flowEdges"
+            :node-types="nodeTypes"
+            :connection-mode="ConnectionMode.Loose"
+            fit-view-on-init
+            @node-click="onNodeClick"
+            @edge-click="onEdgeClick"
+            @connect="onConnect"
+            @node-drag-stop="onNodeDragStop"
+            @viewport-change="onViewportChange"
+          >
+            <Background :gap="22" :size="1" pattern-color="var(--wb-canvas-grid)" />
+            <Controls />
+            <MiniMap :width="150" :height="100" />
+          </VueFlow>
+
+          <WorldLegend
+            v-if="activeView === 'graph'"
+            :factions="worldData.factions"
+            :regions="worldData.regions"
+            @highlight="onLegendHighlight"
+            @select="onLegendSelect"
+          />
+
+          <MapViewCanvas
+            v-else-if="activeView === 'map'"
+            :regions="worldData.regions"
+            :factions="worldData.factions"
+            :relations="worldData.relations"
+            :project-id="projectId"
+            @node-click="onSubViewNodeClick"
+          />
+
+          <LayerViewCanvas
+            v-else-if="activeView === 'layer'"
+            :regions="worldData.regions"
+            @node-click="onSubViewNodeClick"
+          />
+
+          <div v-else-if="activeView === 'space'" class="view-placeholder">
+            <span class="placeholder-icon">✦</span>
+            <p>星图视图正在建设中...</p>
+          </div>
+
+          <TimelinePanel :project-id="projectId" />
+        </template>
       </main>
 
       <aside class="right-panel" :class="{ open: !!selectedNode || !!selectedRelation }">
-        <el-card v-if="!selectedNode && !selectedRelation" shadow="never" class="panel-card empty-panel">
+        <SystemCard v-if="!selectedNode && !selectedRelation" class="panel-card empty-panel">
           <p>选择一个节点查看详情</p>
-        </el-card>
+        </SystemCard>
 
-        <el-card v-else shadow="never" class="panel-card">
+        <SystemCard v-else class="panel-card">
           <template #header>
             <div class="detail-header">
               <span>
                 {{ selectedRelation ? '关系详情' : selectedKind === 'region' ? '地区详情' : '势力详情' }}
               </span>
-              <el-button size="small" text @click="closeDetailPanel">关闭</el-button>
+              <SystemButton size="sm" variant="ghost" @click="closeDetailPanel">关闭</SystemButton>
             </div>
           </template>
 
@@ -221,8 +249,8 @@
               <el-input v-model="relationDraft.description" type="textarea" :rows="3" />
             </el-form-item>
             <div class="detail-actions">
-              <el-button type="primary" :loading="savingDetail" @click="saveRelation">保存</el-button>
-              <el-button type="danger" plain :loading="savingDetail" @click="deleteRelationByDraft">删除</el-button>
+              <SystemButton variant="primary" :loading="savingDetail" @click="saveRelation">保存</SystemButton>
+              <SystemButton variant="danger" :loading="savingDetail" @click="deleteRelationByDraft">删除</SystemButton>
             </div>
           </el-form>
 
@@ -249,7 +277,7 @@
             @delete="deleteFaction"
             @adopt-relation="adoptSuggestedRelation"
           />
-        </el-card>
+        </SystemCard>
 
         <div class="right-panel-section-label">力量体系</div>
         <PowerSystemPanel
@@ -282,14 +310,68 @@
       @create-faction="createFactionFromDialog"
     />
 
-    <el-drawer
+    <SystemDrawer
       v-model="consistencyDrawerVisible"
       title="世界一致性校验"
+      description="集中处理结构冲突、关系缺漏和运行态发布前的基础校验。"
       size="380px"
-      direction="rtl"
     >
       <ConsistencyPanel :world-data="worldData" :project-id="projectId" />
-    </el-drawer>
+    </SystemDrawer>
+
+    <SystemDrawer
+      v-model="toolDrawerVisible"
+      title="世界编辑工具"
+      description="把节点创建、批量关系编辑和辅助入口统一收进工具抽屉，保留主画布为唯一工作焦点。"
+      size="420px"
+    >
+      <SystemCard class="panel-card" title="节点操作">
+        <div class="toolbar-actions">
+          <SystemButton size="sm" variant="primary" @click="openCreateDialog('region')">+ 地区</SystemButton>
+          <SystemButton size="sm" @click="openCreateDialog('faction')">+ 势力</SystemButton>
+          <SystemButton size="sm" variant="quiet" @click="powerDialogVisible = true">+ 力量体系</SystemButton>
+        </div>
+        <el-divider />
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span>地区</span>
+            <strong>{{ worldData.regions.length }}</strong>
+          </div>
+          <div class="stat-item">
+            <span>势力</span>
+            <strong>{{ worldData.factions.length }}</strong>
+          </div>
+          <div class="stat-item">
+            <span>体系</span>
+            <strong>{{ worldData.power_systems.length }}</strong>
+          </div>
+          <div class="stat-item">
+            <span>关系</span>
+            <strong>{{ worldData.relations.length }}</strong>
+          </div>
+        </div>
+      </SystemCard>
+
+      <SystemCard class="panel-card" title="关系批量编辑">
+        <el-form label-position="top" size="small">
+          <el-form-item label="筛选关系类型（可选）">
+            <el-input v-model="batchRelationFilterType" placeholder="例如：connection / alliance / conflict" />
+          </el-form-item>
+          <el-form-item label="新关系类型">
+            <el-input v-model="batchRelationType" placeholder="例如：alliance" />
+          </el-form-item>
+          <el-form-item label="标签前缀（可选）">
+            <el-input v-model="batchRelationLabelPrefix" placeholder="例如：同盟-" />
+          </el-form-item>
+          <SystemButton size="sm" variant="primary" :loading="savingDetail" @click="applyBatchRelationUpdate">应用到匹配关系</SystemButton>
+        </el-form>
+      </SystemCard>
+
+      <div class="toolbar-actions">
+        <SystemButton size="sm" variant="ghost" @click="consistencyDrawerVisible = true">逻辑校验</SystemButton>
+        <SystemButton size="sm" variant="ghost" @click="importTextDialogVisible = true">导入文本</SystemButton>
+      </div>
+    </SystemDrawer>
 
     <el-dialog v-model="importTextDialogVisible" title="文本转图谱导入" width="600px">
       <el-input
@@ -363,6 +445,15 @@ import ConsistencyPanel from './components/ConsistencyPanel.vue'
 import ThemeSwitcher from './components/ThemeSwitcher.vue'
 import type { WbTheme } from './components/ThemeSwitcher.vue'
 import { useViewMode } from './composables/useViewMode'
+import { useAsyncViewState } from '@/composables/useAsyncViewState'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemDrawer from '@/components/system/SystemDrawer.vue'
+import SystemEmpty from '@/components/system/SystemEmpty.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemSkeleton from '@/components/system/SystemSkeleton.vue'
+import SystemStatusBanner from '@/components/system/SystemStatusBanner.vue'
+import SystemVisualizationFallback from '@/components/system/SystemVisualizationFallback.vue'
 
 const route = useRoute()
 const projectId = computed(() => String(route.params.id || ''))
@@ -388,6 +479,26 @@ const worldData = reactive<WorldSandboxData>({
   world_rules: [],
 })
 
+const hasNoWorldContent = computed(() => (
+  worldData.regions.length === 0
+  && worldData.factions.length === 0
+  && worldData.power_systems.length === 0
+  && worldData.relations.length === 0
+))
+
+const { currentState } = useAsyncViewState({
+  loading,
+  blocking: computed(() => Boolean(error.value)),
+  empty: computed(() => !loading.value && !error.value && hasNoWorldContent.value),
+})
+
+const worldSummaryItems = computed(() => [
+  { label: '地区', value: worldData.regions.length },
+  { label: '势力', value: worldData.factions.length },
+  { label: '体系', value: worldData.power_systems.length },
+  { label: '关系', value: worldData.relations.length },
+])
+
 const selectedNode = ref<Node | null>(null)
 const selectedRelation = ref<Edge | null>(null)
 const selectedKind = computed(() => (selectedNode.value?.data as any)?.kind || '')
@@ -403,6 +514,7 @@ const batchRelationFilterType = ref('')
 const batchRelationType = ref('')
 const batchRelationLabelPrefix = ref('')
 const consistencyDrawerVisible = ref(false)
+const toolDrawerVisible = ref(false)
 
 // Theme system
 const currentTheme = ref<WbTheme>(
@@ -521,7 +633,7 @@ const flowNodes = computed<Node[]>(() => {
       data: {
         label: f.name,
         kind: 'factionGroup',
-        color: f.color || '#4d7cff',
+        color: f.color || 'var(--wb-neon-blue)',
         regionCount: effRegions.length,
         scope: f.scope,
       },
@@ -575,19 +687,86 @@ const flowNodes = computed<Node[]>(() => {
 
 // relation_type → edge 视觉映射（覆盖全部 9 种关系类型）
 const EDGE_STYLE_MAP: Record<string, { style: Record<string, string | number>; animated: boolean }> = {
-  adjacent:   { style: { stroke: '#888899', strokeWidth: 1.5, strokeDasharray: '6,4' },   animated: false },
-  border:     { style: { stroke: '#888899', strokeWidth: 2 },                              animated: false },
-  trade:      { style: { stroke: '#f0c040', strokeWidth: 2 },                              animated: true },
-  war:        { style: { stroke: '#ff2e88', strokeWidth: 3 },                              animated: true },
-  alliance:   { style: { stroke: '#2ef2ff', strokeWidth: 2 },                              animated: true },
-  vassal:     { style: { stroke: '#a855f7', strokeWidth: 2, strokeDasharray: '8,3' },      animated: false },
-  blockade:   { style: { stroke: '#ff4040', strokeWidth: 2, strokeDasharray: '4,4' },      animated: false },
-  teleport:   { style: { stroke: '#34d399', strokeWidth: 2, strokeDasharray: '2,4' },      animated: true },
-  connection: { style: { stroke: '#666688', strokeWidth: 1.5 },                            animated: false },
+  adjacent:   { style: { stroke: 'var(--wb-relation-adjacent)', strokeWidth: 1.5, strokeDasharray: '6,4' },   animated: false },
+  border:     { style: { stroke: 'var(--wb-relation-border)', strokeWidth: 2 },                                    animated: false },
+  trade:      { style: { stroke: 'var(--wb-relation-trade)', strokeWidth: 2 },                                     animated: true },
+  war:        { style: { stroke: 'var(--wb-relation-war)', strokeWidth: 3 },                                       animated: true },
+  alliance:   { style: { stroke: 'var(--wb-relation-alliance)', strokeWidth: 2 },                                 animated: true },
+  vassal:     { style: { stroke: 'var(--wb-relation-vassal)', strokeWidth: 2, strokeDasharray: '8,3' },          animated: false },
+  blockade:   { style: { stroke: 'var(--wb-relation-blockade)', strokeWidth: 2, strokeDasharray: '4,4' },        animated: false },
+  teleport:   { style: { stroke: 'var(--wb-relation-teleport)', strokeWidth: 2, strokeDasharray: '2,4' },        animated: true },
+  connection: { style: { stroke: 'var(--wb-relation-connection)', strokeWidth: 1.5 },                             animated: false },
 }
 
 // 性能优化: 节点 > 200 时关闭边动画
 const edgeAnimationEnabled = computed(() => flowNodes.value.length < 200)
+
+const graphPerformanceMessage = computed(() => {
+  if (flowNodes.value.length >= 200) {
+    return '节点已超过 200，系统已关闭边动画并启用视口外节点裁剪以保持主画布稳定。'
+  }
+
+  if (flowNodes.value.length >= 100) {
+    return '节点已超过 100，系统会优先保证主画布交互流畅，并开始按视口裁剪非可见节点。'
+  }
+
+  return ''
+})
+
+function collectWorldCompletenessWarnings() {
+  const warnings: string[] = []
+  if (worldData.regions.length === 0) warnings.push('至少需要 1 个地区')
+  if (worldData.factions.length === 0) warnings.push('至少需要 1 个势力')
+  if (!worldData.world_name?.trim()) warnings.push('缺少世界名称')
+  if (worldData.relations.length === 0) warnings.push('尚未建立任何关系')
+
+  const factionsNoTerritory = worldData.factions.filter((f) => f.territory_region_ids.length === 0)
+  if (factionsNoTerritory.length > 0) {
+    warnings.push(`${factionsNoTerritory.length} 个势力无领地：${factionsNoTerritory.map((f) => f.name).join('、')}`)
+  }
+
+  const regionsNoDesc = worldData.regions.filter((r) => !r.notes?.trim())
+  if (regionsNoDesc.length > 0) {
+    warnings.push(`${regionsNoDesc.length} 个地区无描述`)
+  }
+
+  return warnings
+}
+
+const worldReadinessIssues = computed(() => {
+  if (hasNoWorldContent.value) {
+    return []
+  }
+
+  return collectWorldCompletenessWarnings()
+})
+
+const worldReadinessMessage = computed(() => worldReadinessIssues.value.slice(0, 2).join('；'))
+const worldTypeLabel = computed(() => {
+  switch (worldData.world_type) {
+    case 'planar':
+      return '位面/世界流'
+    case 'interstellar':
+      return '星际/宇宙流'
+    case 'multi_layer':
+      return '多层世界'
+    default:
+      return '大陆流'
+  }
+})
+const worldDescriptionPreview = computed(() => {
+  const description = worldData.world_description?.trim()
+  if (!description) {
+    return '先用一句完整的世界描述说明主秩序、核心冲突或时代气质，左侧信息区才不会退化成只剩表单控件。'
+  }
+  return description.length > 120 ? `${description.slice(0, 120).trim()}…` : description
+})
+const worldMetaSummaryItems = computed(() => [
+  { label: '世界类型', value: worldTypeLabel.value },
+  { label: '发布准备', value: worldReadinessIssues.value.length === 0 ? '可发布' : '待补全' },
+  { label: '描述状态', value: worldData.world_description.trim() ? '已填写' : '待补充' },
+  { label: '关系网络', value: `${worldData.relations.length} 条` },
+])
 
 const flowEdges = computed<Edge[]>(() => {
   return worldData.relations.map((r) => {
@@ -599,8 +778,8 @@ const flowEdges = computed<Edge[]>(() => {
       label: r.label || r.relation_type,
       animated: edgeAnimationEnabled.value && mapping.animated,
       style: mapping.style,
-      labelStyle: { fill: '#e0e0e0', fontSize: '11px' },
-      labelBgStyle: { fill: 'rgba(0,0,0,0.6)', rx: 4 },
+      labelStyle: { fill: 'var(--wb-text-main)', fontSize: '11px' },
+      labelBgStyle: { fill: 'var(--wb-panel-solid-strong)', rx: 4 },
     }
   })
 })
@@ -1217,20 +1396,7 @@ async function deletePowerSystem(psId: string) {
 async function finalizeWorld() {
   if (!projectId.value) return
 
-  // Quality gate: minimum completeness checks
-  const warnings: string[] = []
-  if (worldData.regions.length === 0) warnings.push('至少需要 1 个地区')
-  if (worldData.factions.length === 0) warnings.push('至少需要 1 个势力')
-  if (!worldData.world_name?.trim()) warnings.push('缺少世界名称')
-  if (worldData.relations.length === 0) warnings.push('尚未建立任何关系')
-  const factionsNoTerritory = worldData.factions.filter(f => f.territory_region_ids.length === 0)
-  if (factionsNoTerritory.length > 0) {
-    warnings.push(`${factionsNoTerritory.length} 个势力无领地：${factionsNoTerritory.map(f => f.name).join('、')}`)
-  }
-  const regionsNoDesc = worldData.regions.filter(r => !r.notes?.trim())
-  if (regionsNoDesc.length > 0) {
-    warnings.push(`${regionsNoDesc.length} 个地区无描述`)
-  }
+  const warnings = collectWorldCompletenessWarnings()
 
   if (warnings.length > 0) {
     try {
@@ -1379,31 +1545,125 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   gap: 12px;
   background: var(--color-base);
   color: var(--color-text-primary);
+  --wb-neon-cyan: #2ef2ff;
+  --wb-neon-blue: #4d7cff;
+  --wb-neon-red: #ff5e6c;
+  --wb-neon-gold: #ffc454;
+  --wb-neon-green: #49d89f;
+  --wb-neon-violet: #b57cff;
+  --wb-canvas-bg: radial-gradient(circle at top, rgba(20, 36, 64, 0.92), rgba(6, 12, 24, 0.98));
+  --wb-canvas-grid: rgba(46, 242, 255, 0.18);
+  --wb-glass-bg: rgba(6, 14, 28, 0.72);
+  --wb-panel-solid: rgba(0, 0, 0, 0.3);
+  --wb-panel-solid-strong: rgba(0, 0, 0, 0.6);
+  --wb-panel-faint: rgba(255, 255, 255, 0.03);
+  --wb-panel-hover: rgba(255, 255, 255, 0.06);
+  --wb-glass-border: rgba(130, 201, 255, 0.18);
+  --wb-glass-border-strong: rgba(255, 255, 255, 0.1);
+  --wb-glass-shadow: 0 24px 60px rgba(2, 6, 23, 0.34);
+  --wb-panel-glow: -4px 0 32px rgba(46, 242, 255, 0.12);
+  --wb-button-glow: 0 0 8px rgba(46, 242, 255, 0.2);
+  --wb-text-main: #e7f6ff;
+  --wb-text-muted: rgba(231, 246, 255, 0.7);
+  --wb-text-soft: #aab2bf;
+  --wb-text-dim: #666688;
+  --wb-text-placeholder: #555;
+  --wb-overlay: rgba(8, 8, 16, 0.6);
+  --wb-region-shell: rgba(0, 40, 80, 0.85);
+  --wb-region-core: rgba(0, 30, 60, 0.95);
+  --wb-faction-internal-core: rgba(10, 20, 60, 0.92);
+  --wb-faction-external-core: rgba(50, 10, 10, 0.92);
+  --wb-blue-soft: rgba(77, 124, 255, 0.2);
+  --wb-blue-soft-strong: rgba(77, 124, 255, 0.3);
+  --wb-red-soft: rgba(255, 94, 108, 0.18);
+  --wb-red-soft-strong: rgba(255, 94, 108, 0.3);
+  --wb-green-soft: rgba(73, 216, 159, 0.18);
+  --wb-gold-soft: rgba(255, 196, 84, 0.18);
+  --wb-violet-soft: rgba(181, 124, 255, 0.18);
+  --wb-tile-default: #3a3a5c;
+  --wb-tile-default-bg: rgba(58, 58, 92, 0.18);
+  --wb-tile-default-border: rgba(58, 58, 92, 0.5);
+  --wb-map-line: rgba(255, 255, 255, 0.28);
+  --wb-glow-cyan: 0 0 8px rgba(46, 242, 255, 0.35);
+  --wb-glow-cyan-rest: 0 0 4px rgba(46, 242, 255, 0.2), 0 0 12px rgba(46, 242, 255, 0.1);
+  --wb-glow-cyan-active: 0 0 10px rgba(46, 242, 255, 0.5), 0 0 28px rgba(46, 242, 255, 0.25);
+  --wb-glow-blue: 0 0 12px rgba(77, 124, 255, 0.5);
+  --wb-glow-blue-rest: 0 0 4px rgba(77, 124, 255, 0.15), 0 0 12px rgba(77, 124, 255, 0.08);
+  --wb-glow-blue-active: 0 0 10px rgba(77, 124, 255, 0.4), 0 0 24px rgba(77, 124, 255, 0.2);
+  --wb-glow-red: 0 0 12px rgba(255, 94, 108, 0.45);
+  --wb-glow-red-rest: 0 0 4px rgba(255, 94, 108, 0.15), 0 0 12px rgba(255, 94, 108, 0.08);
+  --wb-glow-red-active: 0 0 10px rgba(255, 94, 108, 0.4), 0 0 24px rgba(255, 94, 108, 0.2);
+  --wb-relation-adjacent: #888899;
+  --wb-relation-border: #888899;
+  --wb-relation-trade: #f0c040;
+  --wb-relation-war: #ff2e88;
+  --wb-relation-alliance: var(--wb-neon-cyan);
+  --wb-relation-vassal: var(--wb-neon-violet);
+  --wb-relation-blockade: var(--wb-neon-red);
+  --wb-relation-teleport: var(--wb-neon-green);
+  --wb-relation-connection: #666688;
+  --wb-event-historical-bg: rgba(77, 124, 255, 0.2);
+  --wb-event-historical-border: rgba(77, 124, 255, 0.4);
+  --wb-event-historical-text: #8ab4ff;
+  --wb-event-conflict-bg: rgba(255, 94, 108, 0.2);
+  --wb-event-conflict-border: rgba(255, 94, 108, 0.4);
+  --wb-event-conflict-text: #ff9aa5;
+  --wb-event-growth-bg: rgba(73, 216, 159, 0.2);
+  --wb-event-growth-border: rgba(73, 216, 159, 0.4);
+  --wb-event-growth-text: #9df0cb;
+  --wb-event-custom-bg: rgba(181, 124, 255, 0.2);
+  --wb-event-custom-border: rgba(181, 124, 255, 0.4);
+  --wb-event-custom-text: #d0afff;
 }
 
-.sandbox-header {
-  display: flex;
+.sandbox-page[data-wb-theme='xianxia'] {
+  --wb-neon-cyan: #8ad9c4;
+  --wb-neon-blue: #8ca1db;
+  --wb-neon-red: #d9887e;
+  --wb-neon-gold: #d7b26d;
+  --wb-neon-green: #86c7a8;
+  --wb-neon-violet: #bea4d7;
+  --wb-canvas-bg: radial-gradient(circle at top, rgba(42, 38, 60, 0.92), rgba(18, 16, 28, 0.98));
+  --wb-canvas-grid: rgba(138, 217, 196, 0.16);
+  --wb-glass-bg: rgba(28, 20, 34, 0.72);
+  --wb-glass-border: rgba(215, 178, 109, 0.2);
+  --wb-panel-glow: -4px 0 32px rgba(138, 217, 196, 0.12);
+  --wb-button-glow: 0 0 8px rgba(138, 217, 196, 0.22);
+  --wb-text-main: #f6efe7;
+  --wb-text-muted: rgba(246, 239, 231, 0.72);
+  --wb-text-soft: #cfc3b2;
+  --wb-text-dim: #7f6f6f;
+}
+
+.sandbox-page[data-wb-theme='classic'] {
+  --wb-neon-cyan: #6c9dc6;
+  --wb-neon-blue: #4f79b8;
+  --wb-neon-red: #c26c63;
+  --wb-neon-gold: #c89a53;
+  --wb-neon-green: #6fa890;
+  --wb-neon-violet: #8f79b8;
+  --wb-canvas-bg: radial-gradient(circle at top, rgba(34, 40, 54, 0.9), rgba(18, 22, 30, 0.98));
+  --wb-canvas-grid: rgba(108, 157, 198, 0.14);
+  --wb-glass-bg: rgba(18, 24, 34, 0.74);
+  --wb-glass-border: rgba(149, 174, 207, 0.18);
+  --wb-panel-glow: -4px 0 32px rgba(108, 157, 198, 0.12);
+  --wb-button-glow: 0 0 8px rgba(108, 157, 198, 0.2);
+  --wb-text-main: #e6edf5;
+  --wb-text-muted: rgba(230, 237, 245, 0.72);
+  --wb-text-soft: #aab3bf;
+  --wb-text-dim: #6f7886;
+}
+
+.sandbox-pill {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.sandbox-title {
-  margin: 0;
-  font-size: 24px;
-}
-
-.sandbox-subtitle {
-  margin: 2px 0 0;
-  color: var(--color-text-secondary);
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--wb-panel-solid) 88%, var(--color-surface-1));
+  border: 1px solid var(--wb-glass-border);
+  color: var(--wb-text-main);
+  font-size: 0.9rem;
 }
 
 .finalize-alert {
@@ -1463,17 +1723,9 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 220px 1fr 0;
-  gap: 12px;
-  transition: grid-template-columns 0.2s ease;
-}
-
-.right-panel.open {
-  width: 320px;
-}
-
-.sandbox-layout:has(.right-panel.open) {
-  grid-template-columns: 220px 1fr 320px;
+  grid-template-columns: minmax(300px, 340px) 1fr;
+  gap: 16px;
+  position: relative;
 }
 
 .left-panel,
@@ -1492,32 +1744,48 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
 }
 
 .right-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, calc(100% - 364px));
   border-left: 1px solid var(--wb-glass-border);
-  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+  z-index: 12;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.25s ease,
               box-shadow 0.25s ease;
+  transform: translateX(calc(100% + 12px));
 }
 
 .right-panel.open {
-  box-shadow: -4px 0 32px rgba(46, 242, 255, 0.12), var(--wb-glass-shadow);
+  transform: translateX(0);
+  box-shadow: var(--wb-panel-glow), var(--wb-glass-shadow);
 }
 
 .panel-card {
   margin-bottom: 12px;
-  --el-card-bg-color: transparent;
   border-color: var(--wb-glass-border);
+  background: transparent;
 }
 
-.panel-card :deep(.el-card__header) {
+.panel-card :deep(.system-card__body) {
+  display: grid;
+  gap: 14px;
+}
+
+.panel-card :deep(.system-card__header) {
+  border-bottom: 1px solid var(--wb-glass-border);
+}
+
+.panel-card :deep(.system-card__title) {
   color: var(--wb-neon-cyan);
-  border-bottom-color: var(--wb-glass-border);
 }
 
 .panel-card :deep(.el-input__wrapper),
 .panel-card :deep(.el-textarea__inner),
 .panel-card :deep(.el-select .el-input__wrapper) {
-  background: rgba(0, 0, 0, 0.3);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--wb-panel-solid);
+  border-color: var(--wb-glass-border-strong);
   color: var(--color-text-primary);
 }
 
@@ -1540,8 +1808,47 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
 }
 
 .toolbar-actions {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.world-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.world-meta-stat {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--wb-glass-border);
+  background: var(--wb-panel-solid);
+  display: grid;
+  gap: 6px;
+}
+
+.world-meta-stat span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.world-meta-stat strong {
+  color: var(--wb-neon-cyan);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.world-meta-copy {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+
+.world-meta-form {
+  display: grid;
 }
 
 .stats-grid {
@@ -1585,15 +1892,24 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   color: var(--el-text-color-secondary);
 }
 
-.error-box {
-  padding: 16px;
-  color: var(--el-color-danger);
+.canvas-state-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: var(--spacing-6);
+}
+
+.canvas-empty-actions {
+  display: flex;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
 }
 
 /* WorldBuilder KeyFrame Animations */
 @keyframes wb-glow-pulse {
-  0%   { box-shadow: 0 0 4px rgba(46, 242, 255, 0.2), 0 0 12px rgba(46, 242, 255, 0.1); }
-  100% { box-shadow: 0 0 10px rgba(46, 242, 255, 0.5), 0 0 28px rgba(46, 242, 255, 0.25); }
+  0%   { box-shadow: var(--wb-glow-cyan-rest); }
+  100% { box-shadow: var(--wb-glow-cyan-active); }
 }
 
 @keyframes wb-flow {
@@ -1615,7 +1931,7 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
 .overlay-divider {
   width: 1px;
   height: 20px;
-  background: var(--wb-glass-border, rgba(255,255,255,0.12));
+  background: var(--wb-glass-border);
   flex-shrink: 0;
 }
 
@@ -1624,8 +1940,8 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 1px;
-  color: var(--wb-neon-cyan, #2ef2ff);
-  border-top: 1px solid var(--wb-glass-border, rgba(255,255,255,0.08));
+  color: var(--wb-neon-cyan);
+  border-top: 1px solid var(--wb-glass-border);
   opacity: 0.7;
   text-transform: uppercase;
 }
@@ -1635,10 +1951,10 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--wb-panel-solid-strong);
   border: 1px solid var(--wb-glass-border);
   border-radius: 6px;
-  color: #aaa;
+  color: var(--wb-text-soft);
   cursor: pointer;
   font-size: 12px;
   backdrop-filter: blur(8px);
@@ -1648,7 +1964,7 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
 .wb-icon-btn:hover {
   color: var(--wb-neon-cyan);
   border-color: var(--wb-neon-cyan);
-  box-shadow: 0 0 8px rgba(46, 242, 255, 0.2);
+  box-shadow: var(--wb-button-glow);
 }
 
 .view-placeholder {
@@ -1657,7 +1973,7 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #555;
+  color: var(--wb-text-placeholder);
   gap: 12px;
 }
 
@@ -1668,7 +1984,7 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
 
 .view-placeholder p {
   font-size: 14px;
-  color: #666;
+  color: var(--wb-text-dim);
 }
 
 .consistency-btn {
@@ -1682,19 +1998,6 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   50%  { opacity: 0.6; }
   100% { opacity: 0.1; }
 }
-.wb-loading-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(8, 8, 16, 0.6);
-  font-size: 32px;
-  animation: wb-hex-pulse 1.2s ease-in-out infinite;
-  z-index: 50;
-  color: var(--wb-neon-cyan, #2ef2ff);
-}
-
 /* Right panel animation */
 .right-panel:not(.open) {
   opacity: 0;
@@ -1704,13 +2007,13 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
 .import-preview {
   margin-top: 16px;
   padding: 12px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--wb-glass-border-strong);
   border-radius: 8px;
-  background: rgba(255,255,255,0.02);
+  background: var(--wb-panel-faint);
 }
 .import-preview h4 {
   margin: 0 0 8px;
-  color: var(--wb-neon-cyan, #2ef2ff);
+  color: var(--wb-neon-cyan);
 }
 .preview-section {
   margin-bottom: 8px;
@@ -1719,7 +2022,7 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
   padding: 4px 8px;
   margin: 2px 0;
   border-radius: 4px;
-  background: rgba(255,255,255,0.04);
+  background: var(--wb-panel-hover);
   font-size: 12px;
 }
 
@@ -1729,8 +2032,7 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
     min-height: calc(100vh - 96px);
   }
 
-  .sandbox-layout,
-  .sandbox-layout:has(.right-panel.open) {
+  .sandbox-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1740,6 +2042,14 @@ function renderPublishPreviewHtml(response: WorldPublishPreviewResponse) {
 
   .right-panel {
     width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .world-meta-grid,
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

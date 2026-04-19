@@ -34,14 +34,18 @@ defineEmits<{
 
 function arcShort(stage: string): string {
   const map: Record<string, string> = { 防御: '防', 裂缝: '裂', 代偿: '偿', 承认: '认', 改变: '变' }
-  return map[stage] ?? stage.slice(0, 1)
+  const normalizedStage = stage?.trim() ?? ''
+  if (!normalizedStage) {
+    return '未'
+  }
+  return map[normalizedStage] ?? normalizedStage.slice(0, 1)
 }
 
 function emotionBg(emotion: string): string {
   const e = (emotion ?? '').toLowerCase()
-  if (e === 'happy' || e === '愉快' || e === '兴奋' || e === '开心') return 'rgba(63,190,138,0.10)'
-  if (e === 'anxious' || e === '焦虑' || e === 'angry' || e === '愤怒' || e === '恐惧' || e === '紧张') return 'rgba(255,180,0,0.10)'
-  if (e === 'sad' || e === '悲伤' || e === '惆怅' || e === '失落') return 'rgba(120,130,255,0.10)'
+  if (e === 'happy' || e === '愉快' || e === '兴奋' || e === '开心') return 'var(--color-success-soft)'
+  if (e === 'anxious' || e === '焦虑' || e === 'angry' || e === '愤怒' || e === '恐惧' || e === '紧张') return 'var(--color-warning-soft)'
+  if (e === 'sad' || e === '悲伤' || e === '惆怅' || e === '失落') return 'color-mix(in srgb, var(--color-info) 12%, transparent)'
   return ''
 }
 </script>
@@ -53,7 +57,7 @@ function emotionBg(emotion: string): string {
   background: var(--color-surface-l1);
   border-radius: 20px;
   border: 1px solid var(--color-surface-l2);
-  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-md);
   overflow-y: auto;
 }
 .char-list-header {
@@ -70,7 +74,7 @@ function emotionBg(emotion: string): string {
 }
 .char-new-btn {
   background: var(--color-ai-active);
-  color: #0a0a0b;
+  color: var(--color-text-inverse);
   border: none;
   padding: 3px 10px;
   border-radius: var(--radius-btn);

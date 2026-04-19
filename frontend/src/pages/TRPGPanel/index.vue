@@ -1,12 +1,24 @@
 <template>
   <div class="trpg-page">
+    <SystemPageHeader
+      eyebrow="TRPG Panel"
+      title="TRPG 互动模式"
+      description="把当前回合、叙事舞台、动作输入和策略托盘拆开，让会话焦点始终落在当前决策上。"
+    >
+      <template #meta>
+        <span class="trpg-meta-pill">项目 {{ projectId }}</span>
+        <span class="trpg-meta-pill">阶段 {{ phaseLabel }}</span>
+        <span class="trpg-meta-pill">回合 {{ store.turn }}</span>
+      </template>
+    </SystemPageHeader>
+
     <!-- Session start screen -->
     <div v-if="!store.sessionId && store.phase === 'INIT'" class="session-init">
       <h2 class="init-title">🎲 TRPG 互动模式</h2>
       <p class="init-sub">PING_PONG 双屏会话</p>
-      <button class="n-btn primary" :disabled="store.loading" @click="startSession">
+      <SystemButton variant="primary" :disabled="store.loading" @click="startSession">
         {{ store.loading ? '初始化中…' : '开始会话' }}
-      </button>
+      </SystemButton>
     </div>
 
     <!-- Session ended — show summary -->
@@ -97,15 +109,15 @@
           </div>
         </div>
         <div class="summary-actions">
-          <button class="n-btn ghost" @click="store.reset">返回标准模式</button>
-          <button class="n-btn primary" @click="startSession">开始新章</button>
+          <SystemButton variant="ghost" @click="store.reset">返回标准模式</SystemButton>
+          <SystemButton variant="primary" @click="startSession">开始新章</SystemButton>
         </div>
       </div>
     </div>
 
     <!-- Active session -->
     <template v-else>
-      <!-- Top session info bar -->
+      <SystemCard class="session-status-card" tone="subtle">
       <div class="session-bar">
         <span class="session-phase-badge" :class="`phase-${store.phase}`">{{ phaseLabel }}</span>
         <span class="session-turn">回合 {{ store.turn }}</span>
@@ -134,8 +146,8 @@
 
         <div style="flex:1" />
         <!-- Phase 3: SL buttons -->
-        <button class="n-btn ghost sm" title="手动存档" @click="doCreateSave">💾 存档</button>
-        <button class="n-btn ghost sm" title="读档" @click="openSLModal">📂 读档</button>
+        <SystemButton variant="ghost" size="sm" title="手动存档" @click="doCreateSave">💾 存档</SystemButton>
+        <SystemButton variant="ghost" size="sm" title="读档" @click="openSLModal">📂 读档</SystemButton>
         <!-- Phase 3: Control mode selector -->
         <select v-model="controlMode" class="control-mode-select" title="控制权模式" @change="applyControlMode">
           <option value="user_driven">👤 用户驱动</option>
@@ -143,9 +155,33 @@
           <option value="full_agent">🤖 全代理</option>
           <option value="director">🎬 导演模式</option>
         </select>
-        <button class="n-btn ghost sm" @click="showRollbackModal = true">↩ 回滚</button>
-        <button class="n-btn danger sm" @click="confirmEnd">结束会话</button>
+        <SystemButton variant="quiet" size="sm" @click="historyExpanded = !historyExpanded">
+          {{ historyExpanded ? '收起历史' : '展开历史' }}
+        </SystemButton>
+        <SystemButton variant="quiet" size="sm" @click="strategyTrayOpen = !strategyTrayOpen">
+          {{ strategyTrayOpen ? '收起策略托盘' : '打开策略托盘' }}
+        </SystemButton>
+        <SystemButton variant="ghost" size="sm" @click="showRollbackModal = true">↩ 回滚</SystemButton>
+        <SystemButton variant="danger" size="sm" @click="confirmEnd">结束会话</SystemButton>
       </div>
+      </SystemCard>
+
+      <SystemCard class="turn-impact-card" tone="subtle">
+        <div class="turn-impact-head">
+          <div>
+            <span class="impact-eyebrow">Turn Summary</span>
+            <h2>本回合影响了什么</h2>
+          </div>
+          <p>把最近动作、风险变化和世界反馈压成一行摘要，避免用户只能从长叙事里自己倒推当前局面。</p>
+        </div>
+        <div class="turn-impact-grid">
+          <article v-for="item in turnImpactCards" :key="item.title" class="impact-item">
+            <span class="impact-item__label">{{ item.title }}</span>
+            <strong class="impact-item__headline">{{ item.headline }}</strong>
+            <p class="impact-item__copy">{{ item.copy }}</p>
+          </article>
+        </div>
+      </SystemCard>
 
       <!-- Pacing Alert Banner -->
       <Transition name="slide-down">
@@ -153,8 +189,8 @@
           <span class="pa-icon">⚡</span>
           <span class="pa-text">节奏预警 — 叙事字数已达 {{ store.turn }} 回合，建议推进至着陆阶段</span>
           <div class="pa-actions">
-            <button class="n-btn ghost sm" @click="continueAfterAlert">继续</button>
-            <button class="n-btn primary sm" @click="confirmEnd">结算</button>
+            <SystemButton variant="ghost" size="sm" @click="continueAfterAlert">继续</SystemButton>
+            <SystemButton variant="primary" size="sm" @click="confirmEnd">结算</SystemButton>
           </div>
         </div>
       </Transition>
@@ -237,9 +273,9 @@
               :disabled="store.loading || contextFull"
               @keydown.enter.prevent="sendAction"
             />
-            <button class="n-btn primary" :disabled="store.loading || !inputText.trim() || contextFull" @click="sendAction">
+            <SystemButton variant="primary" :disabled="store.loading || !inputText.trim() || contextFull" @click="sendAction">
               发送
-            </button>
+            </SystemButton>
           </div>
 
           <!-- Density pill selector -->
@@ -252,50 +288,83 @@
             </button>
           </div>
 
-          <!-- Turn history -->
-          <div class="turn-history" ref="historyEl">
-            <div
-              v-for="rec in store.history"
-              :key="rec.turn_id"
-              class="turn-record"
-              :class="{
-                'rolled-back': rec.rolled_back,
-                'rewrite': rec.is_rewrite,
-                'dm-turn': rec.who === 'dm',
-              }"
-            >
-              <span class="turn-who">{{ rec.who === 'dm' ? 'DM' : '玩家' }} #{{ rec.turn_id }}</span>
-              <span v-if="rec.rolled_back" class="rolled-label">已撤销 ×</span>
-              <span v-if="rec.is_rewrite" class="rewrite-label">当前重写</span>
-              <p class="turn-content">{{ sanitizeDisplayText(rec.content) }}</p>
+          <div class="history-panel">
+            <div class="history-panel__head">
+              <span class="history-panel__title">历史回合</span>
+              <span class="history-panel__hint">默认折叠，避免和当前舞台争抢注意力</span>
             </div>
+            <p class="history-collapsed-copy">已收起 {{ store.history.length }} 条历史记录，历史回看改为抽屉展开。</p>
+            <SystemButton size="sm" variant="ghost" @click="historyExpanded = true">查看历史</SystemButton>
           </div>
         </div>
       </div>
 
-      <!-- Bangui shortcut bar -->
-      <div class="bangui-bar">
+      <SystemDrawer
+        v-model="historyExpanded"
+        title="历史回合"
+        description="历史记录改为抽屉查看，保持当前舞台与输入区为唯一首屏主任务。"
+        size="420px"
+      >
+        <div class="turn-history" ref="historyEl">
+          <div
+            v-for="rec in store.history"
+            :key="rec.turn_id"
+            class="turn-record"
+            :class="{
+              'rolled-back': rec.rolled_back,
+              'rewrite': rec.is_rewrite,
+              'dm-turn': rec.who === 'dm',
+            }"
+          >
+            <span class="turn-who">{{ rec.who === 'dm' ? 'DM' : '玩家' }} #{{ rec.turn_id }}</span>
+            <span v-if="rec.rolled_back" class="rolled-label">已撤销 ×</span>
+            <span v-if="rec.is_rewrite" class="rewrite-label">当前重写</span>
+            <p class="turn-content">{{ sanitizeDisplayText(rec.content) }}</p>
+          </div>
+        </div>
+      </SystemDrawer>
+
+      <SystemDrawer
+        v-model="strategyTrayOpen"
+        title="策略托盘"
+        description="帮回指令改为辅助抽屉，只在需要打断僵局或推进节奏时展开。"
+        size="420px"
+      >
         <div class="bangui-bar-header">
           <span class="bangui-title">帮回指令</span>
           <span class="bangui-subtitle">用于卡顿解套、抬压、补反馈或快速推进，不会替换你的输入权限。</span>
         </div>
-        <button
-          v-for="(btn, i) in banguiButtons"
-          :key="i"
-          class="bangui-btn"
-          :class="{
-            'active-bangui': activeBangui === btn.trigger,
-            'disabled-bangui': store.phase === 'INTERRUPT' && activeBangui !== btn.trigger,
-          }"
-          :title="`${btn.label}：${btn.description}`"
-          :aria-label="`${btn.label}：${btn.description}`"
-          :style="{ pointerEvents: store.phase === 'INTERRUPT' && activeBangui !== btn.trigger ? 'none' : 'auto' }"
-          @click="triggerBangui(btn.trigger)"
-        >
-          <span class="bangui-btn-label">{{ btn.label }}</span>
-          <span class="bangui-btn-desc">{{ btn.description }}</span>
-        </button>
-      </div>
+        <div class="bangui-group-stack">
+          <SystemCard
+            v-for="group in banguiGroups"
+            :key="group.key"
+            :title="group.label"
+            :description="group.description"
+            tone="subtle"
+            class="bangui-group-card"
+          >
+            <div class="bangui-group-grid">
+              <button
+                v-for="btn in group.items"
+                :key="btn.trigger"
+                class="bangui-btn"
+                :class="{
+                  'active-bangui': activeBangui === btn.trigger,
+                  'disabled-bangui': store.phase === 'INTERRUPT' && activeBangui !== btn.trigger,
+                }"
+                :title="`${btn.label}：${btn.description}`"
+                :aria-label="`${btn.label}：${btn.description}`"
+                :style="{ pointerEvents: store.phase === 'INTERRUPT' && activeBangui !== btn.trigger ? 'none' : 'auto' }"
+                @click="triggerBangui(btn.trigger)"
+              >
+                <span class="bangui-btn-label">{{ btn.label }}</span>
+                <span class="bangui-btn-desc">{{ btn.description }}</span>
+              </button>
+            </div>
+          </SystemCard>
+        </div>
+      </SystemDrawer>
+
       <!-- Dangerous option confirm modal -->
       <Teleport to="body">
         <div v-if="dangerConfirm" class="modal-overlay" @click.self="dangerConfirm = null">
@@ -304,8 +373,8 @@
             <p class="danger-text">{{ dangerConfirm.opt }}</p>
             <p class="danger-warn">此选项被标记为高危险度，确认后不可撤销回到此节点。</p>
             <div class="modal-actions">
-              <button class="n-btn ghost" @click="dangerConfirm = null">取消</button>
-              <button class="n-btn danger" @click="confirmDangerous">确认执行</button>
+              <SystemButton variant="ghost" @click="dangerConfirm = null">取消</SystemButton>
+              <SystemButton variant="danger" @click="confirmDangerous">确认执行</SystemButton>
             </div>
           </div>
         </div>
@@ -332,8 +401,8 @@
           </div>
           <p class="rollback-warn">⚠ 被回退的回合保留显示，标记为"已撤销"。</p>
           <div class="modal-actions">
-            <button class="n-btn ghost" @click="showRollbackModal = false">取消</button>
-            <button class="n-btn primary" @click="doRollback">确认回退</button>
+            <SystemButton variant="ghost" @click="showRollbackModal = false">取消</SystemButton>
+            <SystemButton variant="primary" @click="doRollback">确认回退</SystemButton>
           </div>
         </div>
       </div>
@@ -411,8 +480,8 @@
           </div>
           <p v-else class="preview-loading">归档预览暂不可用，仍可直接结束会话。</p>
           <div class="modal-actions">
-            <button class="n-btn ghost" @click="showEndModal = false">继续会话</button>
-            <button class="n-btn danger" @click="doEndSession">确认着陆</button>
+            <SystemButton variant="ghost" @click="showEndModal = false">继续会话</SystemButton>
+            <SystemButton variant="danger" @click="doEndSession">确认着陆</SystemButton>
           </div>
         </div>
       </div>
@@ -431,14 +500,14 @@
                 <span class="sl-pressure">压力 {{ s.scene_pressure?.toFixed(1) }}</span>
               </div>
               <div class="sl-actions">
-                <button class="n-btn primary sm" @click="doLoadSave(s)">读档</button>
-                <button class="n-btn danger sm" @click="doDeleteSave(s.save_id)">删除</button>
+                <SystemButton variant="primary" size="sm" @click="doLoadSave(s)">读档</SystemButton>
+                <SystemButton variant="danger" size="sm" @click="doDeleteSave(s.save_id)">删除</SystemButton>
               </div>
             </div>
           </div>
           <div class="modal-actions">
-            <button class="n-btn ghost" @click="showSLModal = false">关闭</button>
-            <button class="n-btn primary" @click="doCreateSave">💾 新建存档</button>
+            <SystemButton variant="ghost" @click="showSLModal = false">关闭</SystemButton>
+            <SystemButton variant="primary" @click="doCreateSave">💾 新建存档</SystemButton>
           </div>
         </div>
       </div>
@@ -462,6 +531,10 @@
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import NTypewriter from '@/components/common/NTypewriter.vue'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemDrawer from '@/components/system/SystemDrawer.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
 import { useSessionStore } from '@/stores/sessionStore'
 import { useToast } from '@/composables/useToast'
 import { sessions as sessionsApi } from '@/api/sessions'
@@ -521,6 +594,8 @@ const CUSTOM_ROLLBACK_VALUE = -1
 const rollbackSteps = ref<number>(1)
 const customSteps = ref(1)
 const activeBangui = ref<string | null>(null)
+const historyExpanded = ref(false)
+const strategyTrayOpen = ref(false)
 const contextWarned = ref(false)
 const maxTurns = 20
 
@@ -769,6 +844,8 @@ async function startSession() {
   disconnectWs()
   await store.createSession({ project_id: projectId.value })
   if (store.sessionId) {
+    historyExpanded.value = false
+    strategyTrayOpen.value = false
     syncNarrativeFromHistory(true)
     latestDecisionType.value = 'action'
     latestRiskLevels.value = []
@@ -994,6 +1071,12 @@ watch(latestNarrativeFromHistory, (text) => {
   }
 }, { immediate: true })
 
+watch(historyExpanded, (expanded) => {
+  if (expanded) {
+    scrollHistory()
+  }
+})
+
 // Phase 4 computed — pressure
 const pressurePct = computed(() => Math.min((store.scenePressure / 10) * 100, 100))
 const pressureClass = computed(() => {
@@ -1096,6 +1179,78 @@ const modalSessionOnlyText = computed(() =>
   sanitizeSummaryText(modalArchivePreview.value?.preview_session_only.summary, 140),
 )
 
+const latestPlayerTurnRecord = computed(() => {
+  for (let i = store.history.length - 1; i >= 0; i--) {
+    const record = store.history[i]
+    if (!record.rolled_back && record.who !== 'dm') {
+      return record
+    }
+  }
+  return null
+})
+
+const latestDmTurnSummary = computed(() => sanitizeSummaryText(latestNarrativeFromHistory.value, 88))
+
+const primaryRiskLevel = computed<'safe' | 'risky' | 'dangerous'>(() => {
+  if (latestRiskLevels.value.includes('dangerous') || store.scenePressure >= 8) {
+    return 'dangerous'
+  }
+  if (latestRiskLevels.value.includes('risky') || store.scenePressure >= 5) {
+    return 'risky'
+  }
+  return 'safe'
+})
+
+const turnImpactCards = computed(() => {
+  const latestPlayerAction = sanitizeSummaryText(latestPlayerTurnRecord.value?.content, 72)
+  const latestDmFeedback = latestDmTurnSummary.value
+  const optionCount = latestOptions.value.length
+  const drift = store.emotionalTemperature.drift
+  const driftDirection = drift > 0 ? '升温' : drift < 0 ? '降温' : '平稳'
+  const driftCopy = drift === 0
+    ? '本回合情绪温度基本持平，适合继续推进或补信息。'
+    : `当前情绪温度 ${driftDirection} ${Math.abs(drift).toFixed(1)}，需要留意下一步反馈是否继续偏热或偏冷。`
+
+  const riskHeadlineMap = {
+    safe: '风险仍可控',
+    risky: '风险开始抬升',
+    dangerous: '风险已到高位',
+  } as const
+
+  const riskCopyMap = {
+    safe: `当前场景压力 ${store.scenePressure.toFixed(1)}/10，最新可选动作里暂无高危项。`,
+    risky: `当前场景压力 ${store.scenePressure.toFixed(1)}/10，最新选项里已经出现需要谨慎处理的高压动作。`,
+    dangerous: `当前场景压力 ${store.scenePressure.toFixed(1)}/10，最新分支已经接近不可逆节点，建议先确认再执行。`,
+  } as const
+
+  return [
+    {
+      title: '最近动作',
+      headline: latestPlayerAction || '尚未提交新动作',
+      copy: latestPlayerAction
+        ? '这是玩家刚刚落下的动作，会直接决定下一轮 DM 反馈和分支结构。'
+        : '当前还没有新的玩家动作，系统会继续停留在等待输入状态。',
+    },
+    {
+      title: '风险变化',
+      headline: riskHeadlineMap[primaryRiskLevel.value],
+      copy: riskCopyMap[primaryRiskLevel.value],
+    },
+    {
+      title: '情绪温度',
+      headline: `${driftDirection} · ${store.emotionalTemperature.current.toFixed(1)}/10`,
+      copy: driftCopy,
+    },
+    {
+      title: '世界反馈',
+      headline: latestDmFeedback || '等待 DM 新反馈',
+      copy: latestDmFeedback
+        ? `当前 DM 输出后挂出了 ${optionCount} 个可选动作，主舞台已经进入下一次决策点。`
+        : '当前还没有新的 DM 反馈，主舞台会在下一次响应后更新。',
+    },
+  ]
+})
+
 // Bangui 8 buttons
 const banguiButtons = [
   { trigger: '帮回主动1', label: '主动介入', description: '立刻插入外部动作，打破僵局' },
@@ -1106,6 +1261,33 @@ const banguiButtons = [
   { trigger: '帮回黑暗2', label: '黑暗扭转', description: '引入反噬、恶意变化或失控感' },
   { trigger: '帮回推进1', label: '快速推进', description: '跳过拉扯，直接推进到下一节点' },
   { trigger: '帮回推进2', label: '抛出钩子', description: '给出新目标、新人物或新冲突' },
+]
+
+const banguiGroups = [
+  {
+    key: 'active',
+    label: '主动打断',
+    description: '适合场面僵住或需要立刻制造外部动作时使用。',
+    items: banguiButtons.slice(0, 2),
+  },
+  {
+    key: 'passive',
+    label: '被动反馈',
+    description: '适合顺着当前动作补结果、补线索，不强行改变主方向。',
+    items: banguiButtons.slice(2, 4),
+  },
+  {
+    key: 'dark',
+    label: '黑暗加压',
+    description: '适合快速抬高代价、风险和压迫感，让剧情往更危险的方向拐。',
+    items: banguiButtons.slice(4, 6),
+  },
+  {
+    key: 'advance',
+    label: '推进与钩子',
+    description: '适合跳过拉扯、引出下一节点或给当前回合收尾。',
+    items: banguiButtons.slice(6, 8),
+  },
 ]
 
 onUnmounted(() => {
@@ -1120,6 +1302,16 @@ onUnmounted(() => {
   height: 100%;
   background: var(--color-base);
   overflow: hidden;
+}
+
+.trpg-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-surface-l2) 82%, transparent);
+  color: var(--color-text-secondary);
+  font-size: 12px;
 }
 
 /* Init screen */
@@ -1291,13 +1483,80 @@ onUnmounted(() => {
 }
 
 /* Session bar */
+.session-status-card {
+  margin: 0 var(--spacing-md);
+}
+
+.turn-impact-card {
+  margin: var(--spacing-sm) var(--spacing-md) 0;
+}
+
+.turn-impact-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-md);
+}
+
+.turn-impact-head h2,
+.turn-impact-head p,
+.impact-item__copy {
+  margin: 0;
+}
+
+.turn-impact-head h2 {
+  font-size: 16px;
+  color: var(--color-text-primary);
+}
+
+.turn-impact-head p,
+.impact-item__label,
+.impact-eyebrow {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.impact-eyebrow {
+  display: inline-block;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.turn-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+}
+
+.impact-item {
+  display: grid;
+  gap: 8px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-surface-l2);
+  background: var(--color-base);
+}
+
+.impact-item__headline {
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+
+.impact-item__copy {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .session-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-surface-l1);
-  border-bottom: 1px solid var(--color-surface-l2);
+  padding: var(--spacing-sm) 0;
   flex-shrink: 0;
 }
 .session-phase-badge {
@@ -1337,7 +1596,7 @@ onUnmounted(() => {
 }
 .anti-proxy-bar {
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-text-inverse);
   padding: 4px var(--spacing-sm);
   font-size: var(--text-caption);
   border-radius: var(--radius-btn);
@@ -1378,6 +1637,7 @@ onUnmounted(() => {
   padding: var(--spacing-md);
   gap: var(--spacing-sm);
   overflow: hidden;
+  min-height: 0;
 }
 .player-options { display: flex; flex-direction: column; gap: 4px; }
 .option-btn {
@@ -1391,7 +1651,7 @@ onUnmounted(() => {
   font-size: 13px;
   transition: background 150ms, border-color 150ms;
 }
-.option-btn:hover { background: #3d3f4a; border-color: var(--color-ai-active); }
+.option-btn:hover { background: var(--color-surface-3); border-color: var(--color-ai-active); }
 .option-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .opt-key { color: var(--color-ai-active); font-weight: 600; margin-right: 6px; }
 
@@ -1417,6 +1677,40 @@ onUnmounted(() => {
 .d-label { color: var(--color-text-secondary); }
 
 /* Turn history */
+.history-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-surface-l2);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-l1);
+}
+
+.history-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-panel__title {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.history-panel__hint,
+.history-collapsed-copy {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .turn-history { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .turn-record {
   padding: var(--spacing-sm);
@@ -1443,12 +1737,12 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 .bangui-bar-header {
-  grid-column: 1 / -1;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  margin-bottom: var(--spacing-md);
 }
 .bangui-title {
   font-size: 13px;
@@ -1480,13 +1774,28 @@ onUnmounted(() => {
 .bangui-btn:hover .bangui-btn-desc { color: var(--color-text-primary); }
 .bangui-btn.active-bangui {
   border-color: var(--color-hitl);
-  background: rgba(255, 46, 136, 0.15);
+  background: color-mix(in srgb, var(--color-hitl) 15%, transparent);
   animation: bangui-pulse 0.3s ease-out;
 }
 .bangui-btn.disabled-bangui { opacity: 0.35; }
 
+.bangui-group-stack {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.bangui-group-card {
+  min-width: 0;
+}
+
+.bangui-group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+}
+
 /* Phase frame colors */
-.frame-INIT { border-left-color: #999 !important; }
+.frame-INIT { border-left-color: var(--color-text-3) !important; }
 .frame-OPENING { border-left-color: var(--color-ai-active) !important; animation: breathing 2s ease-in-out infinite; }
 .frame-PING_PONG { border-left-color: var(--color-ai-active) !important; }
 .frame-ROLLBACK { border-left-color: var(--color-warning) !important; }
@@ -1494,7 +1803,7 @@ onUnmounted(() => {
 .frame-PACING_ALERT { border-left-color: var(--color-error) !important; animation: flash 0.5s ease-in-out infinite alternate; }
 .frame-LANDING { border-left-color: var(--color-success) !important; }
 .frame-MAINTENANCE { border-left-color: var(--color-success) !important; animation: breathing 3s ease-in-out infinite; }
-.frame-ENDED { border-left-color: #999 !important; }
+.frame-ENDED { border-left-color: var(--color-text-3) !important; }
 
 /* Status dot */
 .dot-OPENING, .dot-PING_PONG { background: var(--color-ai-active) !important; }
@@ -1502,7 +1811,7 @@ onUnmounted(() => {
 .dot-ROLLBACK { background: var(--color-warning) !important; }
 .dot-PACING_ALERT { background: var(--color-error) !important; }
 .dot-LANDING, .dot-MAINTENANCE { background: var(--color-success) !important; }
-.dot-ENDED, .dot-INIT { background: #999 !important; }
+.dot-ENDED, .dot-INIT { background: var(--color-text-3) !important; }
 
 /* Phase badge colors */
 .phase-PING_PONG { color: var(--color-ai-active); }
@@ -1521,7 +1830,7 @@ onUnmounted(() => {
   background: var(--color-surface-l2); border-radius: 3px; overflow: hidden;
 }
 .pg-fill { height: 100%; border-radius: 3px; transition: width 600ms, background 300ms; }
-.pg-safe { background: #3fbe8a; }
+.pg-safe { background: var(--color-success); }
 .pg-warn { background: var(--color-warning); }
 .pg-danger { background: var(--color-error); animation: pressure-pulse 1s ease-in-out infinite alternate; }
 .pg-value { font-size: 12px; color: var(--color-text-secondary); width: 26px; text-align: right; }
@@ -1533,22 +1842,22 @@ onUnmounted(() => {
 .tb-edge { font-size: 11px; color: var(--color-text-secondary); }
 .tb-track {
   position: relative; width: 80px; height: 6px;
-  background: linear-gradient(to right, #5588ff, #888, #ff6644);
+  background: linear-gradient(to right, var(--color-info), var(--color-text-3), var(--color-danger));
   border-radius: 3px; overflow: visible;
 }
 .tb-cursor {
   position: absolute; top: -3px; width: 12px; height: 12px;
-  border-radius: 50%; border: 2px solid #fff;
+  border-radius: 50%; border: 2px solid var(--color-surface-1);
   transform: translateX(-50%); transition: left 600ms;
 }
-.temp-cold { background: #5588ff; }
-.temp-neutral { background: #aaa; }
-.temp-hot { background: #ff6644; }
+.temp-cold { background: var(--color-info); }
+.temp-neutral { background: var(--color-text-3); }
+.temp-hot { background: var(--color-danger); }
 .tb-drift {
   font-size: 11px; font-weight: 600; animation: drift-fade 4s ease-out forwards;
 }
-.drift-hot { color: #ff6644; }
-.drift-cold { color: #5588ff; }
+.drift-hot { color: var(--color-danger); }
+.drift-cold { color: var(--color-info); }
 
 /* ---- Phase 4: Density pills ---- */
 .density-pills {
@@ -1562,14 +1871,14 @@ onUnmounted(() => {
 }
 .density-pill:hover { border-color: var(--color-ai-active); color: var(--color-ai-active); }
 .density-pill.active {
-  background: var(--color-ai-active); color: #000;
+  background: var(--color-ai-active); color: var(--color-text-inverse);
   border-color: var(--color-ai-active); font-weight: 600;
 }
 
 /* ---- Phase 4: Risk badges ---- */
 .dm-opt-type-icon { margin-right: 4px; font-size: 13px; }
 .dm-opt-risk { float: right; font-size: 11px; font-weight: 700; margin-left: 6px; }
-.risk-badge-safe { color: #3fbe8a; }
+.risk-badge-safe { color: var(--color-success); }
 .risk-badge-risky { color: var(--color-warning); }
 .risk-badge-dangerous { color: var(--color-error); }
 
@@ -1577,20 +1886,20 @@ onUnmounted(() => {
 .opt-risk-badge {
   margin-left: auto; padding-left: 8px; font-size: 11px; font-weight: 700; flex-shrink: 0;
 }
-.badge-safe { color: #3fbe8a; }
+.badge-safe { color: var(--color-success); }
 .badge-risky { color: var(--color-warning); }
 .badge-dangerous { color: var(--color-error); }
 
 .option-btn { display: flex; align-items: center; }
-.risk-opt-risky { border-color: rgba(255, 180, 0, 0.3) !important; }
-.risk-opt-dangerous { border-color: rgba(255, 64, 64, 0.4) !important; }
-.risk-opt-dangerous:hover { background: rgba(255,64,64,0.08) !important; }
+.risk-opt-risky { border-color: color-mix(in srgb, var(--color-warning) 30%, transparent) !important; }
+.risk-opt-dangerous { border-color: color-mix(in srgb, var(--color-danger) 38%, transparent) !important; }
+.risk-opt-dangerous:hover { background: color-mix(in srgb, var(--color-danger) 8%, transparent) !important; }
 
 /* ---- Phase 4: Banners ---- */
 .pacing-alert-banner {
   display: flex; align-items: center; gap: var(--spacing-sm);
   padding: 8px var(--spacing-md);
-  background: rgba(255,64,64,0.12);
+  background: var(--color-danger-soft);
   border-bottom: 2px solid var(--color-error);
   flex-shrink: 0;
 }
@@ -1601,7 +1910,7 @@ onUnmounted(() => {
 .agency-warning-banner {
   display: flex; align-items: center; gap: var(--spacing-sm);
   padding: 6px var(--spacing-md);
-  background: rgba(255, 180, 0, 0.1);
+  background: var(--color-warning-soft);
   border-bottom: 1px solid var(--color-warning);
   font-size: 13px; color: var(--color-warning);
   flex-shrink: 0;
@@ -1625,7 +1934,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-surface-l2);
   border-radius: var(--radius-card);
   font-size: 13px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-sm);
   min-width: 220px; max-width: 360px;
 }
 .toast-icon { font-size: 14px; flex-shrink: 0; }
@@ -1663,7 +1972,7 @@ onUnmounted(() => {
 /* Modal */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(10,10,11,0.8);
+  background: var(--color-overlay);
   display: flex; align-items: center; justify-content: center;
   z-index: 200;
 }
@@ -1711,20 +2020,20 @@ onUnmounted(() => {
   border: 1px solid transparent;
   transition: all 150ms;
 }
-.n-btn.primary { background: var(--color-ai-active); color: #000; border-color: var(--color-ai-active); }
+.n-btn.primary { background: var(--color-ai-active); color: var(--color-text-inverse); border-color: var(--color-ai-active); }
 .n-btn.primary:hover { filter: brightness(1.15); }
 .n-btn.ghost { background: transparent; color: var(--color-text-primary); border-color: var(--color-surface-l2); }
 .n-btn.ghost:hover { border-color: var(--color-ai-active); }
 .n-btn.danger { background: transparent; color: var(--color-error); border-color: var(--color-error); }
-.n-btn.danger:hover { background: rgba(255,64,64,0.1); }
+.n-btn.danger:hover { background: color-mix(in srgb, var(--color-danger) 10%, transparent); }
 .n-btn.sm { padding: 4px 10px; font-size: 12px; }
 .n-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Animations */
 @keyframes bangui-pulse {
-  0% { transform: translateY(0) scale(1); box-shadow: 0 0 0 0 rgba(255,46,136,0.5); }
-  50% { transform: translateY(-2px) scale(1.04); box-shadow: 0 0 8px 4px rgba(255,46,136,0.3); }
-  100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 0 rgba(255,46,136,0); }
+  0% { transform: translateY(0) scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-hitl) 50%, transparent); }
+  50% { transform: translateY(-2px) scale(1.04); box-shadow: 0 0 8px 4px color-mix(in srgb, var(--color-hitl) 30%, transparent); }
+  100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-hitl) 0%, transparent); }
 }
 @keyframes flash {
   from { border-left-color: var(--color-error); }
@@ -1764,5 +2073,58 @@ onUnmounted(() => {
 .sl-trigger { font-weight: 600; color: var(--color-ai-active); }
 .sl-turn, .sl-ts, .sl-pressure { color: var(--color-text-secondary); }
 .sl-actions { display: flex; gap: 6px; }
+
+@media (max-width: 960px) {
+  .trpg-page {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+
+  .session-main {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .dm-area {
+    border-right: none;
+    border-bottom: 1px solid var(--color-surface-l2);
+    min-height: 360px;
+  }
+
+  .player-area {
+    overflow: visible;
+    min-height: auto;
+  }
+
+  .turn-impact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .history-panel {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 640px) {
+  .session-status-card {
+    margin: 0 var(--spacing-sm);
+  }
+
+  .session-bar {
+    gap: var(--spacing-sm);
+  }
+
+  .summary-card,
+  .modal-box,
+  .sl-modal {
+    min-width: min(100vw - 32px, 360px);
+  }
+
+  .turn-impact-grid,
+  .bangui-group-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 

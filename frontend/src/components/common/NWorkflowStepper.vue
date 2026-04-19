@@ -55,15 +55,15 @@ defineProps<{
   border: 1px solid var(--color-surface-l2);
 }
 .stepper-item.done .stepper-dot {
-  background: rgba(46, 242, 255, 0.15);
+  background: var(--color-accent-soft);
   color: var(--color-ai-active);
   border-color: var(--color-ai-active);
 }
 .stepper-item.active .stepper-dot {
-  background: rgba(46, 242, 255, 0.25);
+  background: var(--color-accent-soft-strong);
   color: var(--color-ai-active);
   border-color: var(--color-ai-active);
-  box-shadow: 0 0 6px rgba(46, 242, 255, 0.4);
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
 }
 .stepper-connector {
   position: absolute;

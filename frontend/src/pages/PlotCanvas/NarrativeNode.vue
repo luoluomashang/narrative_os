@@ -19,17 +19,17 @@ const props = defineProps<{
 }>()
 
 const nodeStyle = computed(() => ({
-  borderColor: (props.data.borderColor as string) ?? '#2d2f3a',
+  borderColor: (props.data.borderColor as string) ?? 'var(--color-surface-4)',
 }))
 const dotStyle = computed(() => ({
-  background: (props.data.borderColor as string) ?? '#2d2f3a',
+  background: (props.data.borderColor as string) ?? 'var(--color-surface-4)',
 }))
 </script>
 
 <style scoped>
 .narrative-node {
   background: var(--color-surface-l1);
-  border: 2px solid #2d2f3a;
+  border: 2px solid var(--color-surface-4);
   border-radius: var(--radius-card);
   padding: 10px 14px;
   width: 220px;

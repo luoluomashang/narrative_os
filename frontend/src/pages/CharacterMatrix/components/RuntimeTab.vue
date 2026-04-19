@@ -73,9 +73,9 @@ const rt = computed<CharacterRuntime>(() => props.model.runtime ?? ({
 
 const pressureColor = computed(() => {
   const p = rt.value.current_pressure ?? 0
-  if (p >= 0.8) return '#ef4444'
-  if (p >= 0.5) return '#f59e0b'
-  return '#22c55e'
+  if (p >= 0.8) return 'var(--color-danger)'
+  if (p >= 0.5) return 'var(--color-warning)'
+  return 'var(--color-success)'
 })
 
 const stanceMap: Record<string, string> = {
@@ -86,7 +86,7 @@ const stanceLabel = computed(() => stanceMap[rt.value.stance_mode ?? 'normal'] ?
 
 <style scoped>
 .runtime-tab { display: flex; flex-direction: column; gap: 14px; padding: 4px; }
-.read-only-hint { background: var(--color-bg-secondary, #f8f8f8); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: var(--color-text-secondary); }
+.read-only-hint { background: var(--color-surface-2); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: var(--color-text-secondary); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .stat-block { display: flex; flex-direction: column; gap: 4px; }
 .stat-label { font-size: 12px; color: var(--color-text-secondary); font-weight: 500; display: flex; align-items: center; gap: 6px; }
@@ -98,10 +98,10 @@ const stanceLabel = computed(() => stanceMap[rt.value.stance_mode ?? 'normal'] ?
 .event-list li { font-size: 13px; margin-bottom: 2px; }
 .event-list .empty { color: var(--color-text-secondary); list-style: none; padding-left: 0; }
 .badge { display: inline-block; border-radius: 4px; padding: 2px 10px; font-size: 12px; font-weight: 600; }
-.badge.normal { background: #d1fae5; color: #065f46; }
-.badge.danger { background: #fee2e2; color: #991b1b; }
-.badge.stubborn { background: #fef3c7; color: #92400e; }
-.badge.defensive { background: #dbeafe; color: #1e40af; }
-.badge.yes { background: #d1fae5; color: #065f46; }
-.badge.no { background: #fee2e2; color: #991b1b; }
+.badge.normal { background: var(--color-success-soft); color: var(--color-success); }
+.badge.danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.badge.stubborn { background: var(--color-warning-soft); color: var(--color-warning); }
+.badge.defensive { background: color-mix(in srgb, var(--color-info) 14%, transparent); color: var(--color-info); }
+.badge.yes { background: var(--color-success-soft); color: var(--color-success); }
+.badge.no { background: var(--color-danger-soft); color: var(--color-danger); }
 </style>

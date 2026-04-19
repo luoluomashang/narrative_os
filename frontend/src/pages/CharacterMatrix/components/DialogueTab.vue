@@ -216,7 +216,7 @@ function handleSave() {
   line-height: 1;
   padding: 0 4px;
 }
-.example-del:hover { color: #ff4040; }
+.example-del:hover { color: var(--color-danger); }
 .limit-hint {
   color: var(--color-text-secondary);
   font-size: 12px;
@@ -226,7 +226,7 @@ function handleSave() {
   margin-top: 20px;
   padding: 14px;
   border-top: 2px solid var(--color-surface-l2);
-  background: rgba(46,242,255,0.03);
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
   border-radius: var(--radius-btn);
 }
 .voice-test-title {
@@ -252,9 +252,9 @@ function handleSave() {
   font-size: 14px;
   color: var(--color-text-primary);
   padding: 10px 14px;
-  background: rgba(46,242,255,0.06);
+  background: var(--color-accent-soft);
   border-radius: var(--radius-btn);
-  border-left: 3px solid #2ef2ff;
+  border-left: 3px solid var(--color-accent);
   margin-bottom: 8px;
   line-height: 1.6;
 }

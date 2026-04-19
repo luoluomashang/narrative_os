@@ -1,8 +1,17 @@
 <template>
   <div class="scene-ide-page">
-    <!-- Header bar -->
-    <div class="ide-header">
-      <span class="ide-title">场景生成 IDE</span>
+    <SystemPageHeader
+      eyebrow="Scene IDE"
+      title="场景生成 IDE"
+      description="组合上下文、技能和模型路由，生成并诊断章节草稿。"
+    >
+      <template #meta>
+        <span class="ide-pill">项目 {{ projectId }}</span>
+        <span class="ide-pill">章节 {{ currentChapter }}</span>
+      </template>
+    </SystemPageHeader>
+
+    <SystemCard class="ide-control-card" tone="subtle">
       <div class="ide-controls">
         <input
           v-model.number="currentChapter"
@@ -25,50 +34,26 @@
           <option value="claude3">Claude 3.5 — 均衡 / 中成本</option>
           <option value="llama3">Llama 3 — 快速 / 低成本</option>
         </select>
-        <NButton variant="primary" :loading="generating" @click="generate">生成</NButton>
-        <NButton variant="ghost" @click="planOnly">仅规划</NButton>
+        <SystemButton variant="primary" :loading="generating" @click="generate">生成</SystemButton>
+        <SystemButton variant="ghost" @click="planOnly">仅规划</SystemButton>
       </div>
-    </div>
+    </SystemCard>
 
-    <!-- Three-column layout -->
-    <div class="ide-columns">
-      <!-- Left: Context Injection (25%) -->
-      <div class="ide-col ide-left">
-        <div class="col-header">上下文注入</div>
-
-        <div
-          v-for="block in contextBlocks"
-          :key="block.id"
-          class="ctx-block"
-          :class="{ excluded: block.excluded }"
-        >
-          <div class="ctx-block-header">
-            <span class="ctx-block-title">{{ block.label }}</span>
-            <button class="exclude-btn" @click="toggleExclude(block.id)">
-              {{ block.excluded ? '恢复' : '排除' }}
-            </button>
-          </div>
-          <div class="ctx-block-body">{{ block.preview }}</div>
-        </div>
-
-        <div class="token-estimate">
-          Token 估算：<strong>{{ estimatedTokens }}</strong>
-        </div>
-      </div>
-
-      <!-- Center: Generation Control + Output (50%) -->
-      <div class="ide-col ide-center">
-        <!-- Control row -->
+    <div class="ide-layout">
+      <div class="ide-main">
+        <SystemCard class="ide-panel ide-main-panel" padding="none">
+        <div class="col-header">生成控制与输出</div>
         <div class="gen-controls">
           <div class="control-group">
             <label>文长</label>
             <div class="btn-group">
-              <button
+              <SystemButton
                 v-for="l in lengths"
                 :key="l.value"
-                :class="['len-btn', { active: lengthMode === l.value }]"
+                :variant="lengthMode === l.value ? 'primary' : 'secondary'"
+                size="sm"
                 @click="lengthMode = l.value"
-              >{{ l.label }}</button>
+              >{{ l.label }}</SystemButton>
             </div>
           </div>
           <div class="control-group">
@@ -96,16 +81,19 @@
           }"
         >
           <div class="output-tools">
-            <button class="tool-btn" @click="copyOutput" title="复制">⎘</button>
-            <button class="tool-btn" @click="clearOutput" title="清除">✕</button>
+            <SystemButton variant="quiet" size="sm" icon-only @click="copyOutput" title="复制">⎘</SystemButton>
+            <SystemButton variant="quiet" size="sm" icon-only @click="clearOutput" title="清除">✕</SystemButton>
           </div>
 
           <NBreathingLight v-if="generating" :size="8" color="var(--color-ai-active)" />
 
-          <div v-if="errorMsg" class="error-card">
-            <span>⚠ {{ errorMsg }}</span>
-          </div>
-          <NTypewriter v-else :text="generatedText" :speed="25" class="output-text" />
+          <SystemErrorState v-if="errorMsg" title="生成失败" :message="errorMsg" />
+          <NTypewriter v-else-if="generatedText" :text="generatedText" :speed="25" class="output-text" />
+          <SystemEmpty
+            v-else-if="!generating"
+            title="等待生成结果"
+            description="设置章节目标、模型路由和技能队列后开始生成。"
+          />
 
           <!-- Inline annotations -->
           <div v-if="annotations.length > 0" class="annotation-legend">
@@ -113,46 +101,88 @@
             <span class="annotation-hard">红色波浪</span> 严重 OOC
           </div>
         </div>
+        <div class="pipeline-strip">
+          <div class="pipeline-strip__head">
+            <span>生成流水线</span>
+            <span>{{ generating ? '执行中' : generatedText ? '已完成' : '待启动' }}</span>
+          </div>
+          <NWorkflowStepper :steps="pipelineSteps" :current="pipelineCurrent" />
+        </div>
+        </SystemCard>
       </div>
 
-      <!-- Right: Real-time Diagnostics (25%) -->
-      <div class="ide-col ide-right">
-        <div class="col-header">实时诊断</div>
+      <aside class="ide-side">
+        <SystemCard class="ide-side-nav" tone="subtle">
+          <div class="side-nav">
+            <SystemButton size="sm" :variant="asidePanel === 'context' ? 'primary' : 'ghost'" @click="asidePanel = 'context'">上下文</SystemButton>
+            <SystemButton size="sm" :variant="asidePanel === 'diagnostics' ? 'primary' : 'ghost'" @click="asidePanel = 'diagnostics'">实时诊断</SystemButton>
+          </div>
+          <p class="side-nav-copy">
+            {{ asidePanel === 'context'
+              ? '生成前仅处理注入内容与 token 预算，避免三栏并行分散注意力。'
+              : '生成完成后再查看诊断、改写建议与 token 成本。'
+            }}
+          </p>
+        </SystemCard>
 
-        <div v-if="diagnostics.length === 0 && !generating" class="diag-empty">
-          生成后自动分析…
-        </div>
+        <SystemCard v-if="asidePanel === 'context'" class="ide-panel ide-side-panel" padding="none">
+          <div class="col-header">上下文注入</div>
 
-        <div
-          v-for="(d, i) in diagnostics"
-          :key="i"
-          class="diag-card"
-          :class="`diag-${d.type}`"
-        >
-          <div class="diag-icon">{{ diagIcon(d.type) }}</div>
-          <div class="diag-body">
-            <div class="diag-title">{{ d.title }}</div>
-            <div class="diag-desc">{{ d.description }}</div>
-            <div v-if="d.type === 'warning'" class="diag-actions">
-              <button class="diag-btn" @click="requestRewrite(i)">请求改写</button>
-              <button class="diag-btn ghost" @click="ignoreDiag(i)">标记忽略</button>
+          <div
+            v-for="block in contextBlocks"
+            :key="block.id"
+            class="ctx-block"
+            :class="{ excluded: block.excluded }"
+          >
+            <div class="ctx-block-header">
+              <span class="ctx-block-title">{{ block.label }}</span>
+              <button class="exclude-btn" @click="toggleExclude(block.id)">
+                {{ block.excluded ? '恢复' : '排除' }}
+              </button>
+            </div>
+            <div class="ctx-block-body">{{ block.preview }}</div>
+          </div>
+
+          <div class="token-estimate">
+            Token 估算：<strong>{{ estimatedTokens }}</strong>
+          </div>
+        </SystemCard>
+
+        <SystemCard v-else class="ide-panel ide-side-panel" padding="none">
+          <div class="col-header">实时诊断</div>
+
+          <div v-if="diagnostics.length === 0 && !generating" class="diag-empty">
+            <SystemEmpty
+              title="暂无诊断结果"
+              description="生成完成后会自动触发一致性检查与诊断。"
+            />
+          </div>
+
+          <div
+            v-for="(d, i) in diagnostics"
+            :key="i"
+            class="diag-card"
+            :class="`diag-${d.type}`"
+          >
+            <div class="diag-icon">{{ diagIcon(d.type) }}</div>
+            <div class="diag-body">
+              <div class="diag-title">{{ d.title }}</div>
+              <div class="diag-desc">{{ d.description }}</div>
+              <div v-if="d.type === 'warning'" class="diag-actions">
+                <SystemButton variant="secondary" size="sm" @click="requestRewrite(i)">请求改写</SystemButton>
+                <SystemButton variant="ghost" size="sm" @click="ignoreDiag(i)">标记忽略</SystemButton>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Token cost info -->
-        <div class="cost-info">
-          <span>输入 {{ inputTokens }} token</span>
-          <span>输出 {{ outputTokens }} token</span>
-        </div>
-
-        <!-- Generation pipeline stepper -->
-        <div class="col-header" style="margin-top:16px">生成流水线</div>
-        <NWorkflowStepper :steps="pipelineSteps" :current="pipelineCurrent" style="margin-top:8px" />
-      </div>
+          <div class="cost-info">
+            <span>输入 {{ inputTokens }} token</span>
+            <span>输出 {{ outputTokens }} token</span>
+          </div>
+        </SystemCard>
+      </aside>
     </div>
 
-    <!-- DiffView modal -->
     <DiffView
       v-if="showDiff"
       :original="diffOriginal"
@@ -161,7 +191,6 @@
       @close="showDiff = false"
     />
 
-    <!-- HITL tray -->
     <HITLTray :items="hitlItems" @approve="approveHITL" @reject="rejectHITL" />
   </div>
 </template>
@@ -169,7 +198,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import NButton from '@/components/common/NButton.vue'
 import NSlider from '@/components/common/NSlider.vue'
 import NTag from '@/components/common/NTag.vue'
 import NBreathingLight from '@/components/common/NBreathingLight.vue'
@@ -178,6 +206,11 @@ import NWorkflowStepper from '@/components/common/NWorkflowStepper.vue'
 import DiffView from '@/components/DiffView.vue'
 import HITLTray from '@/components/HITLTray.vue'
 import axios from 'axios'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemEmpty from '@/components/system/SystemEmpty.vue'
+import SystemErrorState from '@/components/system/SystemErrorState.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
 
 const route = useRoute()
 const projectId = computed(() => (route.params.id as string) || 'default')
@@ -190,6 +223,7 @@ onMounted(() => {
   if (q) currentChapter.value = Number(q) || 1
 })
 const targetSummary = ref('')
+const asidePanel = ref<'context' | 'diagnostics'>('context')
 
 // ── Context blocks ────────────────────────────────────────────────
 interface CtxBlock { id: string; label: string; preview: string; excluded: boolean; tokens: number }
@@ -284,6 +318,7 @@ async function generate() {
     inputTokens.value = 0
     outputTokens.value = res.data.word_count ?? 0
     loadDiagnostics()
+    asidePanel.value = 'diagnostics'
   } catch (e: unknown) {
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })
       ?.response?.data?.detail ?? (e as { message?: string })?.message ?? '生成失败'
@@ -293,6 +328,7 @@ async function generate() {
       title: 'API 不可用',
       description: '后端未运行或参数错误：' + msg,
     }]
+    asidePanel.value = 'diagnostics'
   } finally {
     generating.value = false
   }
@@ -309,6 +345,7 @@ async function planOnly() {
       project_id: projectId.value,
     })
     generatedText.value = JSON.stringify(res.data, null, 2)
+    asidePanel.value = 'diagnostics'
   } catch (e: unknown) {
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })
       ?.response?.data?.detail ?? (e as { message?: string })?.message ?? '规划失败'
@@ -392,22 +429,22 @@ function rejectHITL(id: string) {
 
 <style scoped>
 .scene-ide-page {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: var(--spacing-md);
   height: 100%;
   overflow: hidden;
+  padding: var(--spacing-md);
+  box-sizing: border-box;
 }
 
-/* Header */
-.ide-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--color-surface-l2);
-  flex-shrink: 0;
+.ide-pill {
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: var(--text-caption);
 }
-.ide-title { font-size: var(--text-h2); font-weight: var(--weight-h2); }
+
 .ide-controls { display: flex; gap: var(--spacing-sm); align-items: center; }
 .llm-select {
   background: var(--color-surface-l1);
@@ -420,7 +457,7 @@ function rejectHITL(id: string) {
 .chapter-input {
   width: 64px;
   background: var(--color-surface-l1);
-  border: 1px solid #444;
+  border: 1px solid var(--color-border-strong);
   color: var(--color-text-primary);
   border-radius: var(--radius-btn);
   padding: 4px 8px;
@@ -429,7 +466,7 @@ function rejectHITL(id: string) {
 .summary-input {
   width: 200px;
   background: var(--color-surface-l1);
-  border: 1px solid #444;
+  border: 1px solid var(--color-border-strong);
   color: var(--color-text-primary);
   border-radius: var(--radius-btn);
   padding: 4px 8px;
@@ -437,16 +474,60 @@ function rejectHITL(id: string) {
 }
 
 /* Columns */
-.ide-columns {
+.ide-layout {
   display: grid;
-  grid-template-columns: 25% 50% 25%;
+  grid-template-columns: minmax(0, 1fr) 320px;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
+  gap: var(--spacing-md);
 }
-.ide-col { display: flex; flex-direction: column; overflow: hidden; }
-.ide-left { border-right: 1px solid var(--color-surface-l2); overflow-y: auto; }
-.ide-center { border-right: 1px solid var(--color-surface-l2); }
-.ide-right { overflow-y: auto; }
+.ide-main,
+.ide-side,
+.ide-panel { min-height: 0; }
+
+.ide-main {
+  display: flex;
+  min-width: 0;
+}
+
+.ide-side {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.ide-panel :deep(.system-card__body) {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ide-side-panel :deep(.system-card__body) {
+  overflow-y: auto;
+}
+
+.ide-main-panel :deep(.system-card__body) {
+  overflow: hidden;
+}
+
+.ide-side-nav :deep(.system-card__body) {
+  gap: 10px;
+}
+
+.side-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.side-nav-copy {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
 
 .col-header {
   font-size: var(--text-caption);
@@ -494,6 +575,21 @@ function rejectHITL(id: string) {
   border-top: 1px solid var(--color-surface-l2);
 }
 
+.pipeline-strip {
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--color-surface-l2);
+  display: grid;
+  gap: 10px;
+}
+
+.pipeline-strip__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+
 /* Generation controls */
 .gen-controls {
   display: flex;
@@ -506,7 +602,7 @@ function rejectHITL(id: string) {
 }
 .control-group { display: flex; align-items: center; gap: var(--spacing-sm); }
 .control-group label { font-size: var(--text-caption); color: var(--color-text-secondary); }
-.btn-group { display: flex; gap: 2px; }
+.btn-group { display: flex; gap: 6px; }
 .len-btn {
   background: var(--color-surface-l1);
   border: 1px solid var(--color-surface-l2);
@@ -625,5 +721,28 @@ function rejectHITL(id: string) {
   color: var(--color-text-secondary);
   margin-top: auto;
   border-top: 1px solid var(--color-surface-l2);
+}
+
+@media (max-width: 1200px) {
+  .ide-layout {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+  .ide-side {
+  .scene-ide-page {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 960px) {
+  .ide-controls {
+    flex-wrap: wrap;
+  }
+
+  .summary-input {
+    width: 100%;
+  }
 }
 </style>

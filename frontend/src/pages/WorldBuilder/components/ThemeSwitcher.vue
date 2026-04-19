@@ -30,7 +30,7 @@ const themes: { key: WbTheme; icon: string; label: string }[] = [
 .theme-switcher {
   display: flex;
   gap: 4px;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--wb-panel-solid-strong);
   border: 1px solid var(--wb-glass-border);
   border-radius: 8px;
   padding: 3px;
@@ -51,14 +51,14 @@ const themes: { key: WbTheme; icon: string; label: string }[] = [
 }
 
 .theme-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--wb-panel-hover);
+  border-color: var(--wb-glass-border-strong);
 }
 
 .theme-btn.active {
-  background: rgba(46, 242, 255, 0.12);
-  border-color: var(--wb-neon-cyan, #2ef2ff);
-  box-shadow: 0 0 6px rgba(46, 242, 255, 0.25);
+  background: color-mix(in srgb, var(--wb-neon-cyan) 12%, transparent);
+  border-color: var(--wb-neon-cyan);
+  box-shadow: var(--wb-button-glow);
 }
 
 .theme-icon {

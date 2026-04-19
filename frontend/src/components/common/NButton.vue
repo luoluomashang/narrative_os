@@ -41,11 +41,11 @@ defineProps<{
 
 .n-button--primary {
   background: var(--color-ai-active);
-  color: var(--color-base);
+  color: var(--color-text-inverse);
   font-weight: 600;
 }
 .n-button--primary:hover:not(:disabled) {
-  background: #00d4e8;
+  background: var(--color-accent-hover);
 }
 
 .n-button--ghost {
@@ -64,7 +64,7 @@ defineProps<{
 }
 .n-button--danger:hover:not(:disabled) {
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-text-inverse);
 }
 
 .n-button__light {

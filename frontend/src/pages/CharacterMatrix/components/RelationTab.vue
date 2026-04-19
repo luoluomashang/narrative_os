@@ -48,6 +48,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import * as d3 from 'd3'
+import { useThemeMode } from '@/composables/useThemeMode'
 import type { CharacterDetail, CharacterSummary } from '@/types/api'
 
 const props = defineProps<{
@@ -65,6 +66,16 @@ const localRelationships = ref<Record<string, number>>({})
 const newTarget = ref('')
 const newValue = ref(0.5)
 const showList = ref(true)
+const { resolvedTheme } = useThemeMode()
+
+function readThemeColor(variable: string, fallback: string) {
+  if (typeof window === 'undefined') {
+    return fallback
+  }
+
+  const value = getComputedStyle(document.documentElement).getPropertyValue(variable).trim()
+  return value || fallback
+}
 
 watch(() => props.model, (m) => {
   if (m) {
@@ -79,11 +90,11 @@ watch(() => props.model, (m) => {
 }, { immediate: true })
 
 function relColor(value: number): string {
-  if (value >= 0.6) return '#2eff8a'
-  if (value >= 0.2) return '#2ef2ff'
-  if (value > -0.2) return '#666'
-  if (value > -0.6) return '#ffc42e'
-  return '#ff4040'
+  if (value >= 0.6) return readThemeColor('--color-success', '#198754')
+  if (value >= 0.2) return readThemeColor('--color-accent', '#127ea8')
+  if (value > -0.2) return readThemeColor('--color-text-3', '#7a8794')
+  if (value > -0.6) return readThemeColor('--color-warning', '#c27a12')
+  return readThemeColor('--color-danger', '#c2413b')
 }
 
 function addRelation() {
@@ -168,14 +179,14 @@ function renderGraph() {
 
   node.append('circle')
     .attr('r', (d: any) => d.id === selfName ? 16 : 12)
-    .attr('fill', (d: any) => d.id === selfName ? '#2ef2ff' : '#445')
-    .attr('stroke', '#2ef2ff')
+    .attr('fill', (d: any) => d.id === selfName ? readThemeColor('--color-accent', '#127ea8') : readThemeColor('--color-surface-4', '#c7d2de'))
+    .attr('stroke', readThemeColor('--color-accent', '#127ea8'))
     .attr('stroke-width', 1.5)
 
   node.append('text')
     .text((d: any) => d.id)
     .attr('font-size', '11px')
-    .attr('fill', '#ccc')
+    .attr('fill', readThemeColor('--color-text-2', '#4f6475'))
     .attr('text-anchor', 'middle')
     .attr('dy', -20)
 
@@ -190,6 +201,10 @@ function renderGraph() {
 }
 
 onMounted(() => {
+  nextTick(renderGraph)
+})
+
+watch(resolvedTheme, () => {
   nextTick(renderGraph)
 })
 
@@ -256,7 +271,7 @@ onBeforeUnmount(() => {
   line-height: 1;
   padding: 0 4px;
 }
-.rel-del:hover { color: #ff4040; }
+.rel-del:hover { color: var(--color-danger); }
 .empty-hint {
   color: var(--color-text-secondary);
   font-size: 13px;

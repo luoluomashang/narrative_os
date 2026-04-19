@@ -158,12 +158,12 @@ function save() {
 .header-row { display: flex; justify-content: space-between; align-items: center; }
 .section-title { font-size: 14px; font-weight: 600; }
 .add-form { display: flex; gap: 8px; align-items: center; }
-.name-input { border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; font-size: 13px; flex: 1; background: var(--color-bg-input, #fff); color: var(--color-text); }
+.name-input { border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; font-size: 13px; flex: 1; background: var(--color-surface-1); color: var(--color-text-primary); }
 .empty-hint { text-align: center; color: var(--color-text-secondary); padding: 24px 0; font-size: 13px; }
 .relation-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .target-name { font-weight: 600; font-size: 14px; }
-.del-btn { background: none; border: none; color: var(--color-error, #ef4444); cursor: pointer; font-size: 13px; }
+.del-btn { background: none; border: none; color: var(--color-danger); cursor: pointer; font-size: 13px; }
 .sliders { display: flex; flex-direction: column; gap: 6px; }
 .slider-row { display: grid; grid-template-columns: 56px 1fr 40px; gap: 6px; align-items: center; }
 .slider-label { font-size: 12px; color: var(--color-text-secondary); }
@@ -171,10 +171,10 @@ function save() {
 .slider-value { font-size: 12px; text-align: right; }
 .field-group { display: flex; flex-direction: column; gap: 4px; }
 label { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); }
-textarea { border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; font-size: 13px; resize: vertical; background: var(--color-bg-input, #fff); color: var(--color-text); width: 100%; }
-.tags-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; background: var(--color-bg-input, #fff); min-height: 32px; }
-.tag { background: var(--color-primary, #6366f1); color: #fff; border-radius: 12px; padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+textarea { border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; font-size: 13px; resize: vertical; background: var(--color-surface-1); color: var(--color-text-primary); width: 100%; }
+.tags-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; background: var(--color-surface-1); min-height: 32px; }
+.tag { background: var(--color-accent); color: var(--color-text-inverse); border-radius: 12px; padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
 .tag button { background: none; border: none; color: inherit; cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
-.tag-inline-input { border: none; outline: none; font-size: 12px; flex: 1; min-width: 80px; background: transparent; color: var(--color-text); }
+.tag-inline-input { border: none; outline: none; font-size: 12px; flex: 1; min-width: 80px; background: transparent; color: var(--color-text-primary); }
 .actions { display: flex; justify-content: flex-end; }
 </style>

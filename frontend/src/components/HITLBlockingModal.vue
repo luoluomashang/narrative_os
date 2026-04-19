@@ -59,7 +59,7 @@ function handleBackdropClick() {
 .hitl-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 11, 0.80);
+  background: var(--color-overlay);
   z-index: 300;
   display: flex;
   align-items: center;
@@ -82,7 +82,7 @@ function handleBackdropClick() {
 }
 .hitl-badge {
   background: var(--color-hitl);
-  color: var(--color-base);
+  color: var(--color-text-inverse);
   font-size: var(--text-caption);
   font-weight: 700;
   padding: 2px 8px;
@@ -135,9 +135,9 @@ function handleBackdropClick() {
   transition: opacity 150ms, transform 80ms;
 }
 .hitl-btn:active { transform: scale(0.97); }
-.hitl-btn.approve { background: var(--color-success); color: var(--color-text-primary); }
+.hitl-btn.approve { background: var(--color-success); color: var(--color-text-inverse); }
 .hitl-btn.regenerate { background: var(--color-surface-l2); color: var(--color-text-primary); }
-.hitl-btn.cancel { background: var(--color-error); color: var(--color-text-primary); }
+.hitl-btn.cancel { background: var(--color-error); color: var(--color-text-inverse); }
 .hitl-btn.takeover { background: var(--color-warning); color: var(--color-base); }
 
 /* Transition */

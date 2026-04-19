@@ -23,7 +23,7 @@
           :class="{ active: highlightFactionId === '__none__', dimmed: highlightFactionId && highlightFactionId !== '__none__' }"
           @click="toggleHighlight('__none__')"
         >
-          <span class="legend-swatch" :style="{ background: '#666' }"></span>
+          <span class="legend-swatch" :style="{ background: 'var(--wb-text-dim)' }"></span>
           <span class="legend-name">无归属</span>
           <span class="legend-count">{{ unaffiliatedCount }}</span>
         </div>
@@ -56,7 +56,7 @@ const legendItems = computed(() =>
   props.factions.map((f) => ({
     id: f.id,
     name: f.name,
-    color: f.color || '#4d7cff',
+    color: f.color || 'var(--wb-neon-blue)',
     // Count regions that list this faction in either direction
     regionCount: props.regions.filter(
       (r) => f.territory_region_ids.includes(r.id) || (r.faction_ids ?? []).includes(f.id)
@@ -103,12 +103,12 @@ function clearHighlight() {
   z-index: 10;
   min-width: 140px;
   max-width: 220px;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--wb-panel-solid-strong);
+  border: 1px solid var(--wb-glass-border-strong);
   border-radius: 8px;
   backdrop-filter: blur(8px);
   font-size: 12px;
-  color: #ccc;
+  color: var(--wb-text-main);
   user-select: none;
 }
 
@@ -147,11 +147,11 @@ function clearHighlight() {
 }
 
 .legend-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--wb-panel-hover);
 }
 
 .legend-item.active {
-  background: rgba(46, 242, 255, 0.1);
+  background: color-mix(in srgb, var(--wb-neon-cyan) 10%, transparent);
 }
 
 .legend-item.dimmed {
@@ -174,7 +174,7 @@ function clearHighlight() {
 
 .legend-count {
   font-size: 10px;
-  color: #888;
+  color: var(--wb-text-soft);
   min-width: 14px;
   text-align: right;
 }
@@ -184,9 +184,9 @@ function clearHighlight() {
   padding: 3px 6px;
   text-align: center;
   font-size: 11px;
-  color: #2ef2ff;
+  color: var(--wb-neon-cyan);
   cursor: pointer;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--wb-glass-border);
 }
 
 .legend-reset:hover {

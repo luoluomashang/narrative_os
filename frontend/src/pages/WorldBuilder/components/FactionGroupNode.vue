@@ -2,9 +2,9 @@
   <div
     class="faction-group-node"
     :style="{
-      '--group-color': data.color || '#4d7cff',
-      '--group-color-alpha': (data.color || '#4d7cff') + '18',
-      '--group-color-border': (data.color || '#4d7cff') + '40',
+      '--group-color': data.color || 'var(--wb-neon-blue)',
+      '--group-color-alpha': data.color ? `${data.color}18` : 'var(--wb-blue-soft)',
+      '--group-color-border': data.color ? `${data.color}40` : 'color-mix(in srgb, var(--wb-neon-blue) 40%, transparent)',
     }"
   >
     <div class="group-header">

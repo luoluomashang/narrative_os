@@ -147,7 +147,7 @@ function acceptAll() {
 .diff-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 11, 0.80);
+  background: var(--color-overlay);
   z-index: 200;
   display: flex;
   align-items: center;

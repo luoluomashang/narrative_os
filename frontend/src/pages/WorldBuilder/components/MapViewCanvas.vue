@@ -38,9 +38,9 @@
         :style="{
           left: `${tile.x}px`,
           top: `${tile.y}px`,
-          '--tile-color': tile.color || '#3a3a5c',
-          '--tile-bg': (tile.color || '#3a3a5c') + '30',
-          '--tile-border': (tile.color || '#3a3a5c') + '80',
+          '--tile-color': tile.color || 'var(--wb-tile-default)',
+          '--tile-bg': tile.color ? `${tile.color}30` : 'var(--wb-tile-default-bg)',
+          '--tile-border': tile.color ? `${tile.color}80` : 'var(--wb-tile-default-border)',
         }"
         @click.stop="$emit('node-click', tile.id)"
       >
@@ -379,7 +379,7 @@ function onPanEnd() {
 }
 
 .adjacency-line {
-  stroke: rgba(255, 255, 255, 0.28);
+  stroke: var(--wb-map-line);
   stroke-width: 2;
   stroke-dasharray: 6 4;
 }
@@ -390,13 +390,13 @@ function onPanEnd() {
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  color: #555;
+  color: var(--wb-text-placeholder);
   font-size: 16px;
 }
 
 .map-hint {
   font-size: 12px;
-  color: #444;
+  color: var(--wb-text-dim);
   margin-top: 4px;
 }
 
@@ -437,7 +437,7 @@ function onPanEnd() {
 .tile-name {
   font-size: 11px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--wb-text-main);
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -465,10 +465,10 @@ function onPanEnd() {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--wb-panel-solid-strong);
   border: 1px solid var(--wb-glass-border);
   border-radius: 6px;
-  color: #ccc;
+  color: var(--wb-text-main);
   cursor: pointer;
   font-size: 12px;
   backdrop-filter: blur(8px);
@@ -486,10 +486,10 @@ function onPanEnd() {
 
 .layout-btn {
   padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--wb-panel-solid-strong);
   border: 1px solid var(--wb-glass-border);
   border-radius: 6px;
-  color: #ccc;
+  color: var(--wb-text-main);
   cursor: pointer;
   font-size: 12px;
   backdrop-filter: blur(8px);
@@ -503,16 +503,16 @@ function onPanEnd() {
 
 .clear-btn {
   padding: 6px 12px;
-  background: rgba(255, 64, 64, 0.15);
-  border: 1px solid rgba(255, 64, 64, 0.3);
+  background: var(--wb-red-soft);
+  border: 1px solid color-mix(in srgb, var(--wb-neon-red) 35%, transparent);
   border-radius: 6px;
-  color: #ff6060;
+  color: var(--wb-neon-red);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s;
 }
 
 .clear-btn:hover {
-  background: rgba(255, 64, 64, 0.3);
+  background: var(--wb-red-soft-strong);
 }
 </style>

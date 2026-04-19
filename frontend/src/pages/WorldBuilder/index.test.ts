@@ -1,5 +1,5 @@
 import { flushPromises, mount, shallowMount } from '@vue/test-utils'
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 
 const { worldApi, messageSuccess, messageError, messageWarning, messageInfo, messageConfirm, messageAlert } = vi.hoisted(() => ({
   worldApi: {
@@ -50,7 +50,6 @@ vi.mock('d3-force', () => ({ forceSimulation: vi.fn(() => ({ force: vi.fn().mock
 
 vi.mock('@/api/world', () => ({ world: worldApi }))
 vi.mock('./composables/useViewMode', () => {
-  const { ref } = require('vue')
   return { useViewMode: () => ({ activeView: ref('graph') }) }
 })
 vi.mock('./components/RegionNode.vue', () => ({ default: { template: '<div />' } }))

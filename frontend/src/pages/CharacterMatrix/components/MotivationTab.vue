@@ -89,9 +89,9 @@ const avgTension = computed(() => {
 const tensionBarColor = computed(() => tensionColor(avgTension.value))
 
 function tensionColor(t: number): string {
-  if (t >= 0.7) return '#ff4040'
-  if (t >= 0.3) return '#ffc42e'
-  return '#2eff8a'
+  if (t >= 0.7) return 'var(--color-danger)'
+  if (t >= 0.3) return 'var(--color-warning)'
+  return 'var(--color-success)'
 }
 
 function addMotivation() {
@@ -165,7 +165,7 @@ function handleSave() {
   line-height: 1;
   padding: 0 4px;
 }
-.motivation-del:hover { color: #ff4040; }
+.motivation-del:hover { color: var(--color-danger); }
 .tension-slider-row {
   display: flex;
   align-items: center;

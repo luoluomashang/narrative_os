@@ -1,68 +1,113 @@
 <template>
   <div class="workshop-page">
-    <!-- Agent monitor cards -->
-    <div class="agent-monitor-row">
-      <div v-if="agents.length === 0" class="monitor-empty">暂无 Agent 运行记录</div>
-      <el-card
-        v-for="agent in agents"
-        :key="agent.id"
-        shadow="hover"
-        class="monitor-card"
-        :class="`status-${agent.status}`"
-        :body-style="{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px' }"
-      >
-        <div class="mc-icon">{{ agent.icon }}</div>
-        <div class="mc-body">
-          <div class="mc-name">{{ agent.name }}</div>
-          <div class="mc-status">{{ statusLabel(agent.status) }}</div>
-          <div class="mc-log">{{ agent.lastLog }}</div>
-        </div>
-        <NBreathingLight
-          v-if="agent.status === 'running'"
-          :size="8"
-          color="var(--color-ai-active)"
-        />
-      </el-card>
-    </div>
+    <SystemPageHeader
+      eyebrow="Agent Workshop"
+      title="Agent 编排工作台"
+      description="查看章节维度的执行泳道、Ticket 状态与 Trace 回放，统一审视当前自动化链路。"
+    >
+      <template #meta>
+        <span class="workshop-pill">项目 {{ projectId }}</span>
+        <span class="workshop-pill">章节 {{ chapterOptions.length ? selectedChapter : '暂无' }}</span>
+      </template>
+      <template #actions>
+        <SystemButton variant="ghost" @click="loadTrace">刷新 Trace</SystemButton>
+      </template>
+    </SystemPageHeader>
 
-    <!-- Swimlane diagram -->
-    <div class="swimlane-container">
-      <div v-if="agents.length === 0" class="lane-empty">当前章节未生成可视化执行链路</div>
-      <div
-        v-for="agent in agents"
-        :key="agent.id"
-        class="swimlane"
-      >
-        <div class="lane-label">{{ agent.name }}</div>
-        <div class="lane-track">
+    <SystemCard class="panel-switch-card" tone="subtle">
+      <div class="panel-switch-row">
+        <SystemButton size="sm" :variant="activePanel === 'monitor' ? 'primary' : 'ghost'" @click="activePanel = 'monitor'">Agent 监控</SystemButton>
+        <SystemButton size="sm" :variant="activePanel === 'swimlane' ? 'primary' : 'ghost'" @click="activePanel = 'swimlane'">执行泳道</SystemButton>
+        <SystemButton size="sm" :variant="activePanel === 'trace' ? 'primary' : 'ghost'" @click="activePanel = 'trace'">Trace 回放</SystemButton>
+      </div>
+      <p class="panel-switch-copy">
+        {{ activePanel === 'monitor'
+          ? '默认先看 Agent 运行状态。'
+          : activePanel === 'swimlane'
+            ? 'Ticket 分布改为单独面板查看，避免与 Trace 同时争抢主视线。'
+            : '详细 Trace 只在需要回放时展开。'
+        }}
+      </p>
+    </SystemCard>
+
+    <SystemSection v-if="activePanel === 'monitor'" title="Agent 监控" description="横向查看各 Agent 当前状态、最近日志和运行呼吸灯。" dense>
+      <div class="agent-monitor-row">
+        <SystemEmpty
+          v-if="agents.length === 0"
+          class="monitor-empty"
+          title="暂无 Agent 运行记录"
+          description="当前章节尚未生成可视化执行链路，先触发一次相关任务后再回来查看。"
+        />
+        <SystemCard
+          v-for="agent in agents"
+          :key="agent.id"
+          class="monitor-card"
+          :class="`status-${agent.status}`"
+        >
+          <div class="mc-icon">{{ agent.icon }}</div>
+          <div class="mc-body">
+            <div class="mc-name">{{ agent.name }}</div>
+            <div class="mc-status">{{ statusLabel(agent.status) }}</div>
+            <div class="mc-log">{{ agent.lastLog }}</div>
+          </div>
+          <NBreathingLight
+            v-if="agent.status === 'running'"
+            :size="8"
+            color="var(--color-ai-active)"
+          />
+        </SystemCard>
+      </div>
+    </SystemSection>
+
+    <SystemSection v-else-if="activePanel === 'swimlane'" title="执行泳道" description="按 Agent 查看各自 Ticket 的排队、运行、重试和失败分布。" dense>
+      <SystemCard class="swimlane-shell" padding="none">
+        <div class="swimlane-container">
+          <div v-if="agents.length === 0" class="lane-empty">当前章节未生成可视化执行链路</div>
           <div
-            v-for="ticket in agent.tickets"
-            :key="ticket.id"
-            class="job-ticket"
-            :class="[`ticket-${ticket.status}`, { rejected: ticket.rejected }]"
+            v-for="agent in agents"
+            :key="agent.id"
+            class="swimlane"
           >
-            <div class="ticket-id">{{ ticket.id }}</div>
-            <div class="ticket-status-text">{{ ticketLabel(ticket.status) }}</div>
-            <div v-if="ticket.retries > 0" class="ticket-retries">重写 #{{ ticket.retries }}</div>
-            <div class="ticket-meta">{{ ticket.elapsed }}ms</div>
-            <!-- Rejection particle line -->
-            <div v-if="ticket.rejected" class="reject-particle" />
+            <div class="lane-label">{{ agent.name }}</div>
+            <div class="lane-track">
+              <div
+                v-for="ticket in agent.tickets"
+                :key="ticket.id"
+                class="job-ticket"
+                :class="[`ticket-${ticket.status}`, { rejected: ticket.rejected }]"
+              >
+                <div class="ticket-id">{{ ticket.id }}</div>
+                <div class="ticket-status-text">{{ ticketLabel(ticket.status) }}</div>
+                <div v-if="ticket.retries > 0" class="ticket-retries">重写 #{{ ticket.retries }}</div>
+                <div class="ticket-meta">{{ ticket.elapsed }}ms</div>
+                <div v-if="ticket.rejected" class="reject-particle" />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </SystemCard>
+    </SystemSection>
 
-    <!-- Trace Inspector (bottom panel) -->
-    <div class="trace-section">
+    <SystemCard v-else class="trace-section" padding="none">
       <div class="trace-header">
-        <span class="trace-title">执行链路 Trace</span>
-        <el-select v-model="selectedChapter" style="width: 120px" @change="loadTrace">
-          <el-option v-for="n in chapterOptions" :key="n" :label="`第 ${n} 章`" :value="n" />
-        </el-select>
+        <div>
+          <span class="trace-title">执行链路 Trace</span>
+          <p class="trace-copy">选择已生成运行记录的章节，查看详细回放。</p>
+        </div>
+        <div class="trace-controls">
+          <el-select v-model="selectedChapter" style="width: 120px" @change="loadTrace">
+            <el-option v-for="n in chapterOptions" :key="n" :label="`第 ${n} 章`" :value="n" />
+          </el-select>
+          <SystemButton size="sm" variant="ghost" @click="loadChapterOptions(); loadTrace()">刷新</SystemButton>
+        </div>
       </div>
-      <el-empty v-if="!traceData" description="暂无执行记录" :image-size="60" />
+      <SystemEmpty
+        v-if="!traceData"
+        title="暂无执行记录"
+        description="选择一个已生成运行记录的章节后，这里会展示对应的执行链路。"
+      />
       <TraceInspector v-else :data="traceData" />
-    </div>
+    </SystemCard>
   </div>
 </template>
 
@@ -71,6 +116,11 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import NBreathingLight from '@/components/common/NBreathingLight.vue'
 import TraceInspector from '@/components/TraceInspector.vue'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemEmpty from '@/components/system/SystemEmpty.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemSection from '@/components/system/SystemSection.vue'
 import axios from 'axios'
 
 // ── Agent definitions ─────────────────────────────────────────────
@@ -118,6 +168,7 @@ interface RunStepData {
 
 const route = useRoute()
 const projectId = computed(() => (route.params.id as string) || 'default')
+const activePanel = ref<'monitor' | 'swimlane' | 'trace'>('monitor')
 const agents = ref<AgentDef[]>([])
 const chapterOptions = ref<number[]>([])
 const runs = ref<RunListItem[]>([])
@@ -264,38 +315,57 @@ onMounted(async () => {
 
 <style scoped>
 .workshop-page {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: 18px;
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
+  padding: 24px;
+}
+
+.workshop-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: 0.9rem;
+}
+
+.panel-switch-card :deep(.system-card__body) {
+  gap: 10px;
+}
+
+.panel-switch-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.panel-switch-copy {
+  margin: 0;
+  color: var(--color-text-3);
+  line-height: 1.6;
 }
 
 /* Monitor row */
 .agent-monitor-row {
   display: flex;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--color-surface-l2);
   flex-shrink: 0;
+  align-items: stretch;
 }
 .monitor-empty {
   width: 100%;
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: var(--text-caption);
-  padding: var(--spacing-md) 0;
 }
 .monitor-card {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  background: var(--color-surface-l1);
-  border-radius: var(--radius-card);
-  border: 1px solid var(--color-surface-l2);
   padding: var(--spacing-sm) var(--spacing-md);
   flex: 1;
   min-width: 0;
-  transition: border-color 200ms;
 }
 .monitor-card.status-running { border-color: var(--color-ai-active); }
 .monitor-card.status-error { border-color: var(--color-error); }
@@ -312,6 +382,10 @@ onMounted(async () => {
 }
 
 /* Swimlane */
+.swimlane-shell {
+  overflow: hidden;
+}
+
 .swimlane-container {
   display: flex;
   flex-direction: column;
@@ -388,7 +462,6 @@ onMounted(async () => {
 /* Trace section */
 .trace-section {
   flex-shrink: 0;
-  border-top: 1px solid var(--color-surface-l2);
   max-height: 40%;
   overflow: hidden;
   display: flex;
@@ -403,6 +476,16 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 .trace-title { font-size: 13px; font-weight: 600; }
+.trace-copy {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.trace-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .chapter-select {
   background: var(--color-surface-l1);
   border: 1px solid var(--color-surface-l2);
@@ -410,5 +493,25 @@ onMounted(async () => {
   color: var(--color-text-primary);
   padding: 2px 8px;
   font-size: var(--text-caption);
+}
+
+@media (max-width: 960px) {
+  .workshop-page {
+    padding: 20px 16px;
+  }
+
+  .agent-monitor-row {
+    flex-direction: column;
+  }
+
+  .monitor-card {
+    width: 100%;
+  }
+
+  .trace-header,
+  .trace-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

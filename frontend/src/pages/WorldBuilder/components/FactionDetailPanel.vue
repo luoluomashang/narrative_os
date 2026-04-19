@@ -264,7 +264,7 @@ async function onExpand(field: string) {
   top: 2px;
   right: 2px;
   font-size: 14px;
-  color: var(--wb-neon-cyan, #2ef2ff);
+  color: var(--wb-neon-cyan);
 }
 
 .suggest-list {
@@ -275,9 +275,9 @@ async function onExpand(field: string) {
 }
 .suggest-card {
   padding: 8px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--wb-glass-border-strong);
   border-radius: 6px;
-  background: rgba(255,255,255,0.03);
+  background: var(--wb-panel-faint);
 }
 .suggest-info {
   display: flex;
@@ -289,12 +289,12 @@ async function onExpand(field: string) {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(77, 124, 255, 0.2);
-  color: var(--wb-neon-blue, #4d7cff);
+  background: var(--wb-blue-soft);
+  color: var(--wb-neon-blue);
 }
 .suggest-reason {
   font-size: 12px;
-  color: rgba(255,255,255,0.6);
+  color: var(--wb-text-muted);
   margin-bottom: 6px;
 }
 
@@ -312,15 +312,15 @@ async function onExpand(field: string) {
   gap: 6px;
   padding: 4px 8px;
   border-radius: 6px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--wb-panel-faint);
+  border: 1px solid var(--wb-glass-border);
 }
 
 .relation-faction-name {
   min-width: 80px;
   max-width: 110px;
   font-size: 12px;
-  color: #ccc;
+  color: var(--wb-text-main);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -334,9 +334,9 @@ async function onExpand(field: string) {
   text-align: center;
   flex-shrink: 0;
 }
-.relation-score-badge.score-positive { color: #2eff8a; }
-.relation-score-badge.score-neutral  { color: #aaa; }
-.relation-score-badge.score-negative { color: #ff8080; }
+.relation-score-badge.score-positive { color: var(--wb-neon-green); }
+.relation-score-badge.score-neutral  { color: var(--wb-text-soft); }
+.relation-score-badge.score-negative { color: var(--wb-neon-red); }
 
 .relation-map-add {
   display: flex;

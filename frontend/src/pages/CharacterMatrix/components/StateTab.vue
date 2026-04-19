@@ -16,8 +16,14 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { LineChart, RadarChart } from 'echarts/charts'
+import { GridComponent, RadarComponent, TooltipComponent } from 'echarts/components'
+import { init, use, type EChartsType } from 'echarts/core'
+import { SVGRenderer } from 'echarts/renderers'
+import { useThemeMode } from '@/composables/useThemeMode'
 import type { CharacterDetail } from '@/types/api'
+
+use([GridComponent, LineChart, RadarChart, RadarComponent, TooltipComponent, SVGRenderer])
 
 const props = defineProps<{
   model: CharacterDetail
@@ -25,15 +31,25 @@ const props = defineProps<{
 
 const radarEl = ref<HTMLElement | null>(null)
 const timelineEl = ref<HTMLElement | null>(null)
-let radarChart: echarts.ECharts | null = null
-let timelineChart: echarts.ECharts | null = null
+let radarChart: EChartsType | null = null
+let timelineChart: EChartsType | null = null
 let resizeObserver: ResizeObserver | null = null
+const { resolvedTheme } = useThemeMode()
 
 type SnapshotPoint = { chapter: number; arc_stage: string; emotion: string; health: number }
 
 const hasTimeline = computed(() => (props.model.snapshot_history?.length ?? 0) >= 2)
 
 const ARC_STAGES = ['防御', '裂缝', '代偿', '承认', '改变']
+
+function readThemeColor(variable: string, fallback: string) {
+  if (typeof window === 'undefined') {
+    return fallback
+  }
+
+  const value = getComputedStyle(document.documentElement).getPropertyValue(variable).trim()
+  return value || fallback
+}
 
 function calcRadarData(d: CharacterDetail): number[] {
   const EMOTION_SCORE: Record<string, number> = {
@@ -53,7 +69,7 @@ function calcRadarData(d: CharacterDetail): number[] {
 
 function renderRadar() {
   if (!radarEl.value || !props.model) return
-  if (!radarChart) radarChart = echarts.init(radarEl.value, 'dark')
+  if (!radarChart) radarChart = init(radarEl.value, undefined, { renderer: 'svg' })
   const data = calcRadarData(props.model)
   radarChart.setOption({
     backgroundColor: 'transparent',
@@ -66,22 +82,22 @@ function renderRadar() {
         { name: '记忆丰富', max: 10 },
         { name: '约束严格', max: 10 },
       ],
-      axisName: { color: '#999' },
-      splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.05)'] } },
+      axisName: { color: readThemeColor('--color-text-3', '#7a8794') },
+      splitArea: { areaStyle: { color: [readThemeColor('--color-surface-2', '#f7fafc'), readThemeColor('--color-surface-3', '#edf3f8')] } },
     },
     series: [{
       type: 'radar',
       data: [{ value: data, name: props.model.name }],
-      areaStyle: { color: 'rgba(46,242,255,0.2)' },
-      lineStyle: { color: '#2ef2ff' },
-      itemStyle: { color: '#2ef2ff' },
+      areaStyle: { color: readThemeColor('--color-chart-area', 'rgba(18, 126, 168, 0.2)') },
+      lineStyle: { color: readThemeColor('--color-chart-1', '#127ea8') },
+      itemStyle: { color: readThemeColor('--color-chart-1', '#127ea8') },
     }],
   })
 }
 
 function renderTimeline() {
   if (!timelineEl.value || !hasTimeline.value) return
-  if (!timelineChart) timelineChart = echarts.init(timelineEl.value, 'dark')
+  if (!timelineChart) timelineChart = init(timelineEl.value, undefined, { renderer: 'svg' })
   const history = (props.model.snapshot_history ?? []) as SnapshotPoint[]
   const xData = history.map((s: SnapshotPoint) => `第${s.chapter}章`)
   const yData = history.map((s: SnapshotPoint) => {
@@ -90,19 +106,19 @@ function renderTimeline() {
   })
   timelineChart.setOption({
     backgroundColor: 'transparent',
-    xAxis: { type: 'category', data: xData, axisLabel: { color: '#999', fontSize: 11 } },
+    xAxis: { type: 'category', data: xData, axisLabel: { color: readThemeColor('--color-text-3', '#7a8794'), fontSize: 11 } },
     yAxis: {
       type: 'value', min: 0, max: 4,
-      axisLabel: { formatter: (v: number) => ARC_STAGES[v] ?? '', color: '#999', fontSize: 11 },
-      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+      axisLabel: { formatter: (v: number) => ARC_STAGES[v] ?? '', color: readThemeColor('--color-text-3', '#7a8794'), fontSize: 11 },
+      splitLine: { lineStyle: { color: readThemeColor('--color-border-subtle', '#dbe5ee') } },
     },
     series: [{
       type: 'line',
       data: yData,
       smooth: true,
-      lineStyle: { color: '#2ef2ff' },
-      itemStyle: { color: '#2ef2ff' },
-      areaStyle: { color: 'rgba(46,242,255,0.1)' },
+      lineStyle: { color: readThemeColor('--color-chart-1', '#127ea8') },
+      itemStyle: { color: readThemeColor('--color-chart-1', '#127ea8') },
+      areaStyle: { color: readThemeColor('--color-chart-area', 'rgba(18, 126, 168, 0.2)') },
     }],
     grid: { left: 60, right: 20, top: 10, bottom: 30 },
     tooltip: {
@@ -123,6 +139,7 @@ function renderAll() {
 }
 
 watch(() => props.model, renderAll, { deep: true })
+watch(resolvedTheme, renderAll)
 
 onMounted(() => {
   renderAll()

@@ -1,75 +1,107 @@
 <template>
   <div class="style-page">
-    <div class="style-header">
-      <span class="style-title">风格控制台</span>
-      <el-select v-model="activePreset" placeholder="— 选择预设 —" style="width: 180px" @change="applyPreset">
-        <el-option v-for="p in presets" :key="p.name" :label="p.name" :value="p.name" />
-      </el-select>
-    </div>
-
-    <!-- Preset quick buttons -->
-    <el-radio-group v-model="activePreset" @change="applyPreset">
-      <el-radio-button v-for="p in quickPresets" :key="p.name" :value="p.name">{{ p.label }}</el-radio-button>
-    </el-radio-group>
-
-    <!-- 5 style sliders -->
-    <div class="sliders-grid">
-      <div v-for="dim in styleDims" :key="dim.key" class="slider-row">
-        <div class="slider-meta">
-          <span class="slider-name">{{ dim.label }}</span>
-          <span class="slider-val">{{ dim.value }}</span>
-        </div>
-        <el-slider
-          v-model="dim.value"
-          :min="0"
-          :max="100"
-          :step="1"
-          style="flex: 1; margin: 0 8px"
-          @change="schedulePreview"
-        />
-        <div class="slider-extremes">
-          <span>{{ dim.low }}</span>
-          <span>{{ dim.high }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Reference file drop zone -->
-    <div
-      class="style-drop-zone"
-      :class="{ dragging: isDragging, error: dropError }"
-      @dragover.prevent="isDragging = true"
-      @dragleave="isDragging = false"
-      @drop.prevent="onFileDrop"
+    <SystemPageHeader
+      eyebrow="Style Console"
+      title="风格控制台"
+      description="通过预设、参数滑块与参考文本提取，快速收敛写作风格。"
     >
-      <div v-if="extracting" class="drop-extracting">
-        <NBreathingLight :size="10" color="var(--color-ai-active)" />
-        <span>提取风格参数中…</span>
-      </div>
-      <span v-else-if="dropError" class="drop-error">{{ dropError }}</span>
-      <span v-else>将 .txt 或 .md 文件拖入此处，自动提取风格参数</span>
-    </div>
+      <template #actions>
+        <el-select v-model="activePreset" placeholder="— 选择预设 —" style="width: 180px" @change="applyPreset">
+          <el-option v-for="p in presets" :key="p.name" :label="p.name" :value="p.name" />
+        </el-select>
+      </template>
+    </SystemPageHeader>
 
-    <!-- Live preview -->
-    <div class="preview-section">
-      <div class="preview-header">
-        <span>实时预览</span>
-        <NButton variant="ghost" @click="refreshPreview">刷新预览</NButton>
-      </div>
-      <div class="preview-box">
-        <NTypewriter v-if="previewText" :text="previewText" :speed="20" />
-        <span v-else class="preview-empty">调整滑块后自动生成示例文本…</span>
-      </div>
-    </div>
+    <SystemSection title="风格编辑" description="把常用预设和细粒度参数收拢到同一编辑区。" dense>
+      <SystemCard>
+        <div class="editor-switch">
+          <SystemButton size="sm" :variant="editorPanel === 'presets' ? 'primary' : 'ghost'" @click="editorPanel = 'presets'">快速预设</SystemButton>
+          <SystemButton size="sm" :variant="editorPanel === 'dimensions' ? 'primary' : 'ghost'" @click="editorPanel = 'dimensions'">风格维度</SystemButton>
+        </div>
+        <p class="editor-copy">
+          {{ editorPanel === 'presets'
+            ? '先通过预设快速锁定方向，再进入细粒度调整。'
+            : '仅在需要精调时展开滑块，避免首屏同时出现过多控制器。'
+          }}
+        </p>
+
+        <div v-if="editorPanel === 'presets'" class="preset-panel">
+          <el-radio-group v-model="activePreset" @change="applyPreset">
+            <el-radio-button v-for="p in quickPresets" :key="p.name" :value="p.name">{{ p.label }}</el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <div v-else class="sliders-grid">
+          <div v-for="dim in styleDims" :key="dim.key" class="slider-shell">
+            <div class="slider-meta">
+              <span class="slider-name">{{ dim.label }}</span>
+              <span class="slider-val">{{ dim.value }}</span>
+            </div>
+            <el-slider
+              v-model="dim.value"
+              :min="0"
+              :max="100"
+              :step="1"
+              style="flex: 1; margin: 0 8px"
+              @change="schedulePreview"
+            />
+            <div class="slider-extremes">
+              <span>{{ dim.low }}</span>
+              <span>{{ dim.high }}</span>
+            </div>
+          </div>
+        </div>
+      </SystemCard>
+    </SystemSection>
+
+    <SystemSection title="参考文本提取" description="拖入样本文本，自动估算风格参数。" dense>
+      <SystemCard tone="subtle">
+        <div
+          class="style-drop-zone"
+          :class="{ dragging: isDragging, error: dropError }"
+          @dragover.prevent="isDragging = true"
+          @dragleave="isDragging = false"
+          @drop.prevent="onFileDrop"
+        >
+          <div v-if="extracting" class="drop-extracting">
+            <NBreathingLight :size="10" color="var(--color-ai-active)" />
+            <span>提取风格参数中…</span>
+          </div>
+          <span v-else-if="dropError" class="drop-error">{{ dropError }}</span>
+          <span v-else>将 .txt 或 .md 文件拖入此处，自动提取风格参数</span>
+        </div>
+      </SystemCard>
+    </SystemSection>
+
+    <SystemSection title="实时预览" description="根据当前参数生成示例文本。" dense>
+      <template #actions>
+        <SystemButton variant="ghost" @click="refreshPreview">刷新预览</SystemButton>
+      </template>
+
+      <SystemCard class="preview-section">
+        <div class="preview-box">
+          <NTypewriter v-if="previewText" :text="previewText" :speed="20" />
+          <SystemEmpty
+            v-else
+            title="暂无预览内容"
+            description="调整滑块、应用预设或导入参考文本后，这里会展示实时预览。"
+          />
+        </div>
+      </SystemCard>
+    </SystemSection>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import NButton from '@/components/common/NButton.vue'
 import NBreathingLight from '@/components/common/NBreathingLight.vue'
 import NTypewriter from '@/components/common/NTypewriter.vue'
 import axios from 'axios'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemEmpty from '@/components/system/SystemEmpty.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemSection from '@/components/system/SystemSection.vue'
 
 // ── Style dimensions ──────────────────────────────────────────────
 interface StyleDim {
@@ -104,6 +136,7 @@ const quickPresets = reactive<Preset[]>([
 ])
 
 const activePreset = ref('')
+const editorPanel = ref<'presets' | 'dimensions'>('presets')
 
 async function loadPresets() {
   try {
@@ -196,8 +229,7 @@ function refreshPreview() {
 
 <style scoped>
 .style-page {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   height: 100%;
   overflow-y: auto;
   padding: var(--spacing-md);
@@ -205,13 +237,6 @@ function refreshPreview() {
   box-sizing: border-box;
   max-width: 800px;
 }
-.style-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-.style-title { font-size: var(--text-h2); font-weight: var(--weight-h2); }
 .preset-select {
   background: var(--color-surface-l1);
   border: 1px solid var(--color-surface-l2);
@@ -236,12 +261,33 @@ function refreshPreview() {
 .preset-quick-btn:hover { border-color: var(--color-ai-active); }
 .preset-quick-btn.active { background: color-mix(in srgb, var(--color-ai-active) 20%, transparent); border-color: var(--color-ai-active); }
 
-/* Sliders */
+.editor-switch {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.editor-copy {
+  margin: 0 0 16px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.preset-panel {
+  display: grid;
+  gap: 12px;
+}
+
 .sliders-grid { display: flex; flex-direction: column; gap: var(--spacing-md); }
-.slider-row {
-  background: var(--color-surface-l1);
+.slider-shell {
+  display: grid;
+  gap: var(--spacing-2);
+  border: 1px solid var(--color-surface-l2);
   border-radius: var(--radius-card);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md);
+  background: color-mix(in srgb, var(--color-surface-l1) 88%, transparent);
 }
 .slider-meta {
   display: flex;
@@ -277,23 +323,7 @@ function refreshPreview() {
 .drop-extracting { display: flex; align-items: center; gap: var(--spacing-sm); }
 .drop-error { color: var(--color-error); }
 
-/* Preview */
-.preview-section {
-  background: var(--color-surface-l1);
-  border-radius: var(--radius-card);
-  overflow: hidden;
-}
-.preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--color-surface-l2);
-  font-size: 13px;
-  font-weight: 500;
-}
 .preview-box {
-  padding: var(--spacing-md);
   font-family: 'Noto Serif SC', 'Georgia', serif;
   font-size: var(--text-body);
   line-height: var(--lh-body);

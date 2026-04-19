@@ -1,47 +1,79 @@
 <template>
   <div class="chapter-manager-page">
-    <div class="cm-header">
-      <h2 class="cm-title">章节管理</h2>
-      <div class="cm-header-actions">
-        <el-button :icon="Download" :loading="exporting" @click="exportNovel('txt')">导出 TXT</el-button>
-        <el-button :icon="Download" :loading="exporting" @click="exportNovel('md')">导出 MD</el-button>
-        <el-button type="primary" :icon="EditPen" @click="goWrite">撰写新章节</el-button>
+    <SystemPageHeader
+      eyebrow="Chapter Manager"
+      title="章节管理"
+      description="查看已生成章节、导出全集，并快速跳回写作工作台进行续写或改写。"
+    >
+      <template #meta>
+        <span class="chapter-manager-page__pill">项目 {{ projectId }}</span>
+      </template>
+    </SystemPageHeader>
+
+    <SystemSection>
+      <template #actions>
+        <SystemButton :loading="exporting" @click="exportNovel('txt')">
+          <el-icon><Download /></el-icon>
+          <span>导出 TXT</span>
+        </SystemButton>
+        <SystemButton :loading="exporting" @click="exportNovel('md')">
+          <el-icon><Download /></el-icon>
+          <span>导出 MD</span>
+        </SystemButton>
+        <SystemButton variant="primary" @click="goWrite">
+          <el-icon><EditPen /></el-icon>
+          <span>撰写新章节</span>
+        </SystemButton>
+      </template>
+
+      <SystemErrorState
+        v-if="loadError && !loading"
+        :message="loadError"
+        action-label="重新加载"
+        @action="load"
+      />
+
+      <div v-if="loading" class="cm-loading">
+        <SystemSkeleton v-for="index in 3" :key="index" card show-header :rows="4" />
       </div>
-    </div>
 
-    <div v-if="loading" class="cm-loading">
-      <el-skeleton :rows="4" animated />
-    </div>
-
-    <el-empty v-else-if="chapters.length === 0" description="暂无已生成章节" />
-
-    <div v-else class="chapter-list">
-      <el-card
-        v-for="ch in chapters"
-        :key="ch.chapter"
-        class="chapter-card"
-        shadow="hover"
-        @click="openChapter(ch)"
+      <SystemEmpty
+        v-else-if="chapters.length === 0"
+        title="还没有已生成章节"
+        description="完成一次章节生成后，这里会显示章节摘要、质量分和导出入口。"
       >
-        <div class="ch-row">
-          <div class="ch-num">第 {{ ch.chapter }} 章</div>
-          <div class="ch-meta">
-            <el-tag v-if="ch.has_text" size="small" type="success">有正文</el-tag>
-            <el-tag v-else size="small" type="warning">仅元数据</el-tag>
-            <span class="ch-words">{{ ch.word_count }} 字</span>
-          </div>
-          <div class="ch-scores">
-            <span class="score-badge">质量 {{ ch.quality_score.toFixed(1) }}</span>
-            <span class="score-badge">钩子 {{ ch.hook_score.toFixed(1) }}</span>
-          </div>
-          <el-button :icon="View" size="small" text @click.stop="openChapter(ch)">查看</el-button>
-          <el-button :icon="EditPen" size="small" text @click.stop="goWriteChapter(ch.chapter)">改写</el-button>
-        </div>
-        <div v-if="ch.summary" class="ch-summary">{{ ch.summary }}</div>
-      </el-card>
-    </div>
+        <template #action>
+          <SystemButton variant="primary" @click="goWrite">去写第一章</SystemButton>
+        </template>
+      </SystemEmpty>
 
-    <!-- Chapter text dialog -->
+      <div v-else class="chapter-list">
+        <SystemCard
+          v-for="ch in chapters"
+          :key="ch.chapter"
+          class="chapter-card"
+          interactive
+          @click="openChapter(ch)"
+        >
+          <div class="ch-row">
+            <div class="ch-num">第 {{ ch.chapter }} 章</div>
+            <div class="ch-meta">
+              <el-tag v-if="ch.has_text" size="small" type="success">有正文</el-tag>
+              <el-tag v-else size="small" type="warning">仅元数据</el-tag>
+              <span class="ch-words">{{ ch.word_count }} 字</span>
+            </div>
+            <div class="ch-scores">
+              <span class="score-badge">质量 {{ ch.quality_score.toFixed(1) }}</span>
+              <span class="score-badge">钩子 {{ ch.hook_score.toFixed(1) }}</span>
+            </div>
+            <SystemButton size="sm" variant="ghost" @click.stop="openChapter(ch)">查看</SystemButton>
+            <SystemButton size="sm" variant="ghost" @click.stop="goWriteChapter(ch.chapter)">改写</SystemButton>
+          </div>
+          <div v-if="ch.summary" class="ch-summary">{{ ch.summary }}</div>
+        </SystemCard>
+      </div>
+    </SystemSection>
+
     <el-dialog
       v-model="showTextDialog"
       :title="`第 ${selectedChapter?.chapter ?? '?'} 章`"
@@ -49,7 +81,7 @@
       draggable
     >
       <div v-if="textLoading" style="padding: 24px; text-align: center">
-        <el-skeleton :rows="8" animated />
+        <SystemSkeleton card :rows="8" />
       </div>
       <div v-else>
         <div class="chapter-text-meta">
@@ -67,9 +99,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Download, EditPen, View } from '@element-plus/icons-vue'
+import { ElIcon, ElMessage } from 'element-plus'
+import { Download, EditPen } from '@element-plus/icons-vue'
 import { projects } from '@/api'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemEmpty from '@/components/system/SystemEmpty.vue'
+import SystemErrorState from '@/components/system/SystemErrorState.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemSection from '@/components/system/SystemSection.vue'
+import SystemSkeleton from '@/components/system/SystemSkeleton.vue'
 import type { ChapterListItem } from '@/types/api'
 
 const route = useRoute()
@@ -77,6 +116,7 @@ const router = useRouter()
 const projectId = computed(() => route.params.id as string)
 
 const loading = ref(false)
+const loadError = ref('')
 const chapters = ref<ChapterListItem[]>([])
 
 const showTextDialog = ref(false)
@@ -87,11 +127,13 @@ const exporting = ref(false)
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await projects.chapterList(projectId.value)
     chapters.value = res.data
   } catch {
     chapters.value = []
+    loadError.value = '加载章节列表失败，请检查项目状态后重试。'
     ElMessage.error('加载章节列表失败')
   } finally {
     loading.value = false
@@ -157,33 +199,26 @@ onMounted(load)
 <style scoped>
 .chapter-manager-page {
   padding: 24px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 20px;
   max-width: 900px;
   margin: 0 auto;
 }
 
-.cm-header {
-  display: flex;
+.chapter-manager-page__pill {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.cm-title {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0;
-  color: var(--el-text-color-primary);
-}
-
-.cm-header-actions {
-  display: flex;
-  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: 0.9rem;
 }
 
 .cm-loading {
-  padding: 24px;
+  display: grid;
+  gap: 12px;
 }
 
 .chapter-list {
@@ -194,11 +229,6 @@ onMounted(load)
 
 .chapter-card {
   cursor: pointer;
-  transition: border-color 150ms;
-}
-
-.chapter-card:hover {
-  border-color: var(--el-color-primary);
 }
 
 .ch-row {
@@ -271,5 +301,16 @@ onMounted(load)
   max-height: 65vh;
   overflow-y: auto;
   margin: 0;
+}
+
+@media (max-width: 900px) {
+  .chapter-manager-page {
+    padding: 20px 16px;
+  }
+
+  .ch-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
 }
 </style>

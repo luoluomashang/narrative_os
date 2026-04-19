@@ -185,18 +185,18 @@ async function runAiCheck() {
   margin-bottom: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--wb-neon-cyan, #2ef2ff);
+  color: var(--wb-neon-cyan);
 }
 
 .cp-count {
   font-size: 12px;
   font-weight: 400;
-  color: #888;
+  color: var(--wb-text-soft);
 }
 
 .cp-empty {
   text-align: center;
-  color: #2eff8a;
+  color: var(--wb-neon-green);
   font-size: 13px;
   padding: 24px;
 }
@@ -214,17 +214,17 @@ async function runAiCheck() {
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 12px;
-  color: #ccc;
+  color: var(--wb-text-main);
 }
 
 .cp-issue.warning {
-  background: rgba(255, 196, 46, 0.1);
-  border: 1px solid rgba(255, 196, 46, 0.25);
+  background: var(--wb-gold-soft);
+  border: 1px solid color-mix(in srgb, var(--wb-neon-gold) 35%, transparent);
 }
 
 .cp-issue.error {
-  background: rgba(255, 64, 64, 0.1);
-  border: 1px solid rgba(255, 64, 64, 0.25);
+  background: var(--wb-red-soft);
+  border: 1px solid color-mix(in srgb, var(--wb-neon-red) 35%, transparent);
 }
 
 .cp-severity {

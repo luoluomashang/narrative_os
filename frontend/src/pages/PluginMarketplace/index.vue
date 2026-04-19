@@ -1,50 +1,114 @@
 <template>
   <div class="plugin-page">
-    <div class="plugin-header">
-      <span class="plugin-title">插件市场</span>
-      <div class="plugin-filter">
-        <button
-          v-for="cat in categories"
-          :key="cat"
-          class="cat-btn"
-          :class="{ active: activeCategory === cat }"
-          @click="activeCategory = cat"
-        >{{ cat }}</button>
+    <SystemPageHeader
+      eyebrow="Plugin Marketplace"
+      title="插件市场"
+      description="统一管理风格增强、后处理、校验与导出能力，保持工作台能力边界清晰。"
+    >
+      <template #meta>
+        <span class="plugin-page__pill">已启用 {{ plugins.filter((plugin) => plugin.enabled).length }} 个插件</span>
+      </template>
+    </SystemPageHeader>
+
+    <SystemSection>
+      <template #actions>
+        <div class="plugin-filter">
+          <SystemButton
+            v-for="cat in categories"
+            :key="cat"
+            size="sm"
+            :variant="activeCategory === cat ? 'secondary' : 'ghost'"
+            @click="activeCategory = cat"
+          >
+            {{ cat }}
+          </SystemButton>
+        </div>
+      </template>
+
+      <div v-if="loading" class="plugin-loading">
+        <SystemSkeleton v-for="index in 3" :key="index" card show-header :rows="3" />
       </div>
-    </div>
 
-    <div v-if="loading" class="plugin-loading">
-      <el-skeleton :rows="3" animated />
-    </div>
-
-    <el-empty v-else-if="filteredPlugins.length === 0" description="暂无插件" />
-
-    <div class="plugin-grid" v-else>
-      <el-card
-        v-for="plugin in filteredPlugins"
-        :key="plugin.id"
-        class="plugin-card"
-        :class="{ enabled: plugin.enabled }"
-        shadow="hover"
+      <SystemEmpty
+        v-else-if="filteredPlugins.length === 0"
+        title="当前分类暂无插件"
+        description="切换筛选分类，或等待插件服务恢复后重新拉取列表。"
       >
-        <div class="pc-header">
-          <span class="pc-name">{{ plugin.name }}</span>
-          <el-switch v-model="plugin.enabled" @change="() => togglePlugin(plugin)" />
-        </div>
-        <div class="pc-desc">{{ plugin.description }}</div>
-        <div class="pc-meta">
-          <el-tag size="small" type="info">v{{ plugin.version }}</el-tag>
-          <el-tag v-for="tag in plugin.tags" :key="tag" size="small">{{ tag }}</el-tag>
-        </div>
-        <div class="pc-author">by {{ plugin.author }}</div>
-      </el-card>
-    </div>
+        <template #action>
+          <SystemButton @click="activeCategory = '全部'">查看全部插件</SystemButton>
+        </template>
+      </SystemEmpty>
+
+      <div class="plugin-grid" v-else>
+        <SystemCard
+          v-for="plugin in filteredPlugins"
+          :key="plugin.id"
+          class="plugin-card"
+          :class="{ enabled: plugin.enabled }"
+          interactive
+          @click="openPlugin(plugin)"
+        >
+          <div class="pc-header">
+            <span class="pc-name">{{ plugin.name }}</span>
+            <span class="pc-state" :class="{ 'pc-state--enabled': plugin.enabled }">
+              {{ plugin.enabled ? '已启用' : '未启用' }}
+            </span>
+          </div>
+          <div class="pc-desc">{{ plugin.description }}</div>
+          <div class="pc-meta">
+            <el-tag size="small" type="info">v{{ plugin.version }}</el-tag>
+            <el-tag v-for="tag in plugin.tags" :key="tag" size="small">{{ tag }}</el-tag>
+          </div>
+          <div class="pc-footer">
+            <div class="pc-author">by {{ plugin.author }}</div>
+            <SystemButton size="sm" variant="secondary" @click.stop="openPlugin(plugin)">查看详情</SystemButton>
+          </div>
+        </SystemCard>
+      </div>
+    </SystemSection>
+
+    <SystemDrawer
+      v-model="pluginDrawerOpen"
+      :title="selectedPlugin?.name || '插件详情'"
+      description="插件详情与启用动作统一进入抽屉，避免浏览列表同时承载过多直接操作。"
+      size="420px"
+    >
+      <div v-if="selectedPlugin" class="plugin-drawer">
+        <SystemCard tone="subtle" :title="selectedPlugin.name" :description="selectedPlugin.description">
+          <div class="pc-meta">
+            <el-tag size="small" type="info">v{{ selectedPlugin.version }}</el-tag>
+            <el-tag size="small">{{ selectedPlugin.category }}</el-tag>
+            <el-tag v-for="tag in selectedPlugin.tags" :key="tag" size="small">{{ tag }}</el-tag>
+          </div>
+          <p class="plugin-drawer__desc">作者：{{ selectedPlugin.author }}</p>
+        </SystemCard>
+
+        <SystemCard title="启用状态" tone="subtle">
+          <p class="plugin-drawer__desc">
+            {{ selectedPlugin.enabled ? '当前插件已启用，会在对应工作流中提供能力支持。' : '当前插件未启用，需要手动打开后才会参与工作流。' }}
+          </p>
+          <template #actions>
+            <el-switch
+              :model-value="selectedPlugin.enabled"
+              @change="handleSelectedPluginToggle"
+            />
+          </template>
+        </SystemCard>
+      </div>
+    </SystemDrawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemDrawer from '@/components/system/SystemDrawer.vue'
+import SystemEmpty from '@/components/system/SystemEmpty.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemSection from '@/components/system/SystemSection.vue'
+import SystemSkeleton from '@/components/system/SystemSkeleton.vue'
 
 interface Plugin {
   id: string
@@ -61,6 +125,8 @@ const loading = ref(true)
 const plugins = ref<Plugin[]>([])
 const categories = ['全部', '风格', '后处理', '校验', '输出']
 const activeCategory = ref('全部')
+const pluginDrawerOpen = ref(false)
+const selectedPlugin = ref<Plugin | null>(null)
 
 const filteredPlugins = computed(() =>
   activeCategory.value === '全部'
@@ -87,8 +153,9 @@ async function loadPlugins() {
   }
 }
 
-async function togglePlugin(plugin: Plugin) {
+async function setPluginEnabled(plugin: Plugin, nextEnabled: boolean) {
   const prev = plugin.enabled
+  plugin.enabled = nextEnabled
   try {
     const res = await axios.post(`/api/plugins/${plugin.id}/toggle`)
     if (res.data && typeof res.data.enabled === 'boolean') {
@@ -100,42 +167,54 @@ async function togglePlugin(plugin: Plugin) {
   }
 }
 
+function handleSelectedPluginToggle(value: boolean | string | number) {
+  if (!selectedPlugin.value) {
+    return
+  }
+  void setPluginEnabled(selectedPlugin.value, Boolean(value))
+}
+
+function openPlugin(plugin: Plugin) {
+  selectedPlugin.value = plugin
+  pluginDrawerOpen.value = true
+}
+
 onMounted(loadPlugins)
+
+watch(pluginDrawerOpen, (open) => {
+  if (!open) {
+    selectedPlugin.value = null
+  }
+})
 </script>
 
 <style scoped>
 .plugin-page {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: 16px;
   height: 100%;
   overflow: hidden;
   padding: var(--spacing-md);
-  gap: var(--spacing-md);
   box-sizing: border-box;
 }
-.plugin-header {
-  display: flex;
+.plugin-page__pill {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: 0.9rem;
 }
-.plugin-title { font-size: var(--text-h2); font-weight: var(--weight-h2); }
 .plugin-filter { display: flex; gap: 4px; }
-.cat-btn {
-  background: var(--color-surface-l1);
-  border: 1px solid var(--color-surface-l2);
-  border-radius: var(--radius-btn);
-  color: var(--color-text-primary);
-  padding: 3px 10px;
-  font-size: var(--text-caption);
-  cursor: pointer;
-  transition: background 150ms;
+
+.plugin-loading {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-md);
 }
-.cat-btn.active { background: var(--color-ai-active); color: var(--color-base); border-color: var(--color-ai-active); }
 
-.plugin-loading { text-align: center; color: var(--color-text-secondary); font-size: 14px; margin-top: var(--spacing-xl); }
-
-/* Grid */
 .plugin-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -144,16 +223,10 @@ onMounted(loadPlugins)
   align-content: start;
 }
 
-/* Plugin card */
 .plugin-card {
-  background: var(--color-surface-l1);
-  border-radius: var(--radius-card);
-  border: 1px solid var(--color-surface-l2);
-  padding: var(--spacing-md);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  transition: border-color 200ms;
 }
 .plugin-card.enabled { border-color: var(--color-success); }
 
@@ -164,30 +237,69 @@ onMounted(loadPlugins)
 }
 .pc-name { font-size: 14px; font-weight: 600; }
 
-.pc-toggle {
-  width: 36px;
-  height: 20px;
-  background: var(--color-surface-l2);
-  border-radius: 10px;
-  position: relative;
-  cursor: pointer;
-  transition: background 200ms;
-  flex-shrink: 0;
+.pc-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-3);
+  font-size: 12px;
+  font-weight: 700;
 }
-.pc-toggle.on { background: var(--color-success); }
-.pc-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: var(--color-text-primary);
-  border-radius: 50%;
-  transition: transform 200ms;
+
+.pc-state--enabled {
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
-.pc-toggle.on .pc-thumb { transform: translateX(16px); }
 
 .pc-desc { font-size: 13px; color: var(--color-text-secondary); flex: 1; }
 .pc-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+.pc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .pc-author { font-size: var(--text-caption); color: var(--color-text-secondary); }
+
+.plugin-drawer {
+  display: grid;
+  gap: 14px;
+}
+
+.plugin-drawer__desc {
+  margin: 0;
+  color: var(--color-text-2);
+  line-height: 1.6;
+}
+
+@media (max-width: 1080px) {
+  .plugin-loading,
+  .plugin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .plugin-page {
+    padding: 16px;
+  }
+
+  .plugin-filter {
+    flex-wrap: wrap;
+  }
+
+  .plugin-loading,
+  .plugin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pc-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 </style>

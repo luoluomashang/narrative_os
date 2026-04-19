@@ -32,7 +32,7 @@ const views = [
 .view-switcher {
   display: flex;
   gap: 4px;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--wb-panel-solid-strong);
   border: 1px solid var(--wb-glass-border);
   border-radius: 8px;
   padding: 4px;
@@ -47,7 +47,7 @@ const views = [
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: #888;
+  color: var(--wb-text-soft);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s ease;
@@ -61,8 +61,8 @@ const views = [
 .vs-btn.active {
   color: var(--wb-neon-cyan);
   border-color: var(--wb-neon-cyan);
-  background: rgba(46, 242, 255, 0.1);
-  box-shadow: 0 0 8px rgba(46, 242, 255, 0.3);
+  background: color-mix(in srgb, var(--wb-neon-cyan) 10%, transparent);
+  box-shadow: var(--wb-button-glow);
 }
 
 .vs-icon { font-size: 14px; }

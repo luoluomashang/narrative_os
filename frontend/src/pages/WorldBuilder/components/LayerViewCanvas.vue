@@ -12,7 +12,7 @@
           v-for="node in layer.nodes"
           :key="node.id"
           class="lv-node"
-          :style="{ borderColor: layer.color, boxShadow: `0 0 8px ${layer.color}40` }"
+          :style="{ borderColor: layer.color, boxShadow: `0 0 8px color-mix(in srgb, ${layer.color} 40%, transparent)` }"
           @click="$emit('node-click', node.id)"
         >
           {{ node.name }}
@@ -38,7 +38,13 @@ const props = defineProps<{
 
 defineEmits<{ (e: 'node-click', id: string): void }>()
 
-const LAYER_COLORS = ['#2ef2ff', '#4d7cff', '#ff2e88', '#ffc42e', '#2eff8a']
+const LAYER_COLORS = [
+  'var(--wb-neon-cyan)',
+  'var(--wb-neon-blue)',
+  'var(--wb-relation-war)',
+  'var(--wb-neon-gold)',
+  'var(--wb-neon-green)',
+]
 const LAYER_NAMES: Record<number, string> = {
   1: '下界',
   2: '中界',
@@ -95,7 +101,7 @@ const computedLayers = computed(() => {
   border: 1px solid;
   border-radius: 12px;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--wb-panel-solid);
   backdrop-filter: blur(6px);
 }
 
@@ -116,8 +122,8 @@ const computedLayers = computed(() => {
   padding: 8px 16px;
   border: 1px solid;
   border-radius: 8px;
-  background: rgba(13, 13, 20, 0.7);
-  color: #e0e0e0;
+  background: color-mix(in srgb, var(--wb-panel-solid-strong) 82%, black);
+  color: var(--wb-text-main);
   cursor: pointer;
   font-size: 13px;
   transition: all 0.2s ease;
@@ -130,7 +136,7 @@ const computedLayers = computed(() => {
 
 .lv-empty {
   font-size: 12px;
-  color: #555;
+  color: var(--wb-text-placeholder);
   font-style: italic;
 }
 </style>

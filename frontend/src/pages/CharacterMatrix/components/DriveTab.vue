@@ -123,10 +123,10 @@ function removeNonNegotiable(index: number) {
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 label { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); }
 .hint { font-weight: 400; font-size: 11px; }
-textarea { width: 100%; border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; font-size: 13px; resize: vertical; background: var(--color-bg-input, #fff); color: var(--color-text); }
+textarea { width: 100%; border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; font-size: 13px; resize: vertical; background: var(--color-surface-1); color: var(--color-text-primary); }
 .actions { display: flex; justify-content: flex-end; padding-top: 4px; }
-.tag-input { display: flex; flex-wrap: wrap; gap: 4px; border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; background: var(--color-bg-input, #fff); min-height: 36px; align-items: center; }
-.tag { background: var(--color-primary, #6366f1); color: #fff; border-radius: 12px; padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+.tag-input { display: flex; flex-wrap: wrap; gap: 4px; border: 1px solid var(--color-border); border-radius: 6px; padding: 4px 8px; background: var(--color-surface-1); min-height: 36px; align-items: center; }
+.tag { background: var(--color-accent); color: var(--color-text-inverse); border-radius: 12px; padding: 2px 8px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
 .tag button { background: none; border: none; color: inherit; cursor: pointer; padding: 0; line-height: 1; font-size: 14px; }
-.tag-input input { border: none; outline: none; font-size: 13px; flex: 1; min-width: 80px; background: transparent; color: var(--color-text); }
+.tag-input input { border: none; outline: none; font-size: 13px; flex: 1; min-width: 80px; background: transparent; color: var(--color-text-primary); }
 </style>

@@ -63,28 +63,28 @@ const scopeClass = computed(() =>
 
 /* --- Internal faction: blue glow --- */
 .scope-internal {
-  background: var(--wb-neon-blue, #4d7cff);
+  background: var(--wb-neon-blue);
 }
 .scope-internal .node-inner {
-  background: rgba(10, 20, 60, 0.92);
-  border: 1.5px solid var(--wb-neon-blue, #4d7cff);
-  box-shadow: var(--wb-glow-blue, 0 0 8px #4d7cff80);
+  background: var(--wb-faction-internal-core);
+  border: 1.5px solid var(--wb-neon-blue);
+  box-shadow: var(--wb-glow-blue);
 }
 
 /* --- External faction: red glow --- */
 .scope-external {
-  background: var(--wb-neon-red, #ff4040);
+  background: var(--wb-neon-red);
 }
 .scope-external .node-inner {
-  background: rgba(50, 10, 10, 0.92);
-  border: 1.5px solid var(--wb-neon-red, #ff4040);
-  box-shadow: var(--wb-glow-red, 0 0 8px #ff404080);
+  background: var(--wb-faction-external-core);
+  border: 1.5px solid var(--wb-neon-red);
+  box-shadow: var(--wb-glow-red);
 }
 
 .node-title {
   font-size: 13px;
   font-weight: 600;
-  color: #e0e8ff;
+  color: var(--wb-text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -96,16 +96,16 @@ const scopeClass = computed(() =>
 }
 
 .scope-internal .node-sub {
-  color: rgba(77, 124, 255, 0.7);
+  color: color-mix(in srgb, var(--wb-neon-blue) 70%, transparent);
 }
 
 .scope-external .node-sub {
-  color: rgba(255, 64, 64, 0.7);
+  color: color-mix(in srgb, var(--wb-neon-red) 70%, transparent);
 }
 
 @keyframes wb-faction-pulse {
-  0%   { box-shadow: 0 0 4px rgba(77, 124, 255, 0.15), 0 0 12px rgba(77, 124, 255, 0.08); }
-  100% { box-shadow: 0 0 10px rgba(77, 124, 255, 0.4), 0 0 24px rgba(77, 124, 255, 0.2); }
+  0%   { box-shadow: var(--wb-glow-blue-rest); }
+  100% { box-shadow: var(--wb-glow-blue-active); }
 }
 
 .scope-external {
@@ -113,7 +113,7 @@ const scopeClass = computed(() =>
 }
 
 @keyframes wb-faction-pulse-red {
-  0%   { box-shadow: 0 0 4px rgba(255, 64, 64, 0.15), 0 0 12px rgba(255, 64, 64, 0.08); }
-  100% { box-shadow: 0 0 10px rgba(255, 64, 64, 0.4), 0 0 24px rgba(255, 64, 64, 0.2); }
+  0%   { box-shadow: var(--wb-glow-red-rest); }
+  100% { box-shadow: var(--wb-glow-red-active); }
 }
 </style>

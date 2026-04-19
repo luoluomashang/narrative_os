@@ -1,74 +1,90 @@
-/* styles/tokens.css — Design Tokens */
+/* styles/tokens.css */
 :root {
-  /* 颜色 */
-  --color-base: #0a0a0b;
-  --color-surface-l1: #1b1c22;
-  --color-surface-l2: #2d2f3a;
-  --color-text-primary: #f2efe9;
-  --color-text-secondary: #999999;
-  --color-ai-active: #2ef2ff;
-  --color-hitl: #ff2e88;
-  --color-success: #3f5a48;
-  --color-warning: #f5a623;
-  --color-error: #ff4040;
+  --font-family-base: 'Segoe UI', 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  --font-family-heading: 'Segoe UI', 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  --font-family-mono: 'Cascadia Code', Consolas, 'SFMono-Regular', ui-monospace, monospace;
 
-  /* 间距 */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 40px;
+  --text-display: 2rem;
+  --text-h1: 1.5rem;
+  --text-h2: 1.125rem;
+  --text-body: 0.9375rem;
+  --text-caption: 0.75rem;
+  --text-code: 0.8125rem;
 
-  /* 字体大小 */
-  --text-h1: 24px;
   --weight-h1: 700;
-  --lh-h1: 1.3;
-  --text-h2: 18px;
   --weight-h2: 600;
-  --lh-h2: 1.4;
-  --text-body: 15px;
   --weight-body: 400;
-  --lh-body: 1.7;
-  --text-caption: 12px;
-  --text-code: 13px;
+  --lh-display: 1.15;
+  --lh-h1: 1.3;
+  --lh-h2: 1.4;
+  --lh-body: 1.6;
 
-  /* 圆角 */
-  --radius-card: 8px;
-  --radius-btn: 6px;
-  --radius-modal: 12px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
 
-  /* 文本行宽 */
-  --max-line-chars: 65ch;
+  --spacing-xs: var(--spacing-1);
+  --spacing-sm: var(--spacing-2);
+  --spacing-md: var(--spacing-4);
+  --spacing-lg: var(--spacing-6);
+  --spacing-xl: var(--spacing-10);
 
-  /* ── WorldBuilder 专属 Token ──────────────────────────────────── */
-  /* 霓虹色系 */
-  --wb-neon-cyan:    #2ef2ff;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  --radius-card: var(--radius-lg);
+  --radius-btn: 10px;
+  --radius-modal: 18px;
+
+  --border-thin: 1px;
+  --border-strong: 2px;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 18px 40px rgba(15, 23, 42, 0.12);
+  --shadow-lg: 0 28px 64px rgba(15, 23, 42, 0.16);
+
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 960px;
+  --breakpoint-lg: 1280px;
+  --breakpoint-xl: 1440px;
+
+  --max-line-chars: 68ch;
+  --app-shell-max-width: 1600px;
+
+  --wb-neon-cyan: #2ef2ff;
   --wb-neon-magenta: #ff2e88;
-  --wb-neon-blue:    #4d7cff;
-  --wb-neon-purple:  #a855f7;
-  --wb-neon-gold:    #f5a623;
-  --wb-neon-red:     #ff4040;
+  --wb-neon-blue: #4d7cff;
+  --wb-neon-purple: #a855f7;
+  --wb-neon-gold: #f5a623;
+  --wb-neon-red: #ff4040;
 
-  /* 节点辉光（box-shadow 用） */
-  --wb-glow-cyan:    0 0 8px #2ef2ff80, 0 0 24px #2ef2ff40;
+  --wb-glow-cyan: 0 0 8px #2ef2ff80, 0 0 24px #2ef2ff40;
   --wb-glow-magenta: 0 0 8px #ff2e8880, 0 0 24px #ff2e8840;
-  --wb-glow-blue:    0 0 8px #4d7cff80, 0 0 24px #4d7cff40;
-  --wb-glow-red:     0 0 8px #ff404080, 0 0 24px #ff404040;
-  --wb-glow-gold:    0 0 8px #f5a62380, 0 0 24px #f5a62340;
+  --wb-glow-blue: 0 0 8px #4d7cff80, 0 0 24px #4d7cff40;
+  --wb-glow-red: 0 0 8px #ff404080, 0 0 24px #ff404040;
+  --wb-glow-gold: 0 0 8px #f5a62380, 0 0 24px #f5a62340;
 
-  /* 玻璃拟物化 */
-  --wb-glass-bg:     rgba(13, 13, 20, 0.75);
+  --wb-glass-bg: rgba(13, 13, 20, 0.75);
   --wb-glass-border: rgba(46, 242, 255, 0.15);
-  --wb-glass-blur:   12px;
+  --wb-glass-blur: 12px;
   --wb-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 
-  /* 画布 */
-  --wb-canvas-bg:    #080810;
-  --wb-canvas-grid:  rgba(46, 242, 255, 0.04);
+  --wb-canvas-bg: #080810;
+  --wb-canvas-grid: rgba(46, 242, 255, 0.04);
 
-  /* 动画时长 */
-  --wb-anim-pulse:   2s;
-  --wb-anim-flow:    3s;
+  --wb-anim-pulse: 2s;
+  --wb-anim-flow: 3s;
 }
 
 /* ── WorldBuilder 主题覆盖 ──────────────────────────────────── */

@@ -1,31 +1,40 @@
 <template>
   <div class="cd-page">
-    <header class="cd-header">
-      <span class="cd-title">消耗统计仪表盘</span>
-      <NButton variant="ghost" @click="loadAll">刷新</NButton>
-    </header>
+    <SystemPageHeader
+      eyebrow="Cost Dashboard"
+      title="消耗统计仪表盘"
+      description="查看 Tokens、费用与 Agent / Skill 分布，快速定位高消耗模块。"
+    >
+      <template #actions>
+        <SystemButton variant="ghost" @click="loadAll">刷新</SystemButton>
+      </template>
+    </SystemPageHeader>
 
-    <!-- 三张统计卡片 -->
     <div v-if="summary" class="stat-cards">
-      <div class="stat-card">
+      <SystemCard class="stat-card" tone="subtle">
         <div class="stat-val">{{ summary.today_tokens.toLocaleString() }}</div>
         <div class="stat-label">今日 Tokens</div>
-      </div>
-      <div class="stat-card">
+      </SystemCard>
+      <SystemCard class="stat-card" tone="subtle">
         <div class="stat-val">{{ summary.total_tokens.toLocaleString() }}</div>
         <div class="stat-label">累计 Tokens</div>
-      </div>
-      <div class="stat-card">
+      </SystemCard>
+      <SystemCard class="stat-card" tone="subtle">
         <div class="stat-val">${{ summary.today_cost_usd.toFixed(4) }}</div>
         <div class="stat-label">今日费用 (USD)</div>
-      </div>
+      </SystemCard>
     </div>
-    <div v-else-if="loading" class="cd-loading">加载中…</div>
+    <SystemSkeleton v-else-if="loading" :rows="5" show-header card />
+    <SystemErrorState
+      v-else-if="loadError"
+      title="消耗统计加载失败"
+      :message="loadError"
+      action-label="重试"
+      @action="loadAll"
+    />
 
-    <!-- 按 Agent 分组 -->
     <section v-if="summary && agentEntries.length > 0" class="cd-section">
-      <div class="cd-card">
-        <div class="cd-card-title">按 Agent 分组</div>
+      <SystemCard title="按 Agent 分组" class="cd-card">
         <div class="bar-list">
           <div v-for="[agent, tokens] in agentEntries" :key="agent" class="bar-row">
             <span class="bar-label">{{ agent }}</span>
@@ -35,13 +44,11 @@
             <span class="bar-val">{{ tokens.toLocaleString() }}</span>
           </div>
         </div>
-      </div>
+      </SystemCard>
     </section>
 
-    <!-- 按 Skill 分组 -->
     <section v-if="summary && skillEntries.length > 0" class="cd-section">
-      <div class="cd-card">
-        <div class="cd-card-title">按 Skill 分组</div>
+      <SystemCard title="按 Skill 分组" class="cd-card">
         <table class="cd-table">
           <thead>
             <tr>
@@ -58,13 +65,11 @@
             </tr>
           </tbody>
         </table>
-      </div>
+      </SystemCard>
     </section>
 
-    <!-- 历史折线（简单文字展示，ECharts 可在阶段五引入） -->
     <section v-if="history.length > 0" class="cd-section">
-      <div class="cd-card">
-        <div class="cd-card-title">历史记录（最近 {{ history.length }} 天）</div>
+      <SystemCard :title="`历史记录（最近 ${history.length} 天）`" class="cd-card">
         <div class="history-list">
           <div v-for="item in history" :key="item.date" class="history-row">
             <span class="history-date">{{ item.date }}</span>
@@ -72,16 +77,20 @@
             <span class="history-cost">${{ item.cost_usd.toFixed(4) }}</span>
           </div>
         </div>
-      </div>
+      </SystemCard>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import NButton from '@/components/common/NButton.vue'
 import { useProjectStore } from '@/stores/projectStore'
 import { cost } from '@/api'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemErrorState from '@/components/system/SystemErrorState.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemSkeleton from '@/components/system/SystemSkeleton.vue'
 import type { CostSummaryResponse, CostHistoryItem } from '@/types/api'
 
 const projectStore = useProjectStore()
@@ -90,6 +99,7 @@ const filterProjectId = computed(() => projectStore.projectId || undefined)
 const summary = ref<CostSummaryResponse | null>(null)
 const history = ref<CostHistoryItem[]>([])
 const loading = ref(false)
+const loadError = ref('')
 const sortCol = ref<'name' | 'tokens'>('tokens')
 const sortAsc = ref(false)
 
@@ -124,6 +134,7 @@ function pct(val: number, total: number): string {
 
 async function loadAll() {
   loading.value = true
+  loadError.value = ''
   try {
     const [s, h] = await Promise.all([
       cost.summary(filterProjectId.value),
@@ -131,8 +142,10 @@ async function loadAll() {
     ])
     summary.value = s.data
     history.value = h.data
-  } catch {
+  } catch (error: unknown) {
     summary.value = null
+    history.value = []
+    loadError.value = error instanceof Error ? error.message : '请求失败，请稍后重试。'
   } finally {
     loading.value = false
   }
@@ -150,22 +163,13 @@ onMounted(loadAll)
   max-width: 900px;
   margin: 0 auto;
 }
-.cd-header { display: flex; align-items: center; justify-content: space-between; }
-.cd-title { font-size: 20px; font-weight: 600; color: var(--color-text-primary); }
-.cd-loading { color: var(--color-text-secondary); font-size: 14px; }
 .stat-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .stat-card {
-  background: var(--color-surface-l1);
-  border: 1px solid var(--color-surface-l2);
-  border-radius: 8px;
-  padding: 20px;
   text-align: center;
 }
 .stat-val { font-size: 28px; font-weight: 700; color: var(--color-accent); }
 .stat-label { font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; }
 .cd-section {}
-.cd-card { background: var(--color-surface-l1); border: 1px solid var(--color-surface-l2); border-radius: 8px; padding: 20px; }
-.cd-card-title { font-size: 14px; font-weight: 600; color: var(--color-text-primary); margin-bottom: 14px; }
 .bar-list { display: flex; flex-direction: column; gap: 8px; }
 .bar-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .bar-label { min-width: 120px; color: var(--color-text-secondary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
@@ -200,4 +204,10 @@ onMounted(loadAll)
 .history-date { color: var(--color-text-secondary); min-width: 100px; }
 .history-tokens { color: var(--color-text-primary); flex: 1; }
 .history-cost { color: var(--color-accent); }
+
+@media (max-width: 720px) {
+  .stat-cards {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

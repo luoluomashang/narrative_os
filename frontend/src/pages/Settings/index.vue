@@ -1,38 +1,85 @@
 <template>
   <div class="settings-page">
-    <h2 class="settings-title">系统设置</h2>
+    <SystemPageHeader
+      eyebrow="Settings"
+      :title="projectId ? '项目设置' : '系统设置'"
+      :description="projectId
+        ? '统一管理当前项目的生成参数、Prompt 覆盖以及与全局模型配置的协同关系。'
+        : '统一管理 Agent 行为、全局 LLM 提供商与默认创作参数。'
+      "
+    >
+      <template #meta>
+        <span class="settings-meta-pill">{{ projectId ? `项目 ${projectId}` : '全局配置' }}</span>
+      </template>
+    </SystemPageHeader>
 
-    <el-tabs v-model="activeTab" class="settings-tabs">
-
-      <!-- ── Global Settings ──────────────────────── -->
-      <el-tab-pane label="全局设置" name="global">
-
-        <!-- Agent behavior -->
-        <el-card class="settings-card" header="Agent 行为">
-          <div class="setting-row">
-            <label class="setting-label">每章 Token 预算</label>
-            <el-input-number v-model="agentCfg.perChapterBudget" :min="1000" :max="200000" :step="1000" />
+    <SystemSection
+      title="配置总览"
+      description="先确认当前可用能力与项目覆盖范围，再进入抽屉修改低频配置。"
+    >
+      <div class="settings-overview-grid" :class="{ 'settings-overview-grid--project': projectId }">
+        <SystemCard class="overview-card" tone="accent" title="Agent 策略概览" description="预算、重试和成本降级策略。">
+          <template #actions>
+            <SystemButton variant="primary" @click="agentDrawerOpen = true">编辑策略</SystemButton>
+          </template>
+          <div class="overview-metric-grid">
+            <div v-for="item in agentSummaryItems" :key="item.label" class="overview-metric">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
           </div>
-          <div class="setting-row">
-            <label class="setting-label">最大重写次数</label>
-            <el-select v-model="agentCfg.maxRetries" style="width: 120px">
-              <el-option v-for="n in [1,2,3,5,10]" :key="n" :label="`${n} 次`" :value="n" />
-            </el-select>
-          </div>
-          <div class="setting-row">
-            <label class="setting-label">自动降级模型</label>
-            <el-switch v-model="agentCfg.autoDowngrade" />
-            <span class="setting-hint">超限时自动切换至低成本模型</span>
-          </div>
-          <div class="setting-actions">
-            <el-button type="primary" :loading="savingAgent" @click="saveAgentConfig">保存 Agent 配置</el-button>
-          </div>
-        </el-card>
+        </SystemCard>
 
-        <!-- LLM Provider Config -->
-        <el-card class="settings-card" header="LLM 提供商配置">
+        <SystemCard class="overview-card" title="LLM 能力卡" description="当前提供商状态、可用连接数量与配置入口。">
+          <template #actions>
+            <SystemButton variant="primary" @click="providerDrawerOpen = true">编辑连接信息</SystemButton>
+          </template>
+          <div class="overview-metric-grid">
+            <div v-for="item in providerOverviewItems" :key="item.label" class="overview-metric">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </SystemCard>
 
-          <!-- Provider status badges -->
+        <SystemCard
+          v-if="projectId"
+          class="overview-card"
+          title="项目默认值"
+          description="项目级生成参数与 Prompt 覆盖状态。"
+        >
+          <template #actions>
+            <SystemButton variant="primary" @click="projectDrawerOpen = true">编辑项目设置</SystemButton>
+          </template>
+          <div class="overview-metric-grid">
+            <div v-for="item in projectSummaryItems" :key="item.label" class="overview-metric">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </SystemCard>
+      </div>
+    </SystemSection>
+
+    <SystemSection
+      title="全局能力"
+      description="Provider 配置收敛为能力卡，测试连接与保存配置分离，避免首屏堆叠大量表单。"
+    >
+      <div class="settings-capability-grid">
+        <SystemCard class="settings-card" title="Agent 行为" description="控制每章预算、重试策略与成本降级兜底。">
+          <div class="setting-summary-list">
+            <div v-for="item in agentSummaryItems" :key="item.label" class="setting-summary-item">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+
+          <template #actions>
+            <SystemButton variant="primary" @click="agentDrawerOpen = true">编辑策略</SystemButton>
+          </template>
+        </SystemCard>
+
+        <SystemCard class="settings-card" title="LLM 提供商配置" description="切换当前查看的提供商，查看可用状态，再进入抽屉维护连接参数。">
           <div class="provider-status-row">
             <el-tag
               v-for="(status, name) in providerStatus"
@@ -45,99 +92,34 @@
             </el-tag>
           </div>
 
-          <!-- Provider selector -->
           <el-radio-group v-model="selectedProvider" class="provider-radio-group">
             <el-radio-button v-for="p in PROVIDERS" :key="p.value" :value="p.value">{{ p.label }}</el-radio-button>
           </el-radio-group>
 
-          <!-- OpenAI -->
-          <div v-if="selectedProvider === 'openai'" class="provider-fields">
-            <div class="setting-row">
-              <label class="setting-label">API Key</label>
-              <el-input
-                v-model="form.openai_api_key"
-                type="password"
-                show-password
-                placeholder="sk-..."
-                autocomplete="off"
-                class="setting-input-wide"
-              />
+          <div class="provider-summary-card">
+            <div class="provider-summary-card__header">
+              <div>
+                <strong>{{ selectedProviderLabel }}</strong>
+                <p>{{ selectedProviderDescription }}</p>
+              </div>
+              <span class="provider-state-pill" :class="{ available: currentProviderAvailable }">
+                {{ currentProviderAvailable ? '可用' : '待配置' }}
+              </span>
+            </div>
+
+            <div class="provider-summary-grid">
+              <div v-for="item in providerSummaryItems" :key="item.label" class="provider-summary-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+            </div>
+
+            <div class="provider-actions compact">
+              <SystemButton :loading="testLoading" @click="testConnection">测试连接</SystemButton>
+              <SystemButton variant="primary" @click="providerDrawerOpen = true">编辑连接信息</SystemButton>
             </div>
           </div>
 
-          <!-- Anthropic -->
-          <div v-else-if="selectedProvider === 'anthropic'" class="provider-fields">
-            <div class="setting-row">
-              <label class="setting-label">API Key</label>
-              <el-input
-                v-model="form.anthropic_api_key"
-                type="password"
-                show-password
-                placeholder="sk-ant-..."
-                autocomplete="off"
-                class="setting-input-wide"
-              />
-            </div>
-          </div>
-
-          <!-- DeepSeek -->
-          <div v-else-if="selectedProvider === 'deepseek'" class="provider-fields">
-            <div class="setting-row">
-              <label class="setting-label">API Key</label>
-              <el-input
-                v-model="form.deepseek_api_key"
-                type="password"
-                show-password
-                placeholder="sk-..."
-                autocomplete="off"
-                class="setting-input-wide"
-              />
-            </div>
-          </div>
-
-          <!-- Ollama -->
-          <div v-else-if="selectedProvider === 'ollama'" class="provider-fields">
-            <div class="setting-row">
-              <label class="setting-label">Base URL</label>
-              <el-input
-                v-model="form.ollama_base_url"
-                placeholder="http://localhost:11434"
-                class="setting-input-wide"
-              />
-            </div>
-          </div>
-
-          <!-- Custom -->
-          <div v-else-if="selectedProvider === 'custom'" class="provider-fields">
-            <div class="setting-row">
-              <label class="setting-label">Base URL</label>
-              <el-input v-model="form.custom_llm_base_url" placeholder="http://localhost:8080/v1" class="setting-input-wide" />
-            </div>
-            <div class="setting-row">
-              <label class="setting-label">API Key (可选)</label>
-              <el-input v-model="form.custom_llm_api_key" type="password" show-password placeholder="留空则不带 Authorization" autocomplete="off" class="setting-input-wide" />
-            </div>
-            <div class="setting-row">
-              <label class="setting-label">Small 模型名</label>
-              <el-input v-model="form.custom_llm_model_small" placeholder="custom-small" class="setting-input-wide" />
-            </div>
-            <div class="setting-row">
-              <label class="setting-label">Medium 模型名</label>
-              <el-input v-model="form.custom_llm_model_medium" placeholder="custom-medium" class="setting-input-wide" />
-            </div>
-            <div class="setting-row">
-              <label class="setting-label">Large 模型名</label>
-              <el-input v-model="form.custom_llm_model_large" placeholder="custom-large" class="setting-input-wide" />
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="provider-actions">
-            <el-button :loading="testLoading" @click="testConnection">测试连接</el-button>
-            <el-button type="primary" :loading="saveLoading" @click="saveSettings">保存配置</el-button>
-          </div>
-
-          <!-- Test result -->
           <el-alert
             v-if="testResult"
             :title="testResult.success
@@ -146,49 +128,184 @@
             :type="testResult.success ? 'success' : 'error'"
             show-icon
             :closable="false"
-            style="margin-top: 12px"
+            class="provider-inline-alert"
           />
-          <el-alert
-            v-if="saveMsg"
-            :title="saveMsg"
-            type="success"
-            show-icon
-            :closable="false"
-            style="margin-top: 12px"
-          />
+        </SystemCard>
+      </div>
+    </SystemSection>
 
-        </el-card>
-      </el-tab-pane>
-
-      <!-- ── Project Settings (only in project context) ── -->
-      <el-tab-pane v-if="projectId" label="项目设置" name="project">
-        <el-card class="settings-card" header="生成参数默认值">
-          <div class="setting-row">
-            <label class="setting-label">章节长度 (字)</label>
-            <el-input-number v-model="projectCfg.chapterLength" :min="500" :max="10000" :step="100" />
+    <SystemSection
+      v-if="projectId"
+      title="项目覆盖"
+      description="把项目级默认值保持为摘要态，仅在需要调整时展开抽屉。"
+    >
+      <SystemCard class="settings-card" title="项目默认值与 Prompt 覆盖" description="统一管理章节长度、温度与项目级 System Prompt。">
+        <div class="setting-summary-list">
+          <div v-for="item in projectSummaryItems" :key="item.label" class="setting-summary-item">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
           </div>
-          <div class="setting-row">
-            <label class="setting-label">温度 (Temperature)</label>
-            <el-slider v-model="projectCfg.temperature" :min="0" :max="2" :step="0.05" style="flex: 1; margin: 0 16px" />
-            <span style="min-width: 36px; text-align: right; font-size: 13px">{{ projectCfg.temperature.toFixed(2) }}</span>
-          </div>
-        </el-card>
-
-        <el-card class="settings-card" header="Prompt 覆盖">
-          <el-input
-            v-model="projectCfg.systemPrompt"
-            type="textarea"
-            :rows="6"
-            placeholder="可选：覆盖全局 System Prompt（留空则使用全局默认）"
-          />
-        </el-card>
-
-        <div class="setting-actions">
-          <el-button type="primary" :loading="savingProject" @click="saveProjectConfig">保存项目设置</el-button>
         </div>
-      </el-tab-pane>
 
-    </el-tabs>
+        <template #actions>
+          <SystemButton variant="primary" @click="projectDrawerOpen = true">编辑项目设置</SystemButton>
+        </template>
+      </SystemCard>
+    </SystemSection>
+
+    <SystemDrawer
+      v-model="agentDrawerOpen"
+      title="Agent 行为配置"
+      description="把预算、重试与降级策略集中在抽屉里编辑，避免首屏出现大面积表单。"
+      size="420px"
+    >
+      <div class="setting-row">
+        <label class="setting-label">每章 Token 预算</label>
+        <el-input-number v-model="agentCfg.perChapterBudget" :min="1000" :max="200000" :step="1000" />
+      </div>
+      <div class="setting-row">
+        <label class="setting-label">最大重写次数</label>
+        <el-select v-model="agentCfg.maxRetries" style="width: 120px">
+          <el-option v-for="n in [1, 2, 3, 5, 10]" :key="n" :label="`${n} 次`" :value="n" />
+        </el-select>
+      </div>
+      <div class="setting-row">
+        <label class="setting-label">自动降级模型</label>
+        <el-switch v-model="agentCfg.autoDowngrade" />
+        <span class="setting-hint">超限时自动切换至低成本模型</span>
+      </div>
+
+      <div class="setting-actions">
+        <SystemButton variant="primary" :loading="savingAgent" @click="saveAgentConfig">保存 Agent 配置</SystemButton>
+      </div>
+    </SystemDrawer>
+
+    <SystemDrawer
+      v-model="providerDrawerOpen"
+      :title="`${selectedProviderLabel} 连接配置`"
+      description="把密钥、Base URL 和模型路由放入抽屉，仅在需要编辑时展开。"
+      size="420px"
+    >
+      <div v-if="selectedProvider === 'openai'" class="provider-fields">
+        <div class="setting-row">
+          <label class="setting-label">API Key</label>
+          <el-input
+            v-model="form.openai_api_key"
+            type="password"
+            show-password
+            placeholder="sk-..."
+            autocomplete="off"
+            class="setting-input-wide"
+          />
+        </div>
+      </div>
+
+      <div v-else-if="selectedProvider === 'anthropic'" class="provider-fields">
+        <div class="setting-row">
+          <label class="setting-label">API Key</label>
+          <el-input
+            v-model="form.anthropic_api_key"
+            type="password"
+            show-password
+            placeholder="sk-ant-..."
+            autocomplete="off"
+            class="setting-input-wide"
+          />
+        </div>
+      </div>
+
+      <div v-else-if="selectedProvider === 'deepseek'" class="provider-fields">
+        <div class="setting-row">
+          <label class="setting-label">API Key</label>
+          <el-input
+            v-model="form.deepseek_api_key"
+            type="password"
+            show-password
+            placeholder="sk-..."
+            autocomplete="off"
+            class="setting-input-wide"
+          />
+        </div>
+      </div>
+
+      <div v-else-if="selectedProvider === 'ollama'" class="provider-fields">
+        <div class="setting-row">
+          <label class="setting-label">Base URL</label>
+          <el-input
+            v-model="form.ollama_base_url"
+            placeholder="http://localhost:11434"
+            class="setting-input-wide"
+          />
+        </div>
+      </div>
+
+      <div v-else-if="selectedProvider === 'custom'" class="provider-fields">
+        <div class="setting-row">
+          <label class="setting-label">Base URL</label>
+          <el-input v-model="form.custom_llm_base_url" placeholder="http://localhost:8080/v1" class="setting-input-wide" />
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">API Key (可选)</label>
+          <el-input v-model="form.custom_llm_api_key" type="password" show-password placeholder="留空则不带 Authorization" autocomplete="off" class="setting-input-wide" />
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Small 模型名</label>
+          <el-input v-model="form.custom_llm_model_small" placeholder="custom-small" class="setting-input-wide" />
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Medium 模型名</label>
+          <el-input v-model="form.custom_llm_model_medium" placeholder="custom-medium" class="setting-input-wide" />
+        </div>
+        <div class="setting-row">
+          <label class="setting-label">Large 模型名</label>
+          <el-input v-model="form.custom_llm_model_large" placeholder="custom-large" class="setting-input-wide" />
+        </div>
+      </div>
+
+      <div class="provider-actions">
+        <SystemButton variant="primary" :loading="saveLoading" @click="saveSettings">保存配置</SystemButton>
+      </div>
+
+      <el-alert
+        v-if="saveMsg"
+        :title="saveMsg"
+        :type="saveMsg.startsWith('✓') ? 'success' : 'error'"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
+    </SystemDrawer>
+
+    <SystemDrawer
+      v-if="projectId"
+      v-model="projectDrawerOpen"
+      title="项目设置"
+      description="在抽屉里调整项目级默认生成参数和 Prompt 覆盖。"
+      size="460px"
+    >
+      <div class="setting-row">
+        <label class="setting-label">章节长度 (字)</label>
+        <el-input-number v-model="projectCfg.chapterLength" :min="500" :max="10000" :step="100" />
+      </div>
+      <div class="setting-row">
+        <label class="setting-label">温度 (Temperature)</label>
+        <el-slider v-model="projectCfg.temperature" :min="0" :max="2" :step="0.05" class="setting-slider" />
+        <span class="setting-value">{{ projectCfg.temperature.toFixed(2) }}</span>
+      </div>
+      <div class="setting-stack">
+        <label class="setting-label setting-label--stack">Prompt 覆盖</label>
+        <el-input
+          v-model="projectCfg.systemPrompt"
+          type="textarea"
+          :rows="6"
+          placeholder="可选：覆盖全局 System Prompt（留空则使用全局默认）"
+        />
+      </div>
+
+      <div class="setting-actions">
+        <SystemButton variant="primary" :loading="savingProject" @click="saveProjectConfig">保存项目设置</SystemButton>
+      </div>
+    </SystemDrawer>
   </div>
 </template>
 
@@ -197,14 +314,17 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { useSettingsStore } from '@/stores/settingsStore'
+import SystemButton from '@/components/system/SystemButton.vue'
+import SystemCard from '@/components/system/SystemCard.vue'
+import SystemDrawer from '@/components/system/SystemDrawer.vue'
+import SystemPageHeader from '@/components/system/SystemPageHeader.vue'
+import SystemSection from '@/components/system/SystemSection.vue'
 import { ElMessage } from 'element-plus'
 import type { LLMSettingsResponse, LLMTestResult, LLMProviderName } from '@/types/api'
 
 const route = useRoute()
 const settingsStore = useSettingsStore()
 const projectId = computed(() => (route.params.id as string) || '')
-
-const activeTab = ref('global')
 
 // ── Agent config (sourced from settingsStore.globalSettings) ──────
 const agentCfg = ref({
@@ -213,6 +333,7 @@ const agentCfg = ref({
   autoDowngrade: true,
 })
 const savingAgent = ref(false)
+const agentDrawerOpen = ref(false)
 
 async function loadAgentConfig() {
   await settingsStore.loadGlobal()
@@ -270,6 +391,61 @@ const testLoading = ref(false)
 const saveLoading = ref(false)
 const testResult = ref<LLMTestResult | null>(null)
 const saveMsg = ref('')
+const providerDrawerOpen = ref(false)
+
+const selectedProviderLabel = computed(
+  () => PROVIDERS.find((provider) => provider.value === selectedProvider.value)?.label ?? selectedProvider.value,
+)
+
+const selectedProviderDescription = computed(() => {
+  if (selectedProvider.value === 'ollama') {
+    return '本地模型服务，优先维护 Base URL 与可达性。'
+  }
+  if (selectedProvider.value === 'custom') {
+    return '适用于兼容 OpenAI 协议的自定义模型网关。'
+  }
+  return '云端模型提供商，通常只需维护 API Key。'
+})
+
+const currentProviderAvailable = computed(
+  () => Boolean(providerStatus.value?.[selectedProvider.value]?.available),
+)
+
+const availableProviderCount = computed(
+  () => Object.values(providerStatus.value ?? {}).filter((status) => status?.available).length,
+)
+
+const agentSummaryItems = computed(() => [
+  { label: '预算', value: `${agentCfg.value.perChapterBudget.toLocaleString()} tokens / 章` },
+  { label: '重试上限', value: `${agentCfg.value.maxRetries} 次` },
+  { label: '成本策略', value: agentCfg.value.autoDowngrade ? '自动降级' : '固定模型' },
+])
+
+const providerOverviewItems = computed(() => [
+  { label: '当前提供商', value: selectedProviderLabel.value },
+  { label: '可用连接', value: `${availableProviderCount.value} / ${PROVIDERS.length}` },
+  { label: '编辑方式', value: '抽屉配置' },
+])
+
+const providerSummaryItems = computed(() => {
+  if (selectedProvider.value === 'ollama') {
+    return [
+      { label: '连接方式', value: 'Base URL' },
+      { label: '目标地址', value: form.value.ollama_base_url || '未设置' },
+    ]
+  }
+  if (selectedProvider.value === 'custom') {
+    return [
+      { label: '连接方式', value: '自定义网关' },
+      { label: '目标地址', value: form.value.custom_llm_base_url || '未设置' },
+      { label: '主模型', value: form.value.custom_llm_model_medium || '未设置' },
+    ]
+  }
+  return [
+    { label: '连接方式', value: 'API Key' },
+    { label: '当前状态', value: currentProviderAvailable.value ? '已配置' : '未配置' },
+  ]
+})
 
 async function loadSettings() {
   try {
@@ -335,6 +511,13 @@ const projectCfg = ref({
   systemPrompt: '',
 })
 const savingProject = ref(false)
+const projectDrawerOpen = ref(false)
+
+const projectSummaryItems = computed(() => [
+  { label: '章节长度', value: `${projectCfg.value.chapterLength} 字` },
+  { label: '温度', value: projectCfg.value.temperature.toFixed(2) },
+  { label: 'Prompt 覆盖', value: projectCfg.value.systemPrompt.trim() ? '已覆盖' : '继承全局' },
+])
 
 async function loadProjectConfig() {
   if (!projectId.value) return
@@ -370,19 +553,75 @@ onMounted(async () => {
 
 <style scoped>
 .settings-page {
-  max-width: 760px;
+  max-width: 980px;
   padding: var(--spacing-xl) var(--spacing-lg);
+  display: grid;
+  gap: var(--spacing-lg);
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
 }
-.settings-title {
-  font-size: var(--text-h1);
-  font-weight: var(--weight-h1);
-  margin-bottom: var(--spacing-md);
+
+.settings-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-2);
+  font-size: 0.9rem;
 }
-.settings-tabs { width: 100%; }
-.settings-card { margin-bottom: var(--spacing-lg); }
+
+.settings-overview-grid,
+.settings-capability-grid {
+  display: grid;
+  gap: var(--spacing-md);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-overview-grid--project {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.overview-card,
+.settings-card {
+  min-width: 0;
+}
+
+.overview-metric-grid,
+.setting-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.overview-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.overview-metric,
+.setting-summary-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-surface-2) 84%, transparent);
+}
+
+.overview-metric span,
+.setting-summary-item span {
+  color: var(--color-text-3);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.overview-metric strong,
+.setting-summary-item strong {
+  color: var(--color-text-1);
+  font-size: 0.98rem;
+}
+
 .setting-row {
   display: flex;
   align-items: center;
@@ -390,13 +629,111 @@ onMounted(async () => {
   padding: 8px 0;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
+
 .setting-row:last-child { border-bottom: none; }
 .setting-label { font-size: 14px; min-width: 160px; flex-shrink: 0; }
+.setting-label--stack { min-width: 0; }
 .setting-hint { font-size: 12px; color: var(--el-text-color-secondary); }
 .setting-input-wide { flex: 1; }
+.setting-slider { flex: 1; margin: 0 16px; }
+.setting-value { min-width: 36px; text-align: right; font-size: 13px; }
+.setting-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
 .provider-status-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .provider-radio-group { margin-bottom: 16px; }
 .provider-fields { margin: 12px 0; }
 .provider-actions { display: flex; gap: var(--spacing-sm); margin-top: 16px; }
 .setting-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.provider-actions.compact { margin-top: 0; }
+.provider-inline-alert { margin-top: 12px; }
+
+.provider-summary-card {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 16px;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+  background: color-mix(in srgb, var(--color-surface-2) 76%, transparent);
+}
+
+.provider-summary-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.provider-summary-card__header p {
+  margin: 6px 0 0;
+  color: var(--color-text-3);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.provider-state-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  color: var(--color-text-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.provider-state-pill.available {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.provider-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.provider-summary-item {
+  display: grid;
+  gap: 6px;
+}
+
+.provider-summary-item span {
+  color: var(--color-text-3);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 1024px) {
+  .settings-overview-grid,
+  .settings-overview-grid--project,
+  .settings-capability-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-page {
+    padding: var(--spacing-lg) var(--spacing-md);
+  }
+
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .setting-label {
+    min-width: 0;
+  }
+
+  .provider-actions,
+  .setting-actions {
+    justify-content: stretch;
+    flex-direction: column;
+  }
+}
 </style>

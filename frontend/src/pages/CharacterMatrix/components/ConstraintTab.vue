@@ -160,8 +160,8 @@ function handleSave() {
   border-radius: 3px;
   font-weight: 600;
 }
-.constraint-badge.hard { background: rgba(255,64,64,0.15); color: #ff4040; }
-.constraint-badge.soft { background: rgba(255,196,46,0.15); color: #ffc42e; }
+.constraint-badge.hard { background: var(--color-danger-soft); color: var(--color-danger); }
+.constraint-badge.soft { background: var(--color-warning-soft); color: var(--color-warning); }
 .constraint-del {
   background: none;
   border: none;
@@ -171,7 +171,7 @@ function handleSave() {
   line-height: 1;
   padding: 0 4px;
 }
-.constraint-del:hover { color: #ff4040; }
+.constraint-del:hover { color: var(--color-danger); }
 .constraint-context {
   font-size: 12px;
   color: var(--color-text-secondary);
@@ -204,8 +204,8 @@ function handleSave() {
   border-radius: var(--radius-btn);
   font-size: 13px;
 }
-.test-result.pass { background: rgba(46,255,138,0.1); color: #2eff8a; }
-.test-result.violation { background: rgba(255,64,64,0.1); color: #ff4040; }
+.test-result.pass { background: var(--color-success-soft); color: var(--color-success); }
+.test-result.violation { background: var(--color-danger-soft); color: var(--color-danger); }
 .constraint-actions {
   margin-top: 16px;
   padding-top: 12px;

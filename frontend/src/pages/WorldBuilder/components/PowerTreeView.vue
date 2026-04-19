@@ -58,8 +58,8 @@ defineProps<{
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  background: rgba(77, 124, 255, 0.15);
-  border: 1px solid var(--wb-neon-blue, #4d7cff);
+  background: var(--wb-blue-soft);
+  border: 1px solid var(--wb-neon-blue);
   border-radius: 8px;
   min-width: 200px;
   max-width: 280px;
@@ -67,23 +67,23 @@ defineProps<{
 }
 
 .level-node.active {
-  box-shadow: var(--wb-glow-blue, 0 0 12px rgba(77, 124, 255, 0.5));
-  border-color: var(--wb-neon-blue, #4d7cff);
-  background: rgba(77, 124, 255, 0.25);
+  box-shadow: var(--wb-glow-blue);
+  border-color: var(--wb-neon-blue);
+  background: var(--wb-blue-soft-strong);
 }
 
 .level-rank {
   min-width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: rgba(77, 124, 255, 0.3);
-  border: 1px solid var(--wb-neon-blue, #4d7cff);
+  background: var(--wb-blue-soft-strong);
+  border: 1px solid var(--wb-neon-blue);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 700;
-  color: var(--wb-neon-blue, #4d7cff);
+  color: var(--wb-neon-blue);
 }
 
 .level-info {
@@ -94,18 +94,18 @@ defineProps<{
 .level-name {
   font-size: 13px;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--wb-text-main);
 }
 
 .level-desc {
   font-size: 11px;
-  color: #999;
+  color: var(--wb-text-soft);
   margin-top: 2px;
 }
 
 .level-req {
   font-size: 10px;
-  color: #7a8aaa;
+  color: var(--wb-text-muted);
   margin-top: 4px;
 }
 
@@ -118,12 +118,12 @@ defineProps<{
 .connector-line {
   width: 2px;
   height: 100%;
-  border-left: 2px dashed rgba(77, 124, 255, 0.4);
+  border-left: 2px dashed color-mix(in srgb, var(--wb-neon-blue) 40%, transparent);
 }
 
 .tree-empty {
   font-size: 12px;
-  color: #666;
+  color: var(--wb-text-dim);
   font-style: italic;
   text-align: center;
   padding: 16px;

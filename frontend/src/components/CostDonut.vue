@@ -11,8 +11,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import * as echarts from 'echarts'
+import { PieChart } from 'echarts/charts'
+import { TooltipComponent } from 'echarts/components'
+import { init, use, type EChartsType } from 'echarts/core'
+import { SVGRenderer } from 'echarts/renderers'
 import { useToast } from '@/composables/useToast'
+import { useThemeMode } from '@/composables/useThemeMode'
+
+use([PieChart, TooltipComponent, SVGRenderer])
 
 interface ModelUsage {
   name: string
@@ -35,8 +41,9 @@ const emit = defineEmits<{
 }>()
 
 const chartEl = ref<HTMLElement | null>(null)
-let chart: echarts.ECharts | null = null
+let chart: EChartsType | null = null
 const toast = useToast()
+const { resolvedTheme } = useThemeMode()
 const warnedAt80 = ref(false)
 const critical = ref(false)
 
@@ -48,13 +55,22 @@ const pctClass = computed(() => {
   return 'normal'
 })
 
+function readThemeColor(name: string, fallback: string) {
+  if (typeof window === 'undefined') {
+    return fallback
+  }
+
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
 const donutColor = computed(() => {
-  if (ratio.value >= 0.95) return '#ff4040'
-  if (ratio.value >= 0.80) return '#f5a623'
-  return '#2ef2ff'
+  if (ratio.value >= 0.95) return readThemeColor('--color-danger', '#ef6b64')
+  if (ratio.value >= 0.80) return readThemeColor('--color-warning', '#e8a23a')
+  return readThemeColor('--color-accent', '#127ea8')
 })
 
 function buildOption() {
+  const trackColor = readThemeColor('--color-status-track', '#d4dee8')
   const models = props.models.length > 0
     ? props.models
     : [{ name: '已使用', tokens: props.used, cost: 0 }]
@@ -72,7 +88,7 @@ function buildOption() {
         {
           name: '剩余',
           value: Math.max(0, props.budget - props.used),
-          itemStyle: { color: '#2d2f3a' },
+          itemStyle: { color: trackColor },
           tooltip: { show: false },
         },
       ],
@@ -87,7 +103,7 @@ function buildOption() {
 
 onMounted(() => {
   if (!chartEl.value) return
-  chart = echarts.init(chartEl.value, null, { renderer: 'svg' })
+  chart = init(chartEl.value, undefined, { renderer: 'svg' })
   chart.setOption(buildOption())
 })
 
@@ -106,6 +122,10 @@ watch([() => props.used, () => props.budget, () => props.models], () => {
     critical.value = true
     emit('budget-critical')
   }
+})
+
+watch(resolvedTheme, () => {
+  chart?.setOption(buildOption(), { replaceMerge: ['series'] })
 })
 </script>
 

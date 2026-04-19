@@ -1,230 +1,327 @@
 <template>
-  <aside class="sidebar" :class="{ 'sidebar--collapsed': isCollapsed }">
-    <el-menu
-      :default-active="activeMenu"
-      :collapse="isCollapsed"
-      :collapse-transition="false"
-      class="sidebar-menu"
-      router
-    >
-      <!-- 无项目上下文时：全局菜单 -->
-      <template v-if="!store.projectId">
-        <el-menu-item index="/projects">
-          <el-icon><Folder /></el-icon>
-          <template #title>全部项目</template>
-        </el-menu-item>
-        <el-menu-item index="/settings">
-          <el-icon><Setting /></el-icon>
-          <template #title>全局设置</template>
-        </el-menu-item>
-        <el-menu-item index="/plugins">
-          <el-icon><Grid /></el-icon>
-          <template #title>插件市场</template>
-        </el-menu-item>
-        <el-menu-item index="/cost">
-          <el-icon><Coin /></el-icon>
-          <template #title>消耗统计</template>
-        </el-menu-item>
-      </template>
+  <transition name="sidebar-overlay-fade">
+    <div v-if="isMobile && isOpen" class="sidebar-overlay" @click="emit('close')" />
+  </transition>
 
-      <!-- 有项目上下文时：完整创作流程菜单 -->
-      <template v-else>
-        <!-- 返回项目列表 -->
-        <el-menu-item index="/projects">
-          <el-icon><ArrowLeft /></el-icon>
-          <template #title>全部项目</template>
-        </el-menu-item>
+  <aside class="sidebar" :class="sidebarClasses">
+    <div class="sidebar__header">
+      <div>
+        <p class="sidebar__eyebrow">{{ store.projectId ? '一级工作区' : '全局入口' }}</p>
+        <strong class="sidebar__title">{{ store.currentProject?.title || 'Narrative OS' }}</strong>
+      </div>
 
-        <!-- 项目主页 -->
-        <el-menu-item :index="`/project/${store.projectId}`">
-          <el-icon><House /></el-icon>
-          <template #title>项目主页</template>
-        </el-menu-item>
+      <el-button v-if="isMobile" text circle @click="emit('close')">×</el-button>
+    </div>
 
-        <!-- 创作工作流 -->
-        <el-sub-menu index="create">
-          <template #title>
-            <el-icon><Edit /></el-icon>
-            <span>创作工作流</span>
-          </template>
-          <el-menu-item :index="`/project/${store.projectId}/worldbuilder`">
-            <el-icon><Location /></el-icon>世界构建
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/concept`">
-            <el-icon><Memo /></el-icon>故事概念
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/plot`">
-            <el-icon><Connection /></el-icon>情节画布
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/write`">
-            <el-icon><DocumentAdd /></el-icon>章节撰写
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/trpg`">
-            <el-icon><Promotion /></el-icon>TRPG 互动
-          </el-menu-item>
-        </el-sub-menu>
+    <nav class="sidebar__nav" aria-label="壳层导航">
+      <button
+        v-for="item in primaryItems"
+        :key="item.id"
+        class="sidebar__nav-item"
+        :class="{ 'sidebar__nav-item--active': item.active, 'sidebar__nav-item--compact': !showLabels }"
+        @click="navigate(item.to)"
+      >
+        <span class="sidebar__nav-icon">
+          <el-icon>
+            <component :is="item.icon" />
+          </el-icon>
+        </span>
+        <span v-if="showLabels" class="sidebar__nav-copy">
+          <strong>{{ item.label }}</strong>
+          <small>{{ item.description }}</small>
+        </span>
+      </button>
+    </nav>
 
-        <!-- 数据管理 -->
-        <el-sub-menu index="data">
-          <template #title>
-            <el-icon><DataAnalysis /></el-icon>
-            <span>数据管理</span>
-          </template>
-          <el-menu-item :index="`/project/${store.projectId}/characters`">
-            <el-icon><User /></el-icon>角色矩阵
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/memory`">
-            <el-icon><Notebook /></el-icon>记忆系统
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/memory-search`">
-            <el-icon><Search /></el-icon>记忆检索
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/chapters`">
-            <el-icon><Document /></el-icon>章节管理
-          </el-menu-item>
-        </el-sub-menu>
+    <div class="sidebar__footer">
+      <button class="sidebar__utility" @click="navigate('/projects')">
+        <el-icon><ArrowLeft /></el-icon>
+        <span v-if="showLabels">全部项目</span>
+      </button>
 
-        <!-- 质量工具 -->
-        <el-sub-menu index="tools">
-          <template #title>
-            <el-icon><Tools /></el-icon>
-            <span>质量工具</span>
-          </template>
-          <el-menu-item :index="`/project/${store.projectId}/benchmark`">
-            <el-icon><DataLine /></el-icon>Benchmark Studio
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/metrics`">
-            <el-icon><TrendCharts /></el-icon>质量仪表盘
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/style`">
-            <el-icon><MagicStick /></el-icon>风格控制台
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/check`">
-            <el-icon><Checked /></el-icon>一致性检查
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/humanize`">
-            <el-icon><StarFilled /></el-icon>去 AI 痕迹
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/agents`">
-            <el-icon><Cpu /></el-icon>Agent 工坊
-          </el-menu-item>
-          <el-menu-item :index="`/project/${store.projectId}/trace`">
-            <el-icon><Share /></el-icon>执行链路
-          </el-menu-item>
-        </el-sub-menu>
+      <button v-if="store.projectId" class="sidebar__utility" @click="navigate(`/project/${store.projectId}/settings`)">
+        <el-icon><Setting /></el-icon>
+        <span v-if="showLabels">项目设置</span>
+      </button>
 
-        <!-- 全局 -->
-        <el-divider />
-        <el-menu-item :index="`/project/${store.projectId}/settings`">
-          <el-icon><Setting /></el-icon>
-          <template #title>项目设置</template>
-        </el-menu-item>
-        <el-menu-item index="/cost">
-          <el-icon><Coin /></el-icon>
-          <template #title>消耗统计</template>
-        </el-menu-item>
-        <el-menu-item index="/plugins">
-          <el-icon><Grid /></el-icon>
-          <template #title>插件市场</template>
-        </el-menu-item>
-      </template>
-    </el-menu>
-
-    <!-- 收起/展开按钮 -->
-    <button class="collapse-btn" @click="toggleCollapse">
-      {{ isCollapsed ? '›' : '‹' }}
-    </button>
+      <button v-if="!isMobile" class="sidebar__utility" @click="toggleCollapse">
+        <el-icon><component :is="isCollapsed ? Expand : Fold" /></el-icon>
+        <span v-if="showLabels">{{ isCollapsed ? '展开导航' : '收起导航' }}</span>
+      </button>
+    </div>
   </aside>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
-  Checked,
-  Coin,
-  Connection,
-  Cpu,
-  DataLine,
+  Collection,
   DataAnalysis,
-  Document,
-  DocumentAdd,
-  Edit,
-  Folder,
-  Grid,
+  EditPen,
+  Expand,
+  Fold,
   House,
-  Location,
-  MagicStick,
-  Memo,
-  Notebook,
-  Promotion,
-  Search,
-  Share,
   Setting,
-  StarFilled,
-  Tools,
-  TrendCharts,
-  User,
 } from '@element-plus/icons-vue'
 import { useProjectStore } from '@/stores/projectStore'
+import {
+  getGlobalPath,
+  getProjectPageDescriptor,
+  getProjectWorkspace,
+  globalNavigation,
+  projectWorkspaces,
+} from '@/config/shellNavigation'
+
+const props = defineProps<{
+  isMobile: boolean
+  isOpen: boolean
+}>()
+
+const emit = defineEmits<{
+  (event: 'close'): void
+}>()
 
 const route = useRoute()
+const router = useRouter()
 const store = useProjectStore()
 
-// 收起状态持久化
 const _storedCollapsed = localStorage.getItem('sidebar_collapsed')
 const isCollapsed = ref(_storedCollapsed === 'true')
+
+const workspaceDescriptor = computed(() =>
+  getProjectPageDescriptor(route.path, (route.meta?.title as string | undefined) ?? '工作台'),
+)
+const activeWorkspace = computed(() => getProjectWorkspace(workspaceDescriptor.value.workspaceId))
+
+const workspaceIcons = {
+  House,
+  EditPen,
+  Collection,
+  DataAnalysis,
+}
+
+const primaryItems = computed(() => {
+  if (!store.projectId) {
+    return globalNavigation.map((item) => ({
+      id: item.id,
+      label: item.label,
+      description: item.description,
+      to: getGlobalPath(item),
+      icon: item.id === 'projects' ? House : item.id === 'settings' ? Setting : item.id === 'plugins' ? Collection : DataAnalysis,
+      active: route.path === getGlobalPath(item),
+    }))
+  }
+
+  return projectWorkspaces.map((workspace) => ({
+    id: workspace.id,
+    label: workspace.label,
+    description: workspace.description,
+    to: workspace.items[0]?.segment ? `/project/${store.projectId}/${workspace.items[0].segment}` : `/project/${store.projectId}`,
+    icon: workspaceIcons[workspace.icon],
+    active: activeWorkspace.value?.id === workspace.id,
+  }))
+})
+
+const showLabels = computed(() => props.isMobile || !isCollapsed.value)
+const sidebarClasses = computed(() => ({
+  'sidebar--collapsed': !props.isMobile && isCollapsed.value,
+  'sidebar--mobile': props.isMobile,
+  'sidebar--mobile-open': props.isMobile && props.isOpen,
+  'sidebar--mobile-hidden': props.isMobile && !props.isOpen,
+}))
 
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value
   localStorage.setItem('sidebar_collapsed', String(isCollapsed.value))
 }
 
-const activeMenu = computed(() => route.path)
+function navigate(target: string) {
+  router.push(target)
+  if (props.isMobile) {
+    emit('close')
+  }
+}
 </script>
 
 <style scoped>
-/* 透明背景覆盖 Element Plus 默认 */
-:deep(.el-menu) {
+.sidebar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  min-width: 260px;
+  height: 100%;
+  background: color-mix(in srgb, var(--color-surface-1) 94%, transparent);
+  border-right: 1px solid var(--color-border-default);
+  transition:
+    width 150ms ease,
+    min-width 150ms ease,
+    transform 180ms ease;
+  z-index: 40;
+}
+
+.sidebar--collapsed {
+  width: 92px;
+  min-width: 92px;
+}
+
+.sidebar__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  padding: var(--spacing-5) var(--spacing-4) var(--spacing-3);
+}
+
+.sidebar__eyebrow {
+  margin: 0 0 6px;
+  font-size: var(--text-caption);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-3);
+}
+
+.sidebar__title {
+  color: var(--color-text-1);
+}
+
+.sidebar__nav {
+  flex: 1;
+  display: grid;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3) var(--spacing-4);
+}
+
+.sidebar__nav-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+  width: 100%;
+  padding: var(--spacing-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
   background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
 }
 
-:deep(.el-menu-item),
-:deep(.el-sub-menu__title) {
-  color: var(--color-text-secondary) !important;
+.sidebar__nav-item:hover {
+  transform: translateY(-1px);
+  background: var(--color-surface-2);
 }
 
-:deep(.el-menu-item.is-active) {
-  color: var(--el-color-primary) !important;
-  background: var(--color-surface-l2) !important;
+.sidebar__nav-item--active {
+  border-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  background: var(--color-accent-soft);
 }
 
-:deep(.el-menu-item:hover),
-:deep(.el-sub-menu__title:hover) {
-  background: var(--color-surface-l2) !important;
-  color: var(--color-text-primary) !important;
+.sidebar__nav-item--compact {
+  justify-content: center;
+  padding-inline: 0;
 }
 
-:deep(.el-divider) {
-  margin: 4px 12px;
-  border-color: var(--color-surface-l2);
+.sidebar__nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface-2) 88%, transparent);
+  color: var(--color-text-1);
 }
 
-.collapse-btn {
+.sidebar__nav-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.sidebar__nav-copy strong {
+  color: var(--color-text-1);
+}
+
+.sidebar__nav-copy small {
+  color: var(--color-text-2);
+  line-height: 1.5;
+}
+
+.sidebar__footer {
+  display: grid;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.sidebar__utility {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  width: 100%;
   background: transparent;
   border: none;
-  border-top: 1px solid var(--color-surface-l2);
+  border-radius: var(--radius-md);
   color: var(--color-text-secondary);
-  padding: 8px;
+  padding: 10px 12px;
   cursor: pointer;
-  font-size: 18px;
-  text-align: center;
-  transition: color 150ms;
-  width: 100%;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
 }
-.collapse-btn:hover {
+
+.sidebar__utility:hover {
+  background: var(--color-surface-2);
   color: var(--color-text-primary);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.sidebar--mobile {
+  position: fixed;
+  inset: 0 auto 0 0;
+  max-width: min(82vw, 320px);
+  width: min(82vw, 320px);
+  min-width: min(82vw, 320px);
+  box-shadow: var(--shadow-md);
+}
+
+.sidebar--mobile-hidden {
+  transform: translateX(-100%);
+}
+
+.sidebar--mobile-open {
+  transform: translateX(0);
+}
+
+@media (max-width: 960px) {
+  .sidebar {
+    height: calc(100vh - 16px);
+    margin: 8px 0 8px 8px;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--color-border-subtle);
+  }
+}
+
+.sidebar-overlay-fade-enter-active,
+.sidebar-overlay-fade-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.sidebar-overlay-fade-enter-from,
+.sidebar-overlay-fade-leave-to {
+  opacity: 0;
 }
 </style>
 

@@ -262,6 +262,6 @@ async function onExpand(field: string) {
   top: 2px;
   right: 2px;
   font-size: 14px;
-  color: var(--wb-neon-cyan, #2ef2ff);
+  color: var(--wb-neon-cyan);
 }
 </style>
